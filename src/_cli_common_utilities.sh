@@ -36,3 +36,11 @@ function stacktrace() {
     ((frame++))
   done
 }
+
+function _load_static() {
+  if ! grep -q -e "^DOCKER_COMPOSE_ENCODED=.*" $0; then
+    local staticFilesDir="$(dirname $0)/../static"
+    export DOCKER_COMPOSE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.yml"`
+    export DOCKER_COMPOSE_OVERRIDE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.override.yml"`
+  fi
+}
