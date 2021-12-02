@@ -1,0 +1,275 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+VERSION=0.1.2
+
+
+function backtrace() {
+  local deptn=${#FUNCNAME[@]}
+
+  for ((i=1; i<$deptn; i++)); do
+    local func="${FUNCNAME[$i]}"
+    local line="${BASH_LINENO[$((i-1))]}"
+    local src="${BASH_SOURCE[$((i-1))]}"
+    printf >&2 '%*s' $i '' # indent
+    echo >&2 "at: ${UNDERLINE}$func()${RESET}, $src, line $line"
+  done
+}
+
+function cleanup() {
+  if [ $? -ne 0 ] && [ ${VERBOSE:-false} == "true" ]; then
+    backtrace
+  fi
+
+  EXITMSG="${EXITMSG:-}"
+  EXITSTATUS=${EXITSTATUS:-0}
+
+  if [ "$EXITMSG" != "" ]; then
+    if [ $EXITSTATUS -gt 0 ]; then
+      error "$EXITMSG"
+    else
+      info "$EXITMSG"
+    fi
+  fi
+  return $EXITSTATUS
+}
+
+trap 'cleanup' SIGINT ERR SIGINT EXIT
+
+function interactiveHeader() {
+  if tty -s; then
+    purple=$(tput setaf 135)
+    echo >&2 "${purple}${DIM}" 
+    echo >&2 "______ _         _____              ";
+    echo >&2 "| ___ \ |       |_   _|             ";
+    echo >&2 "| |_/ / | _____  _| |_ __ __ _  ___ ";
+    echo >&2 "|  __/| |/ _ \ \/ / | '__/ _\ |/ __|";
+    echo >&2 "| |   | |  __/>  <| | | | (_| | (__ ";
+    echo >&2 "\_|   |_|\___/_/\_\_/_|  \__,_|\___|";
+    echo >&2 "                                    ";
+    echo >&2 $RESET
+    echo >&2 "${DIM}Instance Management Utility v$VERSION";
+    echo >&2 $RESET
+  fi
+}
+
+function main() {
+  ProgName=$(basename $0)
+  _load_modules
+  setup_colors
+
+  mod=mod_help
+
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      "-h" | "--help")
+        break
+        ;;
+      "-d" | "--debug")
+        set -x
+        shift
+        ;;
+      "-v" | "--verbose")
+        VERBOSE=true
+        shift
+        ;;
+      "-y" | "--assume-yes")
+        ASSUME_YES=true
+        shift
+        ;;
+      "--install-dir" | "--plextrac-home")
+        PLEXTRAC_HOME=$2
+        shift
+        shift
+        ;;
+      "--force-upgrade")
+        FORCEUPGRADE="force"
+        shift
+        ;;
+      "dist")
+        mod=mod_dist
+        break
+        ;;
+      *)
+        if declare -f mod_$1 >/dev/null 2>&1; then
+          mod=mod_$1
+        else
+          EXITMSG="Invalid argument $1"
+          EXITSTATUS=1
+          exit
+        fi
+        shift
+        ;;
+    esac
+  done
+  export PLEXTRAC_HOME=${PLEXTRAC_HOME:-/opt/plextrac}
+  _load_env
+  _load_static
+  interactiveHeader
+
+  $mod
+}
+
+function _load_modules() {
+  # Checks if all child functions are loaded, if not
+  # loads them in from (assumed) current relative directory
+  if ! declare -f z_end_of_plextrac >/dev/null 2>&1; then
+    for module in $(find $(dirname $0) -type f -name "_*.sh"); do
+      source $module
+    done
+  fi
+}
+
+function _load_env() {
+  for env_file in "$PLEXTRAC_HOME/.env" .env config.txt; do
+    if test -f $env_file; then
+      source $env_file
+      break 1
+    fi
+  done
+}
+
+function _load_static() {
+  local staticFilesDir="$(dirname $0)/../static"
+  export DOCKER_COMPOSE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.yml"`
+  export DOCKER_COMPOSE_OVERRIDE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.override.yml"`
+}
+
+function mod_dist() {
+  if grep -q -e "^DOCKER_COMPOSE_ENCODED=.*" $0; then
+    debug "Detected embedded compose file. dist will output the current script"
+    cat $0
+  else
+    debug "Generating script with embedded compose files"
+    sed -e '/main "$@"$/e \
+      echo "" \
+      cat '"$(dirname $0)"'/_*.sh \
+      echo "" \
+      echo -n "DOCKER_COMPOSE_ENCODED="; \
+      base64 -w0 '"$(dirname $0)"'/../static/docker-compose.yml \
+      echo "" \
+      echo -n "DOCKER_COMPOSE_OVERRIDE_ENCODED="; \
+      base64 -w0 '"$(dirname $0)"'/../static/docker-compose.override.yml \
+      echo ""' \
+      $0
+  fi
+}
+
+
+function requires_user_root() {
+  if [ "$EUID" -ne 0 ]; then
+    die "${RED}Please run as root user (eg, with sudo)${RESET}"
+  fi
+}
+
+function requires_user_plextrac {
+  if [ "$EUID" -ne 1337 ]; then
+    die "${RED}Please run as plextrac user${RESET}"
+  fi
+}
+
+function mod_help() {
+  title "Help for the PlexTrac management script"
+  info "Available commands:"
+  log "initialize                           ${DIM}initialize local system for PlexTrac installation${RESET}"
+  log "install                              ${DIM}install PlexTrac (assumes previously initialized system)${RESET}"
+  log "backup                               ${DIM}perform backup on currently running PlexTrac application${RESET}"
+  log "check                                ${DIM}checks for version & status of PlexTrac application${RESET}"
+  log "configure                            ${DIM}does initial configuration required for PlexTrac application${RESET}"
+  log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
+  log ""
+  info "Available flags to modify command behavior:"
+  log " -h | --help                         ${DIM}prints this help message${RESET}"
+  log " -d | --debug                        ${DIM}enables debug output${RESET}"
+  log " -v | --verbose                      ${DIM}enables verbose output${RESET}"
+  log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
+  log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
+  log " --no-force-upgrade                  ${DIM}do not force install upgrade packages${RESET}"
+  log ""
+}
+
+function mod_initialize() {
+  title "Initializing Environment for PlexTrac..."
+  requires_user_root
+  upgrade_os
+  install_os_dependencies
+  install_docker "${FORCEUPGRADE-}"
+  install_docker_compose "${FORCEUPGRADE-}"
+  create_user
+  configure_user_environment
+  copy_scripts
+  fix_file_ownership
+}
+
+function mod_install() {
+  title "Installing PlexTrac Instance"
+  requires_user_plextrac
+  mod_configure
+  mod_check
+  info "Starting Couchbase before other services"
+  compose_client up -d "$couchbaseComposeService"
+  info "Sleeping to give Couchbase a chance to start up"
+  local progressBar
+  for i in `seq 1 20`; do
+    progressBar=`printf ".%.0s%s"  {1..$i} "${progressBar:-}"`
+    msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
+    sleep 2
+  done
+  echo -n >&2 "${RESET}"
+  msg " Done"
+  configure_couchbase_users
+  pull_docker_images
+  mod_start
+  mod_info
+}
+
+function mod_configure() {
+  title "Setting up base PlexTrac configuration..."
+  requires_user_plextrac
+  generate_default_config
+  login_dockerhub
+  updateComposeConfig
+  create_volume_directories
+}
+
+function mod_start() {
+  title "Starting PlexTrac..."
+  requires_user_plextrac
+  compose_client up -d --remove-orphans
+
+  info "Waiting for application startup"
+  local progressBar
+  # todo: extract this to function waitForCondition
+  # it should take an optional param which is a function
+  # that should return 0 when ready
+  for i in `seq 1 30`; do
+    progressBar=`printf ".%.0s%s"  {1..$i} "${progressBar:-}"`
+    msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
+    sleep 2
+  done
+  echo -n >&2 "${RESET}"
+  msg " Done"
+}
+
+function mod_check() {
+  title "Checking Local Configuration"
+  requires_user_plextrac
+  info "Checking Docker Compose Config"
+  compose_client config -q && info "Config check passed"
+  pending=`composeConfigNeedsUpdated || true`
+  if [ "$pending" != "" ]; then
+    error "Pending Changes:"
+    msg "    %s\n" "$pending"
+  fi
+  VALIDATION_ONLY=1 configure_couchbase_users
+}
+
+function mod_update() {
+  info "Updating to latest PlexTrac release..."
+  mod_configure
+  pull_docker_images
+  mod_start
+  mod_check
+}
+
+main "$@"
