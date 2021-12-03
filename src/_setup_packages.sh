@@ -1,14 +1,14 @@
 function upgrade_os() {
-title "Updating OS packages, this make take some time!"
-apt-get update > /dev/null 2>&1 \
+  title "Updating OS packages, this make take some time!"
+  apt-get update > /dev/null 2>&1 \
     && apt-get upgrade -y -o Dpkg::Options::="--force-confold" > /dev/null 2>&1 \
     && apt-get autoremove -y > /dev/null 2>&1
 debug "Done."
 }
 
 function install_os_dependencies() {
-title "Installing/updating required packages..."
-apt-get install -y \
+  title "Installing/updating required packages..."
+  apt-get install -y \
     apt-transport-https \
     ca-certificates \
     curl \
@@ -17,7 +17,7 @@ apt-get install -y \
     jq \
     unzip \
     > /dev/null 2>&1
-debug "Done."
+  debug "Done."
 }
 
 function install_docker() {
@@ -25,7 +25,7 @@ function install_docker() {
     title "installing docker, this might take some time..."
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - > /dev/null 2>&1
     debug "docker fingerprint: "
-    apt-key fingerprint 0EBFCD88
+    debug `apt-key fingerprint 0EBFCD88 2>&1`
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /dev/null 2>&1
     apt update > /dev/null 2>&1
     apt install -y docker-ce docker-ce-cli containerd.io > /dev/null 2>&1

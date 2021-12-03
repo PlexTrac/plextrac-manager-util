@@ -29,6 +29,7 @@ function mod_info() {
   title "Host Details"
   info "Disk Statistics"
   msg `check_disk_capacity`
+  msg `info_backupDiskUsage`
 }
 
 function info_TLSCertificateDetails() {

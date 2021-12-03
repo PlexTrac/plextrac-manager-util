@@ -4,33 +4,36 @@
 
 function mod_backup() {
   title "Running PlexTrac Backups"
-  do_uploads_backup
-  do_couchbase_backup
+  backup_ensureBackupDirectory
+  backup_fullUploadsBackup
+  backup_fullCouchbaseBackup
 }
 
-function do_uploads_backup() {
+function backup_fullUploadsBackup() {
   # Yoink uploads out to a compressed tarball
   info "$coreBackendComposeService: Performing backup of uploads directory"
-  mkdir -p ${PLEXTRAC_HOME}/backups/uploads
-  compose_client run --rm --entrypoint='' -T \
-    $coreBackendComposeService tar -czf - /usr/src/plextrac-api/uploads > ${PLEXTRAC_HOME}/backups/uploads/$(date "+%Y.%m.%d-%H.%M.%S").tar.gz 2>/dev/null
-  debug "`ls -lah ${PLEXTRAC_HOME}/backups/uploads`"
-  info "Done."
+  local uploadsBackupDir="${PLEXTRAC_BACKUP_PATH}/uploads"
+  mkdir -p $uploadsBackupDir
+  debug "`compose_client run --workdir /usr/src/plextrac-api --rm --entrypoint='' -T \
+    $coreBackendComposeService tar -czf - uploads > \
+    ${uploadsBackupDir}/$(date "+%Y.%m.%d-%H.%M.%S").tar.gz`"
+  debug "`ls -lah ${uploadsBackupDir}`"
+  log "Done."
 }
 
-function do_couchbase_backup() {
+function backup_fullCouchbaseBackup() {
   info "$couchbaseComposeService: Performing backup of couchbase database"
-  # Yoink database backup out to a compressed tarball
-  compose_client exec $couchbaseComposeService \
-      cbbackup -m full "http://localhost:8091" /backups -u ${CB_BACKUP_USER} -p ${CB_BACKUP_PASS} -v
-  info "Done."
+  debug "`compose_client exec $couchbaseComposeService \
+    chown 1337:1337 /backups 2>&1`"
+  debug "`compose_client exec $couchbaseComposeService \
+    cbbackup -m full "http://localhost:8091" /backups -u ${CB_BACKUP_USER} -p ${CB_BACKUP_PASS} 2>&1`"
+  log "Done."
 }
 
 function backup_ensureBackupDirectory() {
-  local backupDir="${PLEXTRAC_HOME}/backups"
-  info "Ensuring backup directory exists at $backupDir"
-  if ! test -d "${backupDir}"; then
-    debug "`mkdir -vp "${PLEXTRAC_HOME}/backups"`"
+  info "Ensuring backup directory exists at $PLEXTRAC_BACKUP_PATH"
+  if ! test -d "${PLEXTRAC_BACKUP_PATH}"; then
+    debug "`mkdir -vp "${PLEXTRAC_BACKUP_PATH}"`"
   fi
   log "Done"
 }
