@@ -60,6 +60,9 @@ function main() {
 
   mod=mod_help
 
+  # This needs to be saved before we parse the command line arguments
+  export _INITIAL_CMD_ARGS="$@"
+
   while [[ $# -gt 0 ]]; do
     case $1 in
       "-h" | "--help")
@@ -139,6 +142,7 @@ function mod_dist() {
       echo "" \
       cat '"$(dirname $0)"'/_*.sh \
       echo "" \
+      echo "DIST=true" \
       echo -n "DOCKER_COMPOSE_ENCODED="; \
       base64 -w0 '"$(dirname $0)"'/../static/docker-compose.yml \
       echo "" \
@@ -210,8 +214,8 @@ function mod_install() {
     sleep 2
   done
   echo -n >&2 "${RESET}"
-  msg " Done"
-  configure_couchbase_users
+  log "Done"
+  mod_autofix
   pull_docker_images
   mod_start
   mod_info
@@ -261,14 +265,6 @@ function mod_check() {
 function mod_autofix() {
   title "Fixing Auto-Correctable Issues"
   configure_couchbase_users
-}
-
-function mod_update() {
-  info "Updating to latest PlexTrac release..."
-  mod_configure
-  pull_docker_images
-  mod_start
-  mod_check
 }
 
 main "$@"
