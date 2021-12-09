@@ -1,1 +1,3 @@
 dist/*
+.vagrant
+*.bak

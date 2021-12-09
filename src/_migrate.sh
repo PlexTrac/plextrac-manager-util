@@ -42,11 +42,16 @@ function mod_migrate() {
 
   info "Continuing..."
 
-  debug "couchbase credentials"
+  info "Migrating existing Couchbase credentials"
   migrate_getCouchbaseCredentials >> "${PLEXTRAC_HOME}/.env"
+
+  info "Migrating existing DockerHub credentials"
   migrate_getDockerHubCredentials >> "${PLEXTRAC_HOME}/.env"
 
-  debug "legacy files"
+  info "Migrating backups"
+  migrate_backupDir
+
+  info "Cleaning up legacy files"
   migrate_archiveLegacyComposeFiles
   migrate_archiveLegacyScripts
 
@@ -77,16 +82,20 @@ function migrate_getDockerHubCredentials() {
   echo "$credentials"
 }
 
+function migrate_backupDir() {
+  export PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
+  log "Using PLEXTRAC_BACKUP_PATH=$PLEXTRAC_BACKUP_PATH"
+  backup_ensureBackupDirectory
+}
+
 function migrate_archiveLegacyScripts() {
   info "Archiving Legacy Scripts"
-  backup_ensureBackupDirectory
-  debug "`tar --remove-files -cvf ${PLEXTRAC_HOME}/backups/legacy_scripts.tar ${PLEXTRAC_HOME}/{**/,}*.sh 2>/dev/null || true`"
+  debug "`tar --remove-files -cvf ${PLEXTRAC_BACKUP_PATH}/legacy_scripts.tar ${PLEXTRAC_HOME}/{**/,}*.sh 2>/dev/null || true`"
 }
 
 function migrate_archiveLegacyComposeFiles() {
   info "Archiving Legacy Compose Files"
-  backup_ensureBackupDirectory
-  debug "`tar --remove-files -cvf ${PLEXTRAC_HOME}/backups/legacy_composefiles.tar ${PLEXTRAC_HOME}/{**/,}docker-{compose,database}.yml 2>/dev/null || true`"
+  debug "`tar --remove-files -cvf ${PLEXTRAC_BACKUP_PATH}/legacy_composefiles.tar ${PLEXTRAC_HOME}/{**/,}docker-{compose,database}.yml 2>/dev/null || true`"
 }
 
 function checkExistingConfigForOverrides() {
