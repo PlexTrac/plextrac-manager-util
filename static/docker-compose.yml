@@ -15,7 +15,7 @@ services:
         - "CMD-SHELL"
         - "curl http://localhost:4350/api/v2/health/live"
 
-  core-migrations:
+  couchbase-migrations:
     profiles:
       - "database-migrations"
     depends_on:
