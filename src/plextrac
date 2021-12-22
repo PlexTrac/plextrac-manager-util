@@ -233,7 +233,8 @@ function mod_configure() {
 function mod_start() {
   title "Starting PlexTrac..."
   requires_user_plextrac
-  compose_client up -d --remove-orphans
+  # Enable database migrations on startup
+  compose_client --profile=database-migrations up -d --remove-orphans
 
   info "Waiting for application startup"
   local progressBar
