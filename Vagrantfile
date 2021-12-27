@@ -34,7 +34,7 @@ Vagrant.configure("2") do |config|
 
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
-  config.vm.network "private_network", ip: "192.168.13.37"
+  config.vm.network "private_network", ip: "192.168.56.37"
 
   # Create a public network, which generally matched to bridged network.
   # Bridged networks make the machine appear as another physical device on
@@ -72,7 +72,7 @@ Vagrant.configure("2") do |config|
 
   echo ""
   echo "# Example customized deployment directory and domain name:"
-  echo "#   PLEXTRAC_HOME=/var/apps/plextrac-demo CLIENT_DOMAIN_NAME=192.168.13.37 ./plextrac initialize"
+  echo "#   PLEXTRAC_HOME=/var/apps/plextrac-demo CLIENT_DOMAIN_NAME=192.168.56.37 ./plextrac initialize"
   echo ""
 
   echo "Initializing PlexTrac at default location..."
