@@ -15,11 +15,15 @@ This is the PlexTrac management CLI that can be used to perform the initial setu
         configure                            does initial configuration required for PlexTrac application
         info                                 display information about the current PlexTrac Instance
 
-### For a fresh install of a new PlexTrac instance:
+## For a fresh install of a new PlexTrac instance:
 
     DOCKER_HUB_KEY=${DOCKER_HUB_KEY} plextrac configure
     plextrac update
     plextrac start
+
+### A quick note about the `DOCKER_HUB_KEY`
+It should look several groups of alphanumeric characters separated by hyphens. It should _not_ be base64-encoded.
+Example: `abcd123-11a1-22bb-c3c3-defg567890`
 
 ## Testing inside a Vagrant box
 
@@ -38,13 +42,15 @@ You'll need to have [Vagrant](https://www.vagrantup.com/) installed before you c
 
 3.  Create a default `.env` file by running the `configure` command
 
-        plextrac configure
+        DOCKER_HUB_KEY=<YOUR_DOCKER_HUB_KEY> plextrac configure
 
-4.  Set your DOCKER_HUB_KEY environment variable in the `.env` file
+    This will write a `.env` file to `/opt/plextrac/.env` with default values plus the DOCKER_HUB_KEY that you just provided.
+
+4.  Set any non-default environment variables in the `.env` file
 
         vim /opt/plextrac/.env
 
-    You should update the following vars:
+    You should check the following vars:
 
         DOCKER_HUB_KEY    # Your token for pulling images from the plextrac private Docker Hub registry
         UPGRADE_STRATEGY  # A docker image tag to pull (i.e. 'stable', 'edge', 'imminent', or a git commitish)
