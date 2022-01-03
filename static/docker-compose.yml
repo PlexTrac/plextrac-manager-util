@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   plextracapi:
@@ -9,7 +9,7 @@ services:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     restart: always
     volumes:
-    - uploads:/usr/src/plextrac-api/uploads:rw
+      - uploads:/usr/src/plextrac-api/uploads:rw
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -22,7 +22,7 @@ services:
       - plextracdb
       - redis
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
-    entrypoint: ''
+    entrypoint: ""
     command: |
       sh -c
         "npm run maintenance:enable &&
@@ -48,14 +48,14 @@ services:
       bucket: "${bucket-}"
     image: plextrac/plextracdb:6.5.1
     ports:
-    - 127.0.0.1:8091:8091/tcp
-    - 127.0.0.1:8092:8092/tcp
-    - 127.0.0.1:8093:8093/tcp
-    - 127.0.0.1:8094:8094/tcp
+      - 127.0.0.1:8091:8091/tcp
+      - 127.0.0.1:8092:8092/tcp
+      - 127.0.0.1:8093:8093/tcp
+      - 127.0.0.1:8094:8094/tcp
     restart: always
     volumes:
-    - dbdata:/opt/couchbase/var:rw
-    - couchbase-backups:/backups:rw
+      - dbdata:/opt/couchbase/var:rw
+      - couchbase-backups:/backups:rw
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -74,11 +74,11 @@ services:
       HIDE_PAGE_TITLE: "${HIDE_PAGE_TITLE-}"
       OVERRIDE_SENTRY_FRONTEND_ENABLED: "${OVERRIDE_SENTRY_FRONTEND_ENABLED-}"
     ports:
-    - 0.0.0.0:80:80/tcp
-    - 0.0.0.0:443:443/tcp
+      - 0.0.0.0:80:80/tcp
+      - 0.0.0.0:443:443/tcp
     restart: always
     volumes:
-    - letsencrypt:/etc/letsencrypt:rw
+      - letsencrypt:/etc/letsencrypt:rw
 
   notification-engine:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
@@ -106,7 +106,7 @@ services:
       CB_API_PASS: "${CB_API_PASS:?err}"
       CB_API_USER: "${CB_API_USER:?err}"
       COUCHBASE_URL: "http://plextracdb"
-      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:-err}
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
       LOG_LEVEL: ${LOG_LEVEL:-error}
       REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
@@ -121,7 +121,7 @@ services:
     command: "redis-server --requirepass ${REDIS_PASSWORD}"
     container_name: redis
     volumes:
-    - redis:/etc/redis:rw
+      - redis:/etc/redis:rw
 
 volumes:
   dbdata: {}
