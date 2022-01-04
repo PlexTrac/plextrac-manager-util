@@ -189,8 +189,8 @@ function mod_help() {
 function mod_initialize() {
   title "Initializing Environment for PlexTrac..."
   requires_user_root
-  upgrade_os
-  install_os_dependencies
+  system_packages__do_system_upgrade
+  system_packages__install_system_dependencies
   install_docker "${FORCEUPGRADE-}"
   install_docker_compose "${FORCEUPGRADE-}"
   create_user

@@ -1,13 +1,25 @@
-function upgrade_os() {
+function system_packages__refresh_package_lists() {
+  debug "Refreshing OS package lists"
+  output=`apt-get update 2>&1`
+  if [ $? -gt 0 ]; then
+    error "Failed to get updates"
+    log "$output"
+  else
+    debug "$output"
+  fi
+}
+
+function system_packages__do_system_upgrade() {
   title "Updating OS packages, this make take some time!"
-  apt-get update > /dev/null 2>&1 \
-    && apt-get upgrade -y -o Dpkg::Options::="--force-confold" > /dev/null 2>&1 \
+  system_packages__refresh_package_lists
+  apt-get upgrade -y -o Dpkg::Options::="--force-confold" > /dev/null 2>&1 \
     && apt-get autoremove -y > /dev/null 2>&1
 debug "Done."
 }
 
 function install_os_dependencies() {
   title "Installing/updating required packages..."
+  system_packages__refresh_package_lists
   apt-get install -y \
     apt-transport-https \
     ca-certificates \
