@@ -1,8 +1,9 @@
-services:
-  plextracnginx:
-    volumes: []
-    # leave these commented out unless using custom logo for whitelabeling and/or using custom certificates
-    # volumes:
-    #   - << local file path here >>:/usr/share/nginx/html/dist/img/PlexTrac_Logo.png
-    #   - << local key path here >>:/etc/ssl/app.plextrac.key
-    #   - << local cert path here >>:/etc/ssl/app_cert_chain.crt
+version: '3.8'
+
+# Example configuration for adding a custom logo and/or using custom certificates
+# services:
+#   plextracnginx:
+#     volumes:
+#       - << local file path here >>:/usr/share/nginx/html/dist/img/PlexTrac_Logo.png
+#       - << local key path here >>:/etc/ssl/app.plextrac.key
+#       - << local cert path here >>:/etc/ssl/app_cert_chain.crt
