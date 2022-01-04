@@ -175,6 +175,7 @@ function mod_help() {
   log "check                                ${DIM}checks for version & status of PlexTrac application${RESET}"
   log "configure                            ${DIM}does initial configuration required for PlexTrac application${RESET}"
   log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
+  log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
   log ""
   info "Available flags to modify command behavior:"
   log " -h | --help                         ${DIM}prints this help message${RESET}"
@@ -182,8 +183,11 @@ function mod_help() {
   log " -v | --verbose                      ${DIM}enables verbose output${RESET}"
   log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
   log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
-  log " --no-force-upgrade                  ${DIM}do not force install upgrade packages${RESET}"
   log ""
+  info "Usage:"
+  log "Prepare server for PlexTrac:         ${DIM}sudo ./plextrac initialize${RESET}"
+  log "Migrate existing instance:           ${DIM}plextrac migrate && plextrac install -y${RESET}"
+  log "Install new instance:                ${DIM}plextrac install -y${RESET}"
 }
 
 function mod_initialize() {
