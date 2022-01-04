@@ -33,7 +33,7 @@ function install_os_dependencies() {
 }
 
 function install_docker() {
-  if ! command -v docker &> /dev/null || [ ${1:-} == "force" ]; then
+  if ! command -v docker &> /dev/null || [ "${1:-}" == "force" ]; then
     title "installing docker, this might take some time..."
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - > /dev/null 2>&1
     debug "docker fingerprint: "
@@ -51,7 +51,7 @@ function install_docker() {
 }
 
 function install_docker_compose() {
-  if ! command -v docker-compose &> /dev/null || [ ${1:-} == "force" ]; then
+  if ! command -v docker-compose &> /dev/null || [ "${1:-}" == "force" ]; then
     title "installing docker-compose..."
     curl -sL $(curl -sL \
       https://api.github.com/repos/docker/compose/releases/latest | jq -r \
