@@ -14,7 +14,7 @@ function system_packages__do_system_upgrade() {
   system_packages__refresh_package_lists
   apt-get upgrade -y -o Dpkg::Options::="--force-confold" > /dev/null 2>&1 \
     && apt-get autoremove -y > /dev/null 2>&1
-debug "Done."
+  log "Done."
 }
 
 function install_os_dependencies() {
@@ -29,7 +29,7 @@ function install_os_dependencies() {
     jq \
     unzip \
     > /dev/null 2>&1
-  debug "Done."
+  log "Done."
 }
 
 function install_docker() {
