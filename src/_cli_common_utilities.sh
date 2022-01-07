@@ -23,6 +23,18 @@ function get_user_approval() {
   done
 }
 
+function requires_user_root() {
+  if [ "$EUID" -ne 0 ]; then
+    die "${RED}Please run as root user (eg, with sudo)${RESET}"
+  fi
+}
+
+function requires_user_plextrac {
+  if [ "$EUID" -ne 1337 ]; then
+    die "${RED}Please run as plextrac user${RESET}"
+  fi
+}
+
 function event__log_activity() {
   local event_log_filepath="${PLEXTRAC_HOME}/event.log"
   if ! test -d `dirname "${event_log_filepath}"`; then { debug "missing parent directory to create event log"; return 0; }; fi
