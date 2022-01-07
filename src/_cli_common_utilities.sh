@@ -23,6 +23,25 @@ function get_user_approval() {
   done
 }
 
+function event__log_activity() {
+  local event_log_filepath="${PLEXTRAC_HOME}/event.log"
+  local activity_timestamp=`date -u +%s`
+  local activity_name="${1:-func:${FUNCNAME[1]}}"
+  local activity_data="${2:--}"
+
+  debug `printf "Logged event '%s' at %s\n" $activity_name $activity_timestamp | tee -a "${event_log_filepath}"`
+
+  if [ "$activity_data" != "-" ]; then activity_data="`printf "|\n>>>\n%s\n<<<\n" "$activity_data"`"; fi
+  debug "`{
+    echo "Event Details:"
+    echo "  activity: $activity_name"
+    echo "  timestamp: \`date -d @$activity_timestamp +%c\`"
+    echo "  user: $USER"
+    echo "  data: $activity_data"
+    echo ""
+  } |& tee -a "$event_log_filepath"`"
+}
+
 function panic() {
   echo >&2 "$*"
   stacktrace

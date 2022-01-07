@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 VERSION=0.2.1
 
+trap 'cleanup $?' SIGINT ERR EXIT
 
 function backtrace() {
   local deptn=${#FUNCNAME[@]}
@@ -17,24 +18,24 @@ function backtrace() {
 }
 
 function cleanup() {
-  if [ $? -ne 0 ] && [ ${VERBOSE:-false} == "true" ]; then
+  local status_code=$1
+
+  if [ "${EXITMSG:-}" != "" ]; then
+    if [ $status_code -gt 0 ]; then
+      error "${EXITMSG}"
+    else
+      info "${EXITMSG}"
+    fi
+  fi
+
+  if [ $status_code -ne 0 ] && [ ${VERBOSE:-false} == "true" ]; then
+    error ""
     backtrace
   fi
 
-  EXITMSG="${EXITMSG:-}"
-  EXITSTATUS=${EXITSTATUS:-0}
-
-  if [ "$EXITMSG" != "" ]; then
-    if [ $EXITSTATUS -gt 0 ]; then
-      error "$EXITMSG"
-    else
-      info "$EXITMSG"
-    fi
-  fi
-  return $EXITSTATUS
+  exit $status_code
 }
 
-trap 'cleanup' SIGINT ERR SIGINT EXIT
 
 function interactiveHeader() {
   if tty -s; then
@@ -95,11 +96,12 @@ function main() {
         ;;
       *)
         if declare -f mod_$1 >/dev/null 2>&1; then
+          # enable event logging for sub commands
+          doModLog=1
           mod=mod_$1
         else
           EXITMSG="Invalid argument $1"
-          EXITSTATUS=1
-          exit
+          return 1
         fi
         shift
         ;;
@@ -110,6 +112,7 @@ function main() {
   _load_static
   interactiveHeader
 
+  if [ ${doModLog:-0} -eq 1 ]; then event__log_activity "command:`declare -F $mod`"; fi
   $mod
 }
 
@@ -175,6 +178,8 @@ function mod_help() {
   log "check                                ${DIM}checks for version & status of PlexTrac application${RESET}"
   log "configure                            ${DIM}does initial configuration required for PlexTrac application${RESET}"
   log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
+  log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
+  log "restore                              ${DIM}restore instance from backups${RESET}"
   log ""
   info "Available flags to modify command behavior:"
   log " -h | --help                         ${DIM}prints this help message${RESET}"
@@ -182,15 +187,18 @@ function mod_help() {
   log " -v | --verbose                      ${DIM}enables verbose output${RESET}"
   log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
   log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
-  log " --no-force-upgrade                  ${DIM}do not force install upgrade packages${RESET}"
   log ""
+  info "Usage:"
+  log "Prepare server for PlexTrac:         ${DIM}sudo ./plextrac initialize${RESET}"
+  log "Migrate existing instance:           ${DIM}plextrac migrate && plextrac install -y${RESET}"
+  log "Install new instance:                ${DIM}plextrac install -y${RESET}"
 }
 
 function mod_initialize() {
   title "Initializing Environment for PlexTrac..."
   requires_user_root
-  upgrade_os
-  install_os_dependencies
+  system_packages__do_system_upgrade
+  system_packages__install_system_dependencies
   install_docker "${FORCEUPGRADE-}"
   install_docker_compose "${FORCEUPGRADE-}"
   create_user

@@ -2,10 +2,12 @@
 #
 # Usage: plextrac update
 
+# subcommand function, this is the entrypoint eg `plextrac update`
 function mod_update() {
-  info "Updating PlexTrac Management Utility"
+  title "Updating PlexTrac Instance"
+  info "Checking for updates to the PlexTrac Management Utility"
   if selfupdate_checkForNewRelease; then
-    debug "Upgrading PlexTrac Management Util"
+    event__log_activity "update:upgrade-utility" "${releaseInfo}"
     selfupdate_doUpgrade
     die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
     exit 1 # just in case, previous line should already exit
@@ -37,7 +39,7 @@ function selfupdate_checkForNewRelease() {
   debug "Current Version: $localVersion"
   debug "Latest Version: $releaseVersion"
   if [ $localVersion == $releaseVersion ]; then
-    info "$localVersion is up to date"
+    info "$localVersion is already up to date"
     return 1
   fi
   info "Updating from $localVersion to $releaseVersion"
@@ -64,6 +66,7 @@ function selfupdate_doUpgrade() {
   local target="${PLEXTRAC_HOME}/.local/bin/plextrac"
 
   debug "`curl --no-progress-meter --verbose -L -o $temp $(jq .browser_download_url -r <<<$scriptAsset) 2>&1`"
+  # todo: add md5sum matching here
   test -f $temp || die "Failed to download release $releaseVersion"
   chmod a+x $temp
   $temp -h >/dev/null 2>&1 && (
