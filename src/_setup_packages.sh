@@ -42,6 +42,7 @@ function install_docker() {
     apt update > /dev/null 2>&1
     apt install -y docker-ce docker-ce-cli containerd.io > /dev/null 2>&1
     systemctl enable docker > /dev/null 2>&1
+    event__log_activity "install-docker" `docker --version`
     debug `docker --version`
     log "Done."
   else
@@ -58,6 +59,7 @@ function install_docker_compose() {
       ".assets[] | select(.name | test(\"^docker-compose-$(uname -s)-$(uname -m)$\"; \"i\")) | .browser_download_url" | grep -v .sha256) -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
     DCVER=$(docker-compose --version)
+    event__log_activity "install-docker" "$DCVER"
     info "docker compose installed, version: $DCVER"
   else
     DCVER=$(docker-compose --version)

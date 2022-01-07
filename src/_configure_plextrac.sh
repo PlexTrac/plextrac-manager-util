@@ -72,6 +72,7 @@ PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
       info "Detected pending changes to ${PLEXTRAC_HOME}/.env:"
       log "${envDiff}"
       if get_user_approval; then
+        event__log_activity "config:update-env" "$envDiff"
         echo "$mergedEnv" > "${PLEXTRAC_HOME}/.env"
       else
         die "Unable to continue without updating .env"
@@ -120,6 +121,7 @@ function updateComposeConfig() {
     log "$composeConfigDiff"
     if get_user_approval; then
       echo "$decodedComposeFile" > $targetComposeFile
+      event__log_activity "config:update-dockercompose" "$composeConfigDiff"
     else
       error "Unable to continue without updating docker-compose.yml"
       return 1

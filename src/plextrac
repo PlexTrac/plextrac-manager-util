@@ -96,6 +96,8 @@ function main() {
         ;;
       *)
         if declare -f mod_$1 >/dev/null 2>&1; then
+          # enable event logging for sub commands
+          doModLog=1
           mod=mod_$1
         else
           EXITMSG="Invalid argument $1"
@@ -110,6 +112,7 @@ function main() {
   _load_static
   interactiveHeader
 
+  if [ ${doModLog:-0} -eq 1 ]; then event__log_activity "command:`declare -F $mod`"; fi
   $mod
 }
 

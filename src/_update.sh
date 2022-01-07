@@ -5,7 +5,7 @@
 function mod_update() {
   info "Updating PlexTrac Management Utility"
   if selfupdate_checkForNewRelease; then
-    debug "Upgrading PlexTrac Management Util"
+    event__log_activity "update:upgrade-utility" "${releaseInfo}"
     selfupdate_doUpgrade
     die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
     exit 1 # just in case, previous line should already exit
