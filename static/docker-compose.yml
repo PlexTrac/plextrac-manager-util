@@ -133,7 +133,7 @@ volumes:
   dbdata: {}
   uploads: {}
   letsencrypt: {}
-  redis: 
+  redis:
     driver: local
     driver_opts:
       type: 'none'
