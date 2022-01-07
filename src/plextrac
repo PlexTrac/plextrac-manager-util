@@ -176,6 +176,7 @@ function mod_help() {
   log "configure                            ${DIM}does initial configuration required for PlexTrac application${RESET}"
   log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
   log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
+  log "restore                              ${DIM}restore instance from backups${RESET}"
   log ""
   info "Available flags to modify command behavior:"
   log " -h | --help                         ${DIM}prints this help message${RESET}"
