@@ -25,6 +25,7 @@ function get_user_approval() {
 
 function event__log_activity() {
   local event_log_filepath="${PLEXTRAC_HOME}/event.log"
+  if ! test -d `dirname "${event_log_filepath}"`; then { debug "missing parent directory to create event log"; return 0; }; fi
   local activity_timestamp=`date -u +%s`
   local activity_name="${1:-func:${FUNCNAME[1]}}"
   local activity_data="${2:--}"
