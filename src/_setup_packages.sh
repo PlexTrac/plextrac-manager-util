@@ -1,12 +1,7 @@
 function system_packages__refresh_package_lists() {
   debug "Refreshing OS package lists"
-  output=`apt-get update 2>&1`
-  if [ $? -gt 0 ]; then
-    error "Failed to get updates"
-    log "$output"
-  else
-    debug "$output"
-  fi
+  output=`apt-get update 2>&1` || { error "Failed to get updates"; log "$output"; return 1 ; }
+  debug "$output"
 }
 
 function system_packages__do_system_upgrade() {
@@ -35,10 +30,10 @@ function system_packages__install_system_dependencies() {
 function install_docker() {
   if ! command -v docker &> /dev/null || [ "${1:-}" == "force" ]; then
     info "installing docker, this might take some time..."
-    debug "`curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -2>&1`"
+    debug "`curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - 2>&1`"
     debug "docker fingerprint: \n`apt-key fingerprint 0EBFCD88 2>&1`"
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /dev/null 2>&1
-    apt update > /dev/null 2>&1
+    system_packages__refresh_package_lists
     apt install -y docker-ce docker-ce-cli containerd.io > /dev/null 2>&1
     systemctl enable docker > /dev/null 2>&1
     event__log_activity "install:docker" `docker --version`
