@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 VERSION=0.2.1
 
+trap 'cleanup $?' SIGINT ERR EXIT
 
 function backtrace() {
   local deptn=${#FUNCNAME[@]}
@@ -17,24 +18,24 @@ function backtrace() {
 }
 
 function cleanup() {
-  if [ $? -ne 0 ] && [ ${VERBOSE:-false} == "true" ]; then
+  local status_code=$1
+
+  if [ "${EXITMSG:-}" != "" ]; then
+    if [ $status_code -gt 0 ]; then
+      error "${EXITMSG}"
+    else
+      info "${EXITMSG}"
+    fi
+  fi
+
+  if [ $status_code -ne 0 ] && [ ${VERBOSE:-false} == "true" ]; then
+    error ""
     backtrace
   fi
 
-  EXITMSG="${EXITMSG:-}"
-  EXITSTATUS=${EXITSTATUS:-0}
-
-  if [ "$EXITMSG" != "" ]; then
-    if [ $EXITSTATUS -gt 0 ]; then
-      error "$EXITMSG"
-    else
-      info "$EXITMSG"
-    fi
-  fi
-  return $EXITSTATUS
+  exit $status_code
 }
 
-trap 'cleanup' SIGINT ERR SIGINT EXIT
 
 function interactiveHeader() {
   if tty -s; then
@@ -98,8 +99,7 @@ function main() {
           mod=mod_$1
         else
           EXITMSG="Invalid argument $1"
-          EXITSTATUS=1
-          exit
+          return 1
         fi
         shift
         ;;
