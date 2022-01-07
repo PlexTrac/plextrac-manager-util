@@ -93,6 +93,12 @@ services:
       LOG_LEVEL: "${LOG_LEVEL:-error}"
       REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+    healthcheck:
+      test: ["CMD", "node", "./dist/apps/notification-engine/scripts/healthcheck.js", "readiness", "10"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     entrypoint: npm run
     command: "start:notification-engine"
 
