@@ -103,7 +103,7 @@ function main() {
         shift
         ;;
       "-V" | "--version")
-        mod="version"
+        mod="mod_version"
         shift
         ;;
       "-v" | "--verbose")
