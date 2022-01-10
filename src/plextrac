@@ -21,7 +21,7 @@ function cleanup() {
   local status_code=$1
 
   if [ "${EXITMSG:-}" != "" ]; then
-    if [ $status_code -gt 0 ]; then
+    if [ $status_code -ne 0 ]; then
       error "${EXITMSG}"
     else
       info "${EXITMSG}"
@@ -29,8 +29,11 @@ function cleanup() {
   fi
 
   if [ $status_code -ne 0 ] && [ ${VERBOSE:-false} == "true" ]; then
-    error ""
+    error "${DIM}trace"
     backtrace
+  fi
+  if [ $status_code -ne 0 ] && [ ${VERBOSE:-false} == "false" ]; then
+    log "Try running with '-v' for verbose output for more details"
   fi
 
   exit $status_code
@@ -81,7 +84,7 @@ function mod_help() {
 
 
 function main() {
-  ProgName=$(basename $0)
+  export ProgName=$0
   _load_modules
   setup_colors
 
@@ -97,6 +100,10 @@ function main() {
         ;;
       "-d" | "--debug")
         set -x
+        shift
+        ;;
+      "-V" | "--version")
+        mod="version"
         shift
         ;;
       "-v" | "--verbose")
@@ -266,6 +273,10 @@ function mod_check() {
 function mod_autofix() {
   title "Fixing Auto-Correctable Issues"
   configure_couchbase_users
+}
+
+function mod_version() {
+  echo $VERSION
 }
 
 main "$@"
