@@ -54,6 +54,32 @@ function interactiveHeader() {
   fi
 }
 
+function mod_help() {
+  title "Help for the PlexTrac management script"
+  info "Available commands:"
+  log "initialize                           ${DIM}initialize local system for PlexTrac installation${RESET}"
+  log "install                              ${DIM}install PlexTrac (assumes previously initialized system)${RESET}"
+  log "backup                               ${DIM}perform backup on currently running PlexTrac application${RESET}"
+  log "check                                ${DIM}checks for version & status of PlexTrac application${RESET}"
+  log "configure                            ${DIM}does initial configuration required for PlexTrac application${RESET}"
+  log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
+  log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
+  log "restore                              ${DIM}restore instance from backups${RESET}"
+  log ""
+  info "Available flags to modify command behavior:"
+  log " -h | --help                         ${DIM}prints this help message${RESET}"
+  log " -d | --debug                        ${DIM}enables debug output${RESET}"
+  log " -v | --verbose                      ${DIM}enables verbose output${RESET}"
+  log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
+  log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
+  log ""
+  info "Usage:"
+  log "Prepare server for PlexTrac:         ${DIM}sudo ./plextrac initialize${RESET}"
+  log "Migrate existing instance:           ${DIM}plextrac migrate && plextrac install -y${RESET}"
+  log "Install new instance:                ${DIM}plextrac install -y${RESET}"
+}
+
+
 function main() {
   ProgName=$(basename $0)
   _load_modules
@@ -135,6 +161,7 @@ function _load_env() {
   done
 }
 
+# Build "dist" of the cli
 function mod_dist() {
   if grep -q -e "^DOCKER_COMPOSE_ENCODED=.*" $0; then
     debug "Detected embedded compose file. dist will output the current script"
@@ -157,50 +184,15 @@ function mod_dist() {
 }
 
 
-function requires_user_root() {
-  if [ "$EUID" -ne 0 ]; then
-    die "${RED}Please run as root user (eg, with sudo)${RESET}"
-  fi
-}
-
-function requires_user_plextrac {
-  if [ "$EUID" -ne 1337 ]; then
-    die "${RED}Please run as plextrac user${RESET}"
-  fi
-}
-
-function mod_help() {
-  title "Help for the PlexTrac management script"
-  info "Available commands:"
-  log "initialize                           ${DIM}initialize local system for PlexTrac installation${RESET}"
-  log "install                              ${DIM}install PlexTrac (assumes previously initialized system)${RESET}"
-  log "backup                               ${DIM}perform backup on currently running PlexTrac application${RESET}"
-  log "check                                ${DIM}checks for version & status of PlexTrac application${RESET}"
-  log "configure                            ${DIM}does initial configuration required for PlexTrac application${RESET}"
-  log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
-  log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
-  log "restore                              ${DIM}restore instance from backups${RESET}"
-  log ""
-  info "Available flags to modify command behavior:"
-  log " -h | --help                         ${DIM}prints this help message${RESET}"
-  log " -d | --debug                        ${DIM}enables debug output${RESET}"
-  log " -v | --verbose                      ${DIM}enables verbose output${RESET}"
-  log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
-  log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
-  log ""
-  info "Usage:"
-  log "Prepare server for PlexTrac:         ${DIM}sudo ./plextrac initialize${RESET}"
-  log "Migrate existing instance:           ${DIM}plextrac migrate && plextrac install -y${RESET}"
-  log "Install new instance:                ${DIM}plextrac install -y${RESET}"
-}
-
 function mod_initialize() {
-  title "Initializing Environment for PlexTrac..."
+  title "Initializing environment for PlexTrac..."
   requires_user_root
+  title "Setting up system packages"
   system_packages__do_system_upgrade
   system_packages__install_system_dependencies
   install_docker "${FORCEUPGRADE-}"
   install_docker_compose "${FORCEUPGRADE-}"
+  title "Setting up local PlexTrac user"
   create_user
   configure_user_environment
   copy_scripts
