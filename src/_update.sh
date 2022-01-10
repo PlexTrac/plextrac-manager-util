@@ -5,12 +5,16 @@
 # subcommand function, this is the entrypoint eg `plextrac update`
 function mod_update() {
   title "Updating PlexTrac Instance"
-  info "Checking for updates to the PlexTrac Management Utility"
-  if selfupdate_checkForNewRelease; then
-    event__log_activity "update:upgrade-utility" "${releaseInfo}"
-    selfupdate_doUpgrade
-    die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
-    exit 1 # just in case, previous line should already exit
+  if [ ${SKIP_SELF_UPGRADE:-0} -eq 0 ]; then
+    info "Checking for updates to the PlexTrac Management Utility"
+    if selfupdate_checkForNewRelease; then
+      event__log_activity "update:upgrade-utility" "${releaseInfo}"
+      selfupdate_doUpgrade
+      die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
+      exit 1 # just in case, previous line should already exit
+    fi
+  else
+    info "Skipping self upgrade"
   fi
   info "Updating PlexTrac instance to latest release..."
   mod_configure
@@ -20,9 +24,17 @@ function mod_update() {
 }
 
 function _selfupdate_refreshReleaseInfo() {
+  releaseApiUrl='https://api.github.com/repos/PlexTrac/plextrac-manager-util/releases'
+  targetRelease="${PLEXTRAC_UTILITY_VERSION:-latest}"
+  if [ $targetRelease == "latest" ]; then
+    releaseApiUrl="${releaseApiUrl}/$targetRelease"
+  else
+    releaseApiUrl="${releaseApiUrl}/tags/$targetRelease"
+  fi
+
   if test -z ${releaseInfo+x}; then
-    local releaseURL='https://api.github.com/repos/PlexTrac/plextrac-manager-util/releases/latest'
-    export releaseInfo=`curl -Ls $releaseURL`
+    export releaseInfo="`curl -Ls --fail $releaseApiUrl`"
+    if [ $? -gt 0 ] || [ "$releaseInfo" == "" ]; then die "Failed to get updated release from GitHub"; fi
     debug "`jq . <<< "$releaseInfo"`"
   fi
 }
@@ -33,12 +45,13 @@ function selfupdate_checkForNewRelease() {
   #  return 1
   #fi
   _selfupdate_refreshReleaseInfo
-  local releaseTag=$(jq '.tag_name' -r <<<$releaseInfo)
-  local releaseVersion=$(_parseVersion "$releaseTag")
-  local localVersion=$(_parseVersion "$VERSION")
+  releaseTag="`jq '.tag_name' -r <<<"$releaseInfo"`"
+  releaseVersion="`_parseVersion "$releaseTag"`"
+  if [ "$releaseVersion" == "" ]; then die "Unable to parse release version, cannot continue"; fi
+  localVersion="`_parseVersion "$VERSION"`"
   debug "Current Version: $localVersion"
   debug "Latest Version: $releaseVersion"
-  if [ $localVersion == $releaseVersion ]; then
+  if [ "$localVersion" == "$releaseVersion" ]; then
     info "$localVersion is already up to date"
     return 1
   fi
@@ -48,36 +61,46 @@ function selfupdate_checkForNewRelease() {
 }
 
 function _parseVersion() {
-  local rawVersion=$1
+  rawVersion=$1
   sed -E 's/^v?(.*)$/\1/' <<< $rawVersion
 }
 
 function info_getReleaseDetails() {
-  local changeLog=$(jq '.body' <<<$releaseInfo)
+  changeLog=$(jq '.body' <<<$releaseInfo)
   debug "$changeLog"
 }
 
 function selfupdate_doUpgrade() {
-  info "Performing Self Update"
-  local releaseVersion=$(jq '.tag_name' -r <<<$releaseInfo)
-  local scriptAsset=$(jq '.assets[] | select(.name=="plextrac") | .' <<<$releaseInfo)
-  debug "$scriptAsset"
-  local temp=`mktemp -t plextrac-$releaseVersion-XXX`
-  local target="${PLEXTRAC_HOME}/.local/bin/plextrac"
+  info "Starting Self Update"
+  releaseVersion=$(jq '.tag_name' -r <<<$releaseInfo)
+  scriptAsset="`jq '.assets[] | select(.name=="plextrac") | .' <<<"$releaseInfo"`"
+  scriptAssetSHA256SUM="`jq '.assets[] | select(.name=="sha256sum-plextrac.txt") | .' <<<"$releaseInfo"`"
+  if [ "$scriptAsset" == "" ]; then die "Failed to find release asset for ${releaseVersion}"; fi
 
-  debug "`curl --no-progress-meter --verbose -L -o $temp $(jq .browser_download_url -r <<<$scriptAsset) 2>&1`"
-  # todo: add md5sum matching here
-  test -f $temp || die "Failed to download release $releaseVersion"
-  chmod a+x $temp
-  $temp -h >/dev/null 2>&1 && (
-    debug "Moving $temp to "
-    mv -b --suffix=.bak $temp "${target}"
-    debug `chmod a-x "${target}.bak" || true`
-    chmod a+x "${target}"
-    log "Successfully downloaded & tested update"
-    )
+  debug "Downloading updated script from $scriptAsset"
+  tempDir=`mktemp -d -t plextrac-$releaseVersion-XXX`
+  debug "Tempdir: $tempDir"
+  target="${PLEXTRAC_HOME}/.local/bin/plextrac"
 
-  debug "Initially called w/ args '$_INITIAL_CMD_ARGS'" 
-  eval $target $_INITIAL_CMD_ARGS
-  exit
+  debug "`curl --no-progress-meter -w %{url_effective} -L -o $tempDir/$(jq '.name, " ", .browser_download_url' -r <<<$scriptAsset) 2>&1 || error "Release download failed"`"
+  debug "`curl --no-progress-meter -w %{url_effective} -L -o $tempDir/$(jq '.name, " ", .browser_download_url' -r <<<$scriptAssetSHA256SUM) 2>&1 || error "Checksum download failed"`"
+  checksumoutput=`pushd $tempDir >/dev/null && sha256sum -c sha256sum-plextrac.txt 2>&1` || die "checksum failed: $checksumoutput"
+  debug "$checksumoutput"
+  tempScript="$tempDir/plextrac"
+  chmod a+x $tempScript && debug "`$tempScript help 2>&1 | grep -i "plextrac management utility" 2>&1`" || die "Invalid script $tempScript"
+
+  info "Successfully downloaded & tested update"
+  log "Backing up previous release & installing $releaseVersion"
+  debug "Moving $tempScript to $target"
+  debug "`cp -vb --suffix=.bak $tempScript "$target" 2>&1`"
+  debug `chmod -v a-x "${target}.bak" || true`
+  debug `chmod -v a+x $target`
+  info "Upgrade complete"
+
+  debug "Initially called '$ProgName' w/ args '$_INITIAL_CMD_ARGS'" 
+  debug "Script Backup: `sha256sum ${target}.bak`"
+  debug "Script Update: `sha256sum $target`"
+
+  eval "SKIP_SELF_UPGRADE=1 $ProgName $_INITIAL_CMD_ARGS"
+  exit $?
 }
