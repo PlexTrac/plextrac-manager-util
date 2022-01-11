@@ -1,7 +1,6 @@
 function system_packages__refresh_package_lists() {
   debug "Refreshing OS package lists"
   _system_cmd_with_debug_and_fail "apt-get update 2>&1"
-  debug "$output"
 }
 
 function system_packages__do_system_upgrade() {
