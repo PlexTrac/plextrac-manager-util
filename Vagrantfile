@@ -77,7 +77,7 @@ Vagrant.configure("2") do |config|
 
   echo "Initializing PlexTrac at default location..."
   echo ""
-  ./plextrac initialize
+  ./plextrac initialize -v 2>&1
 
   echo "You need to provide a valid DOCKER_HUB_KEY to configure PlexTrac"
   echo "On Linux, this can be retrieved using the following command:"
