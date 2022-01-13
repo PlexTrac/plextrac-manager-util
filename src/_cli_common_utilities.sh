@@ -49,7 +49,7 @@ function event__log_activity() {
     echo "Event Details:"
     echo "  activity: $activity_name"
     echo "  timestamp: \`date -d @$activity_timestamp +%c\`"
-    echo "  user: $USER"
+    echo "  user: ${USER:-$EUID}"
     echo "  data: $activity_data"
     echo ""
   } |& tee -a "$event_log_filepath"`"
