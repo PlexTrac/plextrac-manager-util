@@ -17,9 +17,7 @@ This is the PlexTrac management CLI that can be used to perform the initial setu
 
 ## For a fresh install of a new PlexTrac instance:
 
-    DOCKER_HUB_KEY=${DOCKER_HUB_KEY} plextrac configure
-    plextrac update
-    plextrac start
+    DOCKER_HUB_KEY=${DOCKER_HUB_KEY} plextrac install -y
 
 ### A quick note about the `DOCKER_HUB_KEY`
 It should look several groups of alphanumeric characters separated by hyphens. It should _not_ be base64-encoded.
