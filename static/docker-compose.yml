@@ -94,7 +94,7 @@ services:
       REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
     healthcheck:
-      test: ["CMD", "node", "./dist/apps/notification-engine/scripts/healthcheck.js", "readiness", "10"]
+      test: ["CMD", "npm", "run", "healthcheck:notification-engine", "readiness", "10"]
       interval: 5s
       timeout: 5s
       retries: 3
@@ -119,6 +119,8 @@ services:
       NOTIFICATION_DRY_RUN: ${NOTIFICATION_DRY_RUN}
       serviceConfig: ${serviceConfig}
       MAILER_SECURE: ${MAILER_SECURE}
+    healthcheck:
+      test: ["CMD", "npm", "run", "healthcheck:notification-sender", "readiness"]
     entrypoint: npm run
     command: "start:notification-sender"
 
