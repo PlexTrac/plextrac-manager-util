@@ -24,7 +24,7 @@ function configure_user_environment() {
 
 function copy_scripts() {
   info "Copying plextrac CLI to user PATH..."
-  $(dirname $0)/plextrac dist > "${PLEXTRAC_HOME}/.local/bin/plextrac" || cp $0 "${PLEXTRAC_HOME}/.local/bin/plextrac"
+  $(dirname $0)/plextrac dist 2>/dev/null > "${PLEXTRAC_HOME}/.local/bin/plextrac" || cp $0 "${PLEXTRAC_HOME}/.local/bin/plextrac"
   chmod +x "${PLEXTRAC_HOME}/.local/bin/plextrac"
   log "Done."
 }

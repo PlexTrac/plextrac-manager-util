@@ -16,8 +16,8 @@ function check_disk_capacity() {
   done <<< $(awk 'NR != 1 { print $5 " " $1 }' <<<$dfOutput)
 
   if [ "$FAILMSG" != "" ]; then
-    EXITSTATUS=1
     error "Low disk space on ${hostname} at ${currentDate}:\n${RESET}${FAILMSG}\n"
     error "Please verify you've got enough disk space before continuing! Either prune images using 'docker image prune -a' or expand the volume!"
+    return 1
   fi
 }

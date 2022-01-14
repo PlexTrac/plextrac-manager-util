@@ -54,7 +54,7 @@ log_func_header() {
 title() {
   TITLE="${1:-${FUNCNAME[1]}}"
   fill=$(echo "$PRINT_MAX_WIDTH-${#TITLE}-4" | bc)
-  printf "\n-- %s %.${fill}s\n\n" "${BOLD}${TITLE}${RESET}" "${PRINT_FILL}"
+  printf >&2 "\n-- %s %.${fill}s\n\n" "${BOLD}${TITLE}${RESET}" "${PRINT_FILL}"
 }
 
 debug() {

@@ -23,6 +23,38 @@ function get_user_approval() {
   done
 }
 
+function requires_user_root() {
+  if [ "$EUID" -ne 0 ]; then
+    die "${RED}Please run as root user (eg, with sudo)${RESET}"
+  fi
+}
+
+function requires_user_plextrac {
+  if [ "$EUID" -ne 1337 ]; then
+    die "${RED}Please run as plextrac user${RESET}"
+  fi
+}
+
+function event__log_activity() {
+  local event_log_filepath="${PLEXTRAC_HOME}/event.log"
+  if ! test -d `dirname "${event_log_filepath}"`; then { debug "missing parent directory to create event log"; return 0; }; fi
+  local activity_timestamp=`date -u +%s`
+  local activity_name="${1:-func:${FUNCNAME[1]}}"
+  local activity_data="${2:--}"
+
+  debug `printf "Logged event '%s' at %s\n" $activity_name $activity_timestamp | tee -a "${event_log_filepath}"`
+
+  if [ "$activity_data" != "-" ]; then activity_data="`printf "|\n>>>\n%s\n<<<\n" "$activity_data"`"; fi
+  debug "`{
+    echo "Event Details:"
+    echo "  activity: $activity_name"
+    echo "  timestamp: \`date -d @$activity_timestamp +%c\`"
+    echo "  user: ${USER:-$EUID}"
+    echo "  data: $activity_data"
+    echo ""
+  } |& tee -a "$event_log_filepath"`"
+}
+
 function panic() {
   echo >&2 "$*"
   stacktrace

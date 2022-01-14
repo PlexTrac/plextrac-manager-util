@@ -1,0 +1,32 @@
+name: "Upload Release Asset"
+
+on:
+  release:
+    types:
+    - published
+    - edited
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          ./src/plextrac dist > plextrac
+          sha256sum plextrac > sha256sum-plextrac.txt
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./sha256sum-plextrac.txt
+          asset_name: sha256sum-plextrac.txt
+          asset_content_type: text/plain
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./plextrac
+          asset_name: plextrac
+          asset_content_type: text/plain

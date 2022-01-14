@@ -38,47 +38,50 @@ function info_TLSCertificateDetails() {
   if opensslOutput="`echo | openssl s_client -servername localhost -connect localhost:443 2>/dev/null || true`"; then
     certInfo="`echo "$opensslOutput" | openssl x509 -noout -dates --checkend 6048000 -subject -issuer || true`"
     debug "$certInfo"
-    echo "Issuer: \t`awk -F'=' '/issuer/ { $1=""; $2=""; print }' <<<$certInfo | sed 's/ //g'`"
-    echo "Expires: \t`awk -F'=' '/notAfter/ { print $2}' <<<$certInfo`"
+    echo "Issuer: \t`awk -F'=' '/issuer/ { $1=""; $2=""; print }' <<<"$certInfo" | sed 's/ //g'`"
+    echo "Expires: \t`awk -F'=' '/notAfter/ { print $2}' <<<"$certInfo"`"
   else
     error "Certificate Information Unavailable" 2>&1
   fi
 }
 
 function releaseDetails() {
-  local service image version summary=("Name Image Version")
+  summary=("Name Image Version")
   for service in `compose_client ps --services | xargs -n1 echo`; do
     image=`_getServiceContainerImageRepo $service || echo "unknown"`
     version=`_getServiceContainerVersion $service || echo "unknown"`
     summary+=("$service $image $version")
   done
-  for line in "${summary[@]}"; do echo "$line" | awk '{ printf "%-15s  %25-s %s\n", $1, $2, $3 }'; done
+
+  printf "%s\n" "${summary[@]}" | column -t
+
+  #for line in "${summary[@]}"; do echo "$line" | awk '{ printf "%-%ss  %25-s %s\n", $1, $4, $2, $3 }'; done
 }
 
 function _getImageForService() {
-  local imageId service=$1
+  service=$1
   imageId=`compose_client images -q $service 2>/dev/null`
   if [ "$imageId" == "" ]; then echo "unknown"; else echo "$imageId"; fi
 }
 
 function _getServiceContainerImageRepo() {
-  local imageRepo imageId service=$1
+  service=$1
   imageId=`_getImageForService $service`
   imageRepo=`docker image inspect $imageId --format='{{ index .RepoTags 0 }}' 2>/dev/null | awk -F':' '{print $1}' 2>/dev/null || echo ''`
   echo $imageRepo
 }
 
 function _getServiceContainerVersion() {
-  local version imageId service=$1
+  service=$1
   imageId=`_getImageForService $service`
   version=`docker image inspect $imageId --format='{{ index .Config.Labels "org.opencontainers.image.version" }}' 2>/dev/null || echo ''`
   if [ "$version" == "" ]; then
     case $service in
       "$coreBackendComposeService")
-        version=`compose_client exec $coreBackendComposeService cat package.json | jq -r '.version'`
+        version=`compose_client exec -T $coreBackendComposeService cat package.json | jq -r '.version'`
         ;;
       "$couchbaseComposeService")
-        version=`compose_client exec $couchbaseComposeService couchbase-cli --version`
+        version=`compose_client exec -T $couchbaseComposeService couchbase-cli --version`
         ;;
       *)
         version="tag:`compose_client images $service | awk 'NR != 1 {print $3}'`"
