@@ -7,7 +7,7 @@ function system_packages__do_system_upgrade() {
   info "Updating OS packages, this make take some time!"
   system_packages__refresh_package_lists
   debug "Running system upgrade"
-  out=`apt-get upgrade -y -o Dpkg::Options::="--force-confold"  2>&1 && apt-get autoremove -y 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
+  out=`apt-get upgrade -y -o DPkg::Options::=--force-confold -o DPkg::Options::=--force-confdef  2>&1 && apt-get autoremove -y 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
   debug "$out"
   log "Done."
 }
