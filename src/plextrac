@@ -198,7 +198,7 @@ function mod_initialize() {
   system_packages__do_system_upgrade
   system_packages__install_system_dependencies
   install_docker "${FORCEUPGRADE-}"
-  install_docker_compose "${FORCEUPGRADE-}"
+  install_docker_compose
   title "Setting up local PlexTrac user"
   create_user
   configure_user_environment
