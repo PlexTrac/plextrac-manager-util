@@ -7,7 +7,7 @@ function system_packages__do_system_upgrade() {
   info "Updating OS packages, this make take some time!"
   system_packages__refresh_package_lists
   debug "Running system upgrade"
-  out=`apt-get upgrade -y -o Dpkg::Options::="--force-confold"  2>&1 && apt-get autoremove -y 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
+  out=`export DEBIAN_FRONTEND=noninteractive ; apt-get upgrade -y -o DPkg::Options::=--force-confold -o DPkg::Options::=--force-confdef  2>&1 && apt-get autoremove -y 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
   debug "$out"
   log "Done."
 }
@@ -47,18 +47,14 @@ function install_docker() {
 }
 
 function install_docker_compose() {
-  if ! command -v docker-compose &> /dev/null || [ "${1:-}" == "force" ]; then
-    info "installing docker-compose..."
-    curl -sL $(curl -sL \
-      https://api.github.com/repos/docker/compose/releases/latest | jq -r \
-      ".assets[] | select(.name | test(\"^docker-compose-$(uname -s)-$(uname -m)$\"; \"i\")) | .browser_download_url" | grep -v .sha256) -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
-    docker_compose_version=`docker-compose --version`
-    event__log_activity "install:docker-compose" "$docker_compose_version"
-    info "docker compose installed, version: $docker_compose_version"
-  else
-    info "docker-compose already installed, version: `docker-compose --version`"
-  fi
+  info "upgrading docker-compose..."
+  curl -sL $(curl -sL \
+    https://api.github.com/repos/docker/compose/releases/latest | jq -r \
+    ".assets[] | select(.name | test(\"^docker-compose-$(uname -s)-$(uname -m)$\"; \"i\")) | .browser_download_url" | grep -v .sha256) -o /usr/local/bin/docker-compose
+  chmod +x /usr/local/bin/docker-compose
+  docker_compose_version=`docker-compose --version`
+  event__log_activity "install:docker-compose" "$docker_compose_version"
+  info "docker compose installed, version: $docker_compose_version"
   log "Done."
 }
 
