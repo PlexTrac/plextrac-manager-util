@@ -112,12 +112,12 @@ Vagrant.configure("2") do |config|
 
   echo ""
   echo "# Example customized deployment directory and domain name:"
-  echo "#   PLEXTRAC_HOME=/var/apps/plextrac-demo CLIENT_DOMAIN_NAME=192.168.13.37 ./plextrac initialize"
+  echo "#   PLEXTRAC_HOME=/var/apps/plextrac-demo CLIENT_DOMAIN_NAME=192.168.56.37 ./plextrac initialize"
   echo ""
 
   echo "Initializing PlexTrac at default location..."
   echo ""
-  ./plextrac initialize
+  ./plextrac initialize -v 2>&1
 
   echo "You need to provide a valid DOCKER_HUB_KEY to configure PlexTrac"
   echo "On Linux, this can be retrieved using the following command:"

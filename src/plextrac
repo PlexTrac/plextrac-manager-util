@@ -1,8 +1,9 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.2.1
+VERSION=0.2.8
 
+trap 'cleanup $?' SIGINT ERR EXIT
 
 function backtrace() {
   local deptn=${#FUNCNAME[@]}
@@ -17,24 +18,27 @@ function backtrace() {
 }
 
 function cleanup() {
-  if [ $? -ne 0 ] && [ ${VERBOSE:-false} == "true" ]; then
-    backtrace
-  fi
+  local status_code=$1
 
-  EXITMSG="${EXITMSG:-}"
-  EXITSTATUS=${EXITSTATUS:-0}
-
-  if [ "$EXITMSG" != "" ]; then
-    if [ $EXITSTATUS -gt 0 ]; then
-      error "$EXITMSG"
+  if [ "${EXITMSG:-}" != "" ]; then
+    if [ $status_code -ne 0 ]; then
+      error "${EXITMSG}"
     else
-      info "$EXITMSG"
+      info "${EXITMSG}"
     fi
   fi
-  return $EXITSTATUS
+
+  if [ $status_code -ne 0 ] && [ ${VERBOSE:-false} == "true" ]; then
+    error "${DIM}trace"
+    backtrace
+  fi
+  if [ $status_code -ne 0 ] && [ ${VERBOSE:-false} == "false" ]; then
+    log "Try running with '-v' for verbose output for more details"
+  fi
+
+  exit $status_code
 }
 
-trap 'cleanup' SIGINT ERR SIGINT EXIT
 
 function interactiveHeader() {
   if tty -s; then
@@ -53,8 +57,34 @@ function interactiveHeader() {
   fi
 }
 
+function mod_help() {
+  title "Help for the PlexTrac management script"
+  info "Available commands:"
+  log "initialize                           ${DIM}initialize local system for PlexTrac installation${RESET}"
+  log "install                              ${DIM}install PlexTrac (assumes previously initialized system)${RESET}"
+  log "backup                               ${DIM}perform backup on currently running PlexTrac application${RESET}"
+  log "check                                ${DIM}checks for version & status of PlexTrac application${RESET}"
+  log "configure                            ${DIM}does initial configuration required for PlexTrac application${RESET}"
+  log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
+  log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
+  log "restore                              ${DIM}restore instance from backups${RESET}"
+  log ""
+  info "Available flags to modify command behavior:"
+  log " -h | --help                         ${DIM}prints this help message${RESET}"
+  log " -d | --debug                        ${DIM}enables debug output${RESET}"
+  log " -v | --verbose                      ${DIM}enables verbose output${RESET}"
+  log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
+  log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
+  log ""
+  info "Usage:"
+  log "Prepare server for PlexTrac:         ${DIM}sudo ./plextrac initialize${RESET}"
+  log "Migrate existing instance:           ${DIM}plextrac migrate && plextrac install -y${RESET}"
+  log "Install new instance:                ${DIM}plextrac install -y${RESET}"
+}
+
+
 function main() {
-  ProgName=$(basename $0)
+  export ProgName=$0
   _load_modules
   setup_colors
 
@@ -70,6 +100,10 @@ function main() {
         ;;
       "-d" | "--debug")
         set -x
+        shift
+        ;;
+      "-V" | "--version")
+        mod="mod_version"
         shift
         ;;
       "-v" | "--verbose")
@@ -95,11 +129,12 @@ function main() {
         ;;
       *)
         if declare -f mod_$1 >/dev/null 2>&1; then
+          # enable event logging for sub commands
+          doModLog=1
           mod=mod_$1
         else
           EXITMSG="Invalid argument $1"
-          EXITSTATUS=1
-          exit
+          return 1
         fi
         shift
         ;;
@@ -110,6 +145,7 @@ function main() {
   _load_static
   interactiveHeader
 
+  if [ ${doModLog:-0} -eq 1 ]; then event__log_activity "command:`declare -F $mod`"; fi
   $mod
 }
 
@@ -132,6 +168,7 @@ function _load_env() {
   done
 }
 
+# Build "dist" of the cli
 function mod_dist() {
   if grep -q -e "^DOCKER_COMPOSE_ENCODED=.*" $0; then
     debug "Detected embedded compose file. dist will output the current script"
@@ -154,45 +191,15 @@ function mod_dist() {
 }
 
 
-function requires_user_root() {
-  if [ "$EUID" -ne 0 ]; then
-    die "${RED}Please run as root user (eg, with sudo)${RESET}"
-  fi
-}
-
-function requires_user_plextrac {
-  if [ "$EUID" -ne 1337 ]; then
-    die "${RED}Please run as plextrac user${RESET}"
-  fi
-}
-
-function mod_help() {
-  title "Help for the PlexTrac management script"
-  info "Available commands:"
-  log "initialize                           ${DIM}initialize local system for PlexTrac installation${RESET}"
-  log "install                              ${DIM}install PlexTrac (assumes previously initialized system)${RESET}"
-  log "backup                               ${DIM}perform backup on currently running PlexTrac application${RESET}"
-  log "check                                ${DIM}checks for version & status of PlexTrac application${RESET}"
-  log "configure                            ${DIM}does initial configuration required for PlexTrac application${RESET}"
-  log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
-  log ""
-  info "Available flags to modify command behavior:"
-  log " -h | --help                         ${DIM}prints this help message${RESET}"
-  log " -d | --debug                        ${DIM}enables debug output${RESET}"
-  log " -v | --verbose                      ${DIM}enables verbose output${RESET}"
-  log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
-  log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
-  log " --no-force-upgrade                  ${DIM}do not force install upgrade packages${RESET}"
-  log ""
-}
-
 function mod_initialize() {
-  title "Initializing Environment for PlexTrac..."
+  title "Initializing environment for PlexTrac..."
   requires_user_root
-  upgrade_os
-  install_os_dependencies
+  title "Setting up system packages"
+  system_packages__do_system_upgrade
+  system_packages__install_system_dependencies
   install_docker "${FORCEUPGRADE-}"
-  install_docker_compose "${FORCEUPGRADE-}"
+  install_docker_compose
+  title "Setting up local PlexTrac user"
   create_user
   configure_user_environment
   copy_scripts
@@ -233,7 +240,8 @@ function mod_configure() {
 function mod_start() {
   title "Starting PlexTrac..."
   requires_user_plextrac
-  compose_client up -d --remove-orphans
+  # Enable database migrations on startup
+  compose_client --profile=database-migrations up -d --remove-orphans
 
   info "Waiting for application startup"
   local progressBar
@@ -265,6 +273,10 @@ function mod_check() {
 function mod_autofix() {
   title "Fixing Auto-Correctable Issues"
   configure_couchbase_users
+}
+
+function mod_version() {
+  echo $VERSION
 }
 
 main "$@"

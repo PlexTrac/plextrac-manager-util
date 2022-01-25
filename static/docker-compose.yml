@@ -1,12 +1,12 @@
-version: '3.5'
+version: '3.8'
 
 services:
   plextracapi:
+    environment:
+      STARTUP_MODE: API_ONLY
     env_file:
       - .env
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
-    ports:
-    - 127.0.0.1:4350:4350/tcp
     restart: always
     volumes:
     - uploads:/usr/src/plextrac-api/uploads:rw
@@ -14,6 +14,25 @@ services:
       test:
         - "CMD-SHELL"
         - "curl http://localhost:4350/api/v2/health/live"
+
+  couchbase-migrations:
+    profiles:
+      - "database-migrations"
+    depends_on:
+      - plextracdb
+      - redis
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    entrypoint: ''
+    command: |
+      sh -c
+        "npm run maintenance:enable &&
+         npm run db:migrate &&
+         npm run maintenance:disable"
+    environment:
+      CB_API_PASS: ${CB_API_PASS}
+      CB_API_USER: ${CB_API_USER}
+      REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING:-redis}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
 
   plextracdb:
     environment:

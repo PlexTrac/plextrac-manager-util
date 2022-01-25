@@ -64,13 +64,15 @@ PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
   # values as needed (eg, rotating SENTRY_DSN)
   mergedEnv=$(echo "${generatedEnv}" | sort -u -t '=' -k 1,1 - <(echo "$existingCfg") | awk 'NF' -)
 
-  diff -Nurb --color=always <(sort "${PLEXTRAC_HOME}/.env") <(echo "$mergedEnv") || true
-
   if test -f "${PLEXTRAC_HOME}/.env"; then
     if [ $(echo "$mergedEnv" | md5sum | awk '{print $1}') = $(md5sum "${PLEXTRAC_HOME}/.env" | awk '{print $1}') ]; then
       log "No change required";
     else
+      envDiff="`diff -Nurb --color=always "${PLEXTRAC_HOME}/.env" <(echo "$mergedEnv") || true`"
+      info "Detected pending changes to ${PLEXTRAC_HOME}/.env:"
+      log "${envDiff}"
       if get_user_approval; then
+        event__log_activity "config:update-env" "$envDiff"
         echo "$mergedEnv" > "${PLEXTRAC_HOME}/.env"
       else
         die "Unable to continue without updating .env"
@@ -91,12 +93,14 @@ function generateSecret() {
 }
 
 function login_dockerhub() {
+  local output
   info "Logging into DockerHub to pull images"
   if [ -z ${DOCKER_HUB_KEY} ]; then
     die "ERROR: Docker Hub key not found, please set DOCKER_HUB_KEY in the .env and re-run configuration"
   fi
 
-  docker login -u ${DOCKER_HUB_USER:-plextracusers} -p ${DOCKER_HUB_KEY}  > /dev/null 2>&1
+  output="`docker login -u ${DOCKER_HUB_USER:-plextracusers} --password-stdin 2>&1 <<< "${DOCKER_HUB_KEY}"`" || die "${output}"
+  debug "$output"
   log "Done."
 }
 
@@ -112,18 +116,22 @@ function updateComposeConfig() {
     echo "$decodedComposeFile" > $targetComposeFile
   fi
 
-  if composeConfigNeedsUpdated; then
+  composeConfigDiff="`composeConfigNeedsUpdated 2>/dev/null || true`"
+  if composeConfigNeedsUpdated >/dev/null; then
+    log "$composeConfigDiff"
     if get_user_approval; then
       echo "$decodedComposeFile" > $targetComposeFile
+      event__log_activity "config:update-dockercompose" "$composeConfigDiff"
     else
-      die "Unable to continue without updating docker-compose.yml";
+      error "Unable to continue without updating docker-compose.yml"
+      return 1
     fi
   fi
   info "Done."
 }
 
 function create_volume_directories() {
-  log_func_header
+  title "Create directories for bind mounts"
   debug "Ensuring directories exist for Docker Volumes..."
   info "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
   info "Done"
