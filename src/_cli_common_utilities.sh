@@ -42,7 +42,7 @@ function event__log_activity() {
   local activity_name="${1:-func:${FUNCNAME[1]}}"
   local activity_data="${2:--}"
 
-  debug `printf "Logged event '%s' at %s\n" $activity_name $activity_timestamp | tee -a "${event_log_filepath}"`
+  debug "`printf "Logged event '%s' at %s\n" $activity_name $activity_timestamp | tee -pa "${event_log_filepath}" 2>&1 || echo "Unable to write to event log"`"
 
   if [ "$activity_data" != "-" ]; then activity_data="`printf "|\n>>>\n%s\n<<<\n" "$activity_data"`"; fi
   debug "`{
@@ -52,7 +52,7 @@ function event__log_activity() {
     echo "  user: ${USER:-$EUID}"
     echo "  data: $activity_data"
     echo ""
-  } |& tee -a "$event_log_filepath"`"
+  } |& tee -pa "$event_log_filepath" 2>&1 || echo "Unable to write to event log"`"
 }
 
 function panic() {
