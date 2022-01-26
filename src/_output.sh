@@ -17,8 +17,6 @@ PRINT_FILL_CHAR="-"
 PRINT_FILL=$(head -c ${PRINT_MAX_WIDTH} /dev/zero | tr '\0' "${PRINT_FILL_CHAR}")
 
 msg() {
-  local in
-  local fmt
   if [ $# -ge 2 ]; then
     fmt="${1}"
     shift

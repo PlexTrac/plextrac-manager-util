@@ -114,6 +114,11 @@ function main() {
         ASSUME_YES=true
         shift
         ;;
+      # only used for mod_check
+      "--pre" | "--preinstall")
+        DO_PREINSTALL_CHECKS=1
+        shift
+        ;;
       # skip checks for existing installation, mostly for doing a migration
       "--ignore-existing")
         IGNORE_EXISTING_INSTALLATION=1
@@ -260,19 +265,6 @@ function mod_start() {
   done
   echo -n >&2 "${RESET}"
   msg " Done"
-}
-
-function mod_check() {
-  title "Checking Local Configuration"
-  requires_user_plextrac
-  info "Checking Docker Compose Config"
-  compose_client config -q && info "Config check passed"
-  pending=`composeConfigNeedsUpdated || true`
-  if [ "$pending" != "" ]; then
-    error "Pending Changes:"
-    msg "    %s\n" "$pending"
-  fi
-  VALIDATION_ONLY=1 configure_couchbase_users
 }
 
 function mod_autofix() {
