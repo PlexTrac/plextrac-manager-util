@@ -74,5 +74,6 @@ function _load_static() {
     local staticFilesDir="$(dirname $0)/../static"
     export DOCKER_COMPOSE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.yml"`
     export DOCKER_COMPOSE_OVERRIDE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.override.yml"`
+    export SYSTEM_REQUIREMENTS=`cat "$staticFilesDir/system-requirements.json"`
   fi
 }

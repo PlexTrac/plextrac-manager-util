@@ -1,0 +1,16 @@
+{
+  "operating_systems": [
+    {
+      "name": "ubuntu",
+      "versions": [
+        "20.04"
+      ]
+    },
+    {
+      "name": "redhat",
+      "versions": [
+        "7"
+      ]
+    }
+  ]
+}
