@@ -26,16 +26,24 @@ function mod_check() {
 
 # Check for an existing installation
 function _check_no_existing_installation() {
+  if [ ${IGNORE_EXISTING_INSTALLATION:-0} -eq 1 ]; then
+    info "SKIPPING existing installation checks (check command arguments)"
+    return 0
+  fi
   info "Checking for pre-existing installation at '${PLEXTRAC_HOME}'"
+  status=0
   if test -d "${PLEXTRAC_HOME}"; then
     debug "Found directory '${PLEXTRAC_HOME}'"
     if test -f "${PLEXTRAC_HOME}/docker-compose.yml"; then
-      debug "Found existing docker-compose.yml"
+      error "Found existing docker-compose.yml"
+      status=1
     fi
     if test -f "${PLEXTRAC_HOME}/docker-compose.override.yml"; then
-      debug "Found existing docker-compose.override.yml"
+      error "Found existing docker-compose.override.yml"
+      status=1
     fi
   fi
+  return $status
 }
 
 function _check_system_meets_minimum_requirements() {
