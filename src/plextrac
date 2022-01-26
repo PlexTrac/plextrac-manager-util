@@ -114,6 +114,11 @@ function main() {
         ASSUME_YES=true
         shift
         ;;
+      # skip checks for existing installation, mostly for doing a migration
+      "--ignore-existing")
+        IGNORE_EXISTING_INSTALLATION=1
+        shift
+        ;;
       "--install-dir" | "--plextrac-home")
         PLEXTRAC_HOME=$2
         shift

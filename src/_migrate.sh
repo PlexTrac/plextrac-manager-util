@@ -59,7 +59,7 @@ function mod_migrate() {
   mod_configure
 
   title "Migration complete"
-  info "Please run 'plextrac install' to complete your installation"
+  info "Please run 'plextrac install --ignore-existing' to complete your installation"
 }
 
 function migrate_getCouchbaseCredentials() {
