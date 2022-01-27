@@ -1,14 +1,34 @@
+function systemPackageManager() {
+  if command -v apt-get >/dev/null 2>&1; then echo "apt"; return; fi
+  if command -v yum >/dev/null 2>&1; then echo "yum"; return; fi
+}
+
 function system_packages__refresh_package_lists() {
   debug "Refreshing OS package lists"
-  _system_cmd_with_debug_and_fail "apt-get update 2>&1"
+  case `systemPackageManager` in
+    "apt")
+      _system_cmd_with_debug_and_fail "apt-get update 2>&1"
+      ;;
+    "yum")
+      _system_cmd_with_debug_and_fail "yum check-update 2>&1 || true # hide exit code for successful check and pending upgrades"
+      ;;
+  esac
 }
 
 function system_packages__do_system_upgrade() {
   info "Updating OS packages, this make take some time!"
   system_packages__refresh_package_lists
   debug "Running system upgrade"
-  out=`export DEBIAN_FRONTEND=noninteractive ; apt-get upgrade -y -o DPkg::Options::=--force-confold -o DPkg::Options::=--force-confdef  2>&1 && apt-get autoremove -y 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
-  debug "$out"
+  case `systemPackageManager` in
+    "apt")
+      out=`export DEBIAN_FRONTEND=noninteractive ; apt-get upgrade -y -o DPkg::Options::=--force-confold -o DPkg::Options::=--force-confdef  2>&1 && apt-get autoremove -y 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
+      debug "$out"
+      ;;
+    *)
+      error "unsupported"
+      exit 1
+      ;;
+  esac
   log "Done."
 }
 
