@@ -36,6 +36,7 @@ function cleanup() {
     log "Try running with '-v' for verbose output for more details"
   fi
 
+  trap - EXIT  # prevent calling cleanup again on exit
   exit $status_code
 }
 

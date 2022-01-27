@@ -6,8 +6,8 @@
 function mod_check() {
   if [ ${DO_PREINSTALL_CHECKS:-0} -eq 1 ]; then
     title "Running pre-installation checks"
-    _check_no_existing_installation
     _check_system_meets_minimum_requirements
+    _check_no_existing_installation
   else
     title "Running checks on installation at '${PLEXTRAC_HOME}'"
     requires_user_plextrac
@@ -47,6 +47,8 @@ function _check_no_existing_installation() {
 }
 
 function _check_system_meets_minimum_requirements() {
+  info "Checking for initial packages"
+  _check_base_required_packages
   info "Checking system meets minimum requirements"
   _check_os_supported_flavor_and_release
 }
@@ -62,9 +64,46 @@ function _check_os_supported_flavor_and_release() {
   release=`lsb_release -sr`
   debug "Detected OS release/version: '${release}'"
 
-  query=".operating_systems[] | select((.name==\"$name\" and .versions[]==\"$release\")) | .name"
+  query=".operating_systems[] | select((.name==\"$name\" and .versions[]==\"$release\")) | .family"
 
   output=`jq --exit-status -r "${query}" <<<"${SYSTEM_REQUIREMENTS}"` || \
-    { error "Detected OS $name:$release does not meet system requirements"; debug "json query filter: '${query}'" ; exit 1 ; }
-  log "Detected OS '$name:$release' matched supported OS '$output'"
+    { error "Detected OS $name:$release does not meet system requirements"
+      debug "json query filter: '${query}'"; debug "$output" ; exit 1 ; }
+  log "Detected supported OS '$name:$release' from family '$output'"
+}
+
+# Check for some base required packages to even validate the system
+function _check_base_required_packages() {
+  requiredCommands=('jq' 'lsb_release' 'curl')
+  missingCommands=()
+  status=0
+  for cmd in ${requiredCommands[@]}; do
+    debug "--"
+    debug "Checking if '$cmd' is available"
+    output="`command -V "$cmd" 2>&1`" || { debug "Missing required command '$cmd'"; debug "$output";
+                                         missingCommands+=("$cmd"); status=1 ; continue; }
+    log "$cmd is available"
+  done
+  if [ $status -ne 0 ]; then
+    error "Missing required commands: ${missingCommands[*]}"
+    # special handling for centos/rhel, which need epel enabled
+    if command -v yum >/dev/null 2>&1; then
+      installCmd="${BOLD}\$${RESET} ${CYAN}"
+      yum repolist -q | grep epel || installCmd+='yum install --assumeyes epel-release && '
+
+      declare -A cmdToPkg=([jq]=jq [lsb_release]=redhat-lsb-core [curl]=curl)
+      installCmd="$installCmd""yum install --assumeyes`for cmd in ${missingCommands[@]}; do echo -n " ${cmdToPkg[$cmd]}"; done`"
+
+      log "${BOLD}Please enable the EPEL repo and install required packages:"
+      log "$installCmd"
+    fi
+    # debian based systems should all be roughly similar
+    if command -v apt-get >/dev/null 2>&1; then
+      declare -A cmdToPkg=([jq]=jq [lsb_release]=lsb-release [curl]=curl)
+      installCandidates=`for cmd in ${missingCommands[@]}; do echo -n " ${cmdToPkg[$cmd]}"; done`
+      log "${BOLD}Please install required packages:"
+      log "${BOLD}\$${RESET} ${CYAN}apt-get install -y ${installCandidates}"
+    fi
+  fi
+  return $status
 }
