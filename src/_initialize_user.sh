@@ -15,8 +15,8 @@ function create_user() {
 
 function configure_user_environment() {
   info "Configuring plextrac user environment..."
-    test -f /opt/plextrac/.profile || cp /etc/skel/.profile /opt/plextrac/.profile
-    test -f /opt/plextrac/.bashrc || cp /etc/skel/.bashrc /opt/plextrac/.bashrc
+    test -f "${PLEXTRAC_HOME}/.profile" || cp /etc/skel/.profile "${PLEXTRAC_HOME}/.profile"
+    test -f "${PLEXTRAC_HOME}/.bashrc" || cp /etc/skel/.bashrc "${PLEXTRAC_HOME}/.bashrc"
     mkdir -p "${PLEXTRAC_HOME}/.local/bin"
     sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' "${PLEXTRAC_HOME}/.bashrc"
     egrep 'PATH=${HOME}/.local/bin:$PATH' "${PLEXTRAC_HOME}/.bashrc" || echo 'PATH=${HOME}/.local/bin:$PATH' >> "${PLEXTRAC_HOME}/.bashrc"
