@@ -28,11 +28,18 @@ function mod_migrate() {
     die "Could not find existing installation in ${PLEXTRAC_HOME}"
   fi
 
-  if checkExistingConfigForOverrides $legacyScriptPackVersion; then
-    error "You have existing customizations to your Docker Compose configuration."
-    log "\n\tThe diff shows what will be REMOVED from your configuration\n"
-    error "Please review the above changes and add any required configuration to ${PLEXTRAC_HOME}/docker-compose.override.yml\n"
-    info "Do you wish to continue anyway?"
+  pendingChanges="`checkExistingConfigForOverrides $legacyScriptPackVersion`"
+  if [ "$pendingChanges" != "" ]; then
+    debug "$pendingChanges"
+    error "There are pending changes to your Docker-Compose configuration."
+    log "Do you wish to review the changes?"
+    if get_user_approval; then
+      error "Any output in RED indicates configuration that will be REMOVED"
+      log "If you have any customizations such as a custom log or TLS certificate,"
+      log "please set those in the '${PLEXTRAC_HOME}/docker-compose.override.yml' file."
+      echo "$pendingChanges" >&2
+    fi
+    info "Do you wish to continue?"
     if ! get_user_approval; then
       die "Migration cannot continue without resolving local customizations"
     fi
