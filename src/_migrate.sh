@@ -28,9 +28,9 @@ function mod_migrate() {
     die "Could not find existing installation in ${PLEXTRAC_HOME}"
   fi
 
-  pendingChanges="`checkExistingConfigForOverrides $legacyScriptPackVersion`"
+  pendingChanges="`checkExistingConfigForOverrides $legacyScriptPackVersion`" || true
   if [ "$pendingChanges" != "" ]; then
-    debug "$pendingChanges"
+    event__log_activity "migrate:pending-changes" "$pendingChanges"
     error "There are pending changes to your Docker-Compose configuration."
     log "Do you wish to review the changes?"
     if get_user_approval; then
@@ -93,19 +93,18 @@ function mod_migrate() {
 
 function migrate_getCouchbaseCredentials() {
   info "Retrieving Couchbase Credentials"
-  local activeCouchbaseContainer="`docker ps | grep plextracdb 2>/dev/null | awk '{print $1}' || echo ""`"
-  if [ "$activeCouchbaseContainer" == "" ]; then
-    die "Unable to retrieve couchbase credentials from running container, please set them in .env manually"
-  fi
-  cbEnv="`docker exec -it $activeCouchbaseContainer env | grep CB_ADMIN`"
+  activeCouchbaseContainer="`docker ps | grep plextracdb 2>/dev/null | awk '{print $1}' || echo ""`"
+  cbEnv="`docker exec -it $activeCouchbaseContainer env | grep CB_ADMIN`" || info "CB_ADMIN credentials unset, will assume defaults"
   echo "CB_ADMIN_PASS=`echo "$cbEnv" | awk -F= '/PASS/ {print $2}' | grep . || echo "Plextrac"`"
   echo "CB_ADMIN_USER=`echo "$cbEnv" | awk -F= '/USER/ {print $2}' | grep . || echo "Administrator"`"
 }
 
 function migrate_getDockerHubCredentials() {
   info "Checking for existing DockerHub credentials"
-  legacyDockerLoginScript="${PLEXTAC_HOME}/connection_setup.sh"
-  test -f "$legacyDockerLoginScript" && debug "`bash ${legacyDockerLoginScript}`" || true
+  legacyDockerLoginScript="${PLEXTRAC_HOME}/connection_setup.sh"
+  if test -f "$legacyDockerLoginScript"; then
+    debug "`bash ${legacyDockerLoginScript} || true`"
+  fi
   local credentials="`jq '.auths."https://index.docker.io/v1/".auth' ~/.docker/config.json -r \
     2>/dev/null | base64 -d | \
     awk -F':' '{printf "DOCKER_HUB_USER=%s\nDOCKER_HUB_KEY=%s\n", $1, $2}'`"
