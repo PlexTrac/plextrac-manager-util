@@ -65,8 +65,30 @@ function mod_migrate() {
   info "Finished archiving legacy files"
   mod_configure
 
-  title "Migration complete"
-  info "Please run 'plextrac install' to complete your installation"
+  if [ $legacyScriptPackVersion -eq 2 ]; then
+    title "Final Steps (MANUAL DATA MIGRATION)"
+    error "Manual data migration required"
+    log "The legacy 'v2 script pack' placed certain data volumes in custom directories"
+    log "To ensure data is still available post-migration, we recommend manually"
+    log "performing the following steps:"
+    log ""
+    info "  1. Stop all running Docker containers"
+    info "  2. Create new services and associated data volumes without starting any containers"
+    info "  3. Copy existing data to newly available volumes"
+    info "  4. Finalize installation"
+    log ""
+    log ""
+    info "Example Commands:"
+    log ""
+    log "  # docker stop"
+    log "  # docker-compose create"
+    log "  # cp -aR /var/lib/docker/volumes/compose-files_dbdata/_data/. /var/lib/docker/volumes/plextrac_dbdata/_data/"
+    log "  # cp -aR ${PLEXTRAC_HOME}/uploads/. /var/lib/docker/volumes/plextrac_uploads/_data/"
+    log "  # plextrac install"
+  else
+    title "Migration complete"
+    info "Please run 'plextrac install' to complete your installation"
+  fi
 }
 
 function migrate_getCouchbaseCredentials() {
