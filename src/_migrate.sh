@@ -134,7 +134,6 @@ function migrate_archiveLegacyComposeFiles() {
 function checkExistingConfigForOverrides() {
   info "Checking for overrides to the legacy docker-compose configuration"
   composeOverrideFile="${PLEXTRAC_HOME}/docker-compose.override.yml"
-  legacyComposeFile legacyDatabaseFile
   case ${1:-1} in
     1)
       legacyComposeFile="${PLEXTRAC_HOME}/docker-compose.yml"
