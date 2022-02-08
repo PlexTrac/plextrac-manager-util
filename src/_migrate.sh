@@ -75,14 +75,18 @@ function migrate_getCouchbaseCredentials() {
   if [ "$activeCouchbaseContainer" == "" ]; then
     die "Unable to retrieve couchbase credentials from running container, please set them in .env manually"
   fi
-  local cbEnv="`docker exec -it $activeCouchbaseContainer env | grep CB_ADMIN`"
+  cbEnv="`docker exec -it $activeCouchbaseContainer env | grep CB_ADMIN`"
   echo "CB_ADMIN_PASS=`echo "$cbEnv" | awk -F= '/PASS/ {print $2}' | grep . || echo "Plextrac"`"
   echo "CB_ADMIN_USER=`echo "$cbEnv" | awk -F= '/USER/ {print $2}' | grep . || echo "Administrator"`"
 }
 
 function migrate_getDockerHubCredentials() {
   info "Checking for existing DockerHub credentials"
-  local credentials="`jq '.auths."https://index.docker.io/v1/".auth' ~/.docker/config.json -r 2>/dev/null | base64 -d | awk -F':' '{printf "DOCKER_HUB_USER=%s\nDOCKER_HUB_KEY=%s\n", $1, $2}'`"
+  legacyDockerLoginScript="${PLEXTAC_HOME}/connection_setup.sh"
+  test -f "$legacyDockerLoginScript" && debug "`bash ${legacyDockerLoginScript}`" || true
+  local credentials="`jq '.auths."https://index.docker.io/v1/".auth' ~/.docker/config.json -r \
+    2>/dev/null | base64 -d | \
+    awk -F':' '{printf "DOCKER_HUB_USER=%s\nDOCKER_HUB_KEY=%s\n", $1, $2}'`"
   if [ "$credentials" == "" ]; then
     error "Please add your DOCKER_HUB_USER & DOCKER_HUB_KEY credentials to ${PLEXTRAC_HOME}/.env"
   fi
@@ -107,26 +111,26 @@ function migrate_archiveLegacyComposeFiles() {
 
 function checkExistingConfigForOverrides() {
   info "Checking for overrides to the legacy docker-compose configuration"
-  local composeOverrideFile="${PLEXTRAC_HOME}/docker-compose.override.yml"
-  local legacyComposeFile legacyDatabaseFile
+  composeOverrideFile="${PLEXTRAC_HOME}/docker-compose.override.yml"
+  legacyComposeFile legacyDatabaseFile
   case ${1:-1} in
     1)
-      local legacyComposeFile="${PLEXTRAC_HOME}/docker-compose.yml"
-      local legacyDatabaseFile="${PLEXTRAC_HOME}/docker-database.yml"
+      legacyComposeFile="${PLEXTRAC_HOME}/docker-compose.yml"
+      legacyDatabaseFile="${PLEXTRAC_HOME}/docker-database.yml"
       ;;
     2)
-      local legacyComposeFile="${PLEXTRAC_HOME}/compose-files/docker-compose.yml"
-      local legacyDatabaseFile="${PLEXTRAC_HOME}/compose-files/docker-database.yml"
+      legacyComposeFile="${PLEXTRAC_HOME}/compose-files/docker-compose.yml"
+      legacyDatabaseFile="${PLEXTRAC_HOME}/compose-files/docker-database.yml"
       ;;
     *)
       die "Invalid script pack version";;
   esac
 
   info "Checking legacy configuration"
-  local dcCMD="docker-compose -f $legacyComposeFile -f $legacyDatabaseFile"
+  dcCMD="docker-compose -f $legacyComposeFile -f $legacyDatabaseFile"
   ${dcCMD} config -q || die "Invalid legacy configuration - please contact support"
 
-  local decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
+  decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
   #diff -N --unified=2 --color=always --label existing --label "updated" $targetComposeFile <(echo "$decodedComposeFile") || return 0
   diff --unified --color=always --show-function-line='^\s\{2\}\w\+' \
     <($dcCMD config --no-interpolate) \
