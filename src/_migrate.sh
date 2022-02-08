@@ -28,11 +28,18 @@ function mod_migrate() {
     die "Could not find existing installation in ${PLEXTRAC_HOME}"
   fi
 
-  if checkExistingConfigForOverrides $legacyScriptPackVersion; then
-    error "You have existing customizations to your Docker Compose configuration."
-    log "\n\tThe diff shows what will be REMOVED from your configuration\n"
-    error "Please review the above changes and add any required configuration to ${PLEXTRAC_HOME}/docker-compose.override.yml\n"
-    info "Do you wish to continue anyway?"
+  pendingChanges="`checkExistingConfigForOverrides $legacyScriptPackVersion`" || true
+  if [ "$pendingChanges" != "" ]; then
+    event__log_activity "migrate:pending-changes" "$pendingChanges"
+    error "There are pending changes to your Docker-Compose configuration."
+    log "Do you wish to review the changes?"
+    if get_user_approval; then
+      error "Any output in RED indicates configuration that will be REMOVED"
+      log "If you have any customizations such as a custom log or TLS certificate,"
+      log "please set those in the '${PLEXTRAC_HOME}/docker-compose.override.yml' file."
+      echo "$pendingChanges" >&2
+    fi
+    info "Do you wish to continue?"
     if ! get_user_approval; then
       die "Migration cannot continue without resolving local customizations"
     fi
@@ -58,24 +65,49 @@ function mod_migrate() {
   info "Finished archiving legacy files"
   mod_configure
 
-  title "Migration complete"
-  info "Please run 'plextrac install' to complete your installation"
+  if [ $legacyScriptPackVersion -eq 2 ]; then
+    title "Final Steps (MANUAL DATA MIGRATION)"
+    error "Manual data migration required"
+    log "The legacy 'v2 script pack' placed certain data volumes in custom directories"
+    log "To ensure data is still available post-migration, we recommend manually"
+    log "performing the following steps:"
+    log ""
+    info "  1. Stop all running Docker containers"
+    info "  2. Create new services and associated data volumes without starting any containers"
+    info "  3. Copy existing data to newly available volumes"
+    info "  4. Finalize installation"
+    log ""
+    log ""
+    info "Example Commands:"
+    log ""
+    log "  # docker stop"
+    log "  # docker-compose create"
+    log "  # cp -aR /var/lib/docker/volumes/compose-files_dbdata/_data/. /var/lib/docker/volumes/plextrac_dbdata/_data/"
+    log "  # cp -aR ${PLEXTRAC_HOME}/uploads/. /var/lib/docker/volumes/plextrac_uploads/_data/"
+    log "  # plextrac install"
+  else
+    title "Migration complete"
+    info "Please run 'plextrac install' to complete your installation"
+  fi
 }
 
 function migrate_getCouchbaseCredentials() {
   info "Retrieving Couchbase Credentials"
-  local activeCouchbaseContainer="`docker ps | grep plextracdb 2>/dev/null | awk '{print $1}' || echo ""`"
-  if [ "$activeCouchbaseContainer" == "" ]; then
-    die "Unable to retrieve couchbase credentials from running container, please set them in .env manually"
-  fi
-  local cbEnv="`docker exec -it $activeCouchbaseContainer env | grep CB_ADMIN`"
+  activeCouchbaseContainer="`docker ps | grep plextracdb 2>/dev/null | awk '{print $1}' || echo ""`"
+  cbEnv="`docker exec -it $activeCouchbaseContainer env | grep CB_ADMIN`" || info "CB_ADMIN credentials unset, will assume defaults"
   echo "CB_ADMIN_PASS=`echo "$cbEnv" | awk -F= '/PASS/ {print $2}' | grep . || echo "Plextrac"`"
   echo "CB_ADMIN_USER=`echo "$cbEnv" | awk -F= '/USER/ {print $2}' | grep . || echo "Administrator"`"
 }
 
 function migrate_getDockerHubCredentials() {
   info "Checking for existing DockerHub credentials"
-  local credentials="`jq '.auths."https://index.docker.io/v1/".auth' ~/.docker/config.json -r 2>/dev/null | base64 -d | awk -F':' '{printf "DOCKER_HUB_USER=%s\nDOCKER_HUB_KEY=%s\n", $1, $2}'`"
+  legacyDockerLoginScript="${PLEXTRAC_HOME}/connection_setup.sh"
+  if test -f "$legacyDockerLoginScript"; then
+    debug "`bash ${legacyDockerLoginScript} || true`"
+  fi
+  local credentials="`jq '.auths."https://index.docker.io/v1/".auth' ~/.docker/config.json -r \
+    2>/dev/null | base64 -d | \
+    awk -F':' '{printf "DOCKER_HUB_USER=%s\nDOCKER_HUB_KEY=%s\n", $1, $2}'`"
   if [ "$credentials" == "" ]; then
     error "Please add your DOCKER_HUB_USER & DOCKER_HUB_KEY credentials to ${PLEXTRAC_HOME}/.env"
   fi
@@ -100,26 +132,25 @@ function migrate_archiveLegacyComposeFiles() {
 
 function checkExistingConfigForOverrides() {
   info "Checking for overrides to the legacy docker-compose configuration"
-  local composeOverrideFile="${PLEXTRAC_HOME}/docker-compose.override.yml"
-  local legacyComposeFile legacyDatabaseFile
+  composeOverrideFile="${PLEXTRAC_HOME}/docker-compose.override.yml"
   case ${1:-1} in
     1)
-      local legacyComposeFile="${PLEXTRAC_HOME}/docker-compose.yml"
-      local legacyDatabaseFile="${PLEXTRAC_HOME}/docker-database.yml"
+      legacyComposeFile="${PLEXTRAC_HOME}/docker-compose.yml"
+      legacyDatabaseFile="${PLEXTRAC_HOME}/docker-database.yml"
       ;;
     2)
-      local legacyComposeFile="${PLEXTRAC_HOME}/compose-files/docker-compose.yml"
-      local legacyDatabaseFile="${PLEXTRAC_HOME}/compose-files/docker-database.yml"
+      legacyComposeFile="${PLEXTRAC_HOME}/compose-files/docker-compose.yml"
+      legacyDatabaseFile="${PLEXTRAC_HOME}/compose-files/docker-database.yml"
       ;;
     *)
       die "Invalid script pack version";;
   esac
 
   info "Checking legacy configuration"
-  local dcCMD="docker-compose -f $legacyComposeFile -f $legacyDatabaseFile"
+  dcCMD="docker-compose -f $legacyComposeFile -f $legacyDatabaseFile"
   ${dcCMD} config -q || die "Invalid legacy configuration - please contact support"
 
-  local decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
+  decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
   #diff -N --unified=2 --color=always --label existing --label "updated" $targetComposeFile <(echo "$decodedComposeFile") || return 0
   diff --unified --color=always --show-function-line='^\s\{2\}\w\+' \
     <($dcCMD config --no-interpolate) \
