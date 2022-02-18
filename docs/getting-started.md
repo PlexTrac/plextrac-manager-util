@@ -14,7 +14,7 @@ title: Getting Started
 
         CPU: 4 cores or higher
 
-        Storage: ???gb or higher
+        Storage: 128GB or higher
 
 ## Installation
 
@@ -41,9 +41,6 @@ Instance Management Utility v0.1.2
 
 ...
 ```
-
-!!! todo
-    Should do at least an md5sum match to be sure the file is complete
 
 You _must_ switch to the `plextrac` user before continuing.
 
