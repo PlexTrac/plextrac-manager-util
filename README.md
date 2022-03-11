@@ -20,6 +20,7 @@ This is the PlexTrac management CLI that can be used to perform the initial setu
     DOCKER_HUB_KEY=${DOCKER_HUB_KEY} plextrac install -y
 
 ### A quick note about the `DOCKER_HUB_KEY`
+
 It should look several groups of alphanumeric characters separated by hyphens. It should _not_ be base64-encoded.
 Example: `abcd123-11a1-22bb-c3c3-defg567890`
 
@@ -74,3 +75,11 @@ You'll need to have [Vagrant](https://www.vagrantup.com/) installed before you c
     ...or for the entire stack all at once:
 
         docker-compose logs -f
+
+## Development
+
+To test changes to the bash scripts, you can SSH into the running Vagrant box and re-compile the plextrac cli by running
+
+    /vagrant/src/plextrac dist > /opt/plextrac/.local/bin/plextrac
+
+Then run whatever cli command you were editing. I.e. `plextrac info`
