@@ -23,9 +23,9 @@ function backup_fullUploadsBackup() {
 
 function backup_fullCouchbaseBackup() {
   info "$couchbaseComposeService: Performing backup of couchbase database"
-  debug "`compose_client exec $couchbaseComposeService \
+  debug "`compose_client exec $couchbaseComposeService -T \
     chown 1337:1337 /backups 2>&1`"
-  debug "`compose_client exec $couchbaseComposeService \
+  debug "`compose_client exec $couchbaseComposeService -T \
     cbbackup -m full "http://localhost:8091" /backups -u ${CB_BACKUP_USER} -p ${CB_BACKUP_PASS} 2>&1`"
   log "Done."
 }
