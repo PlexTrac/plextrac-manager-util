@@ -49,7 +49,7 @@ function install_docker() {
 function install_docker_compose() {
   info "upgrading docker-compose..."
   curl -sL $(curl -sL \
-    https://api.github.com/repos/docker/compose/releases/latest | jq -r \
+    https://api.github.com/repos/docker/compose/releases/tags/v2.2.3 | jq -r \
     ".assets[] | select(.name | test(\"^docker-compose-$(uname -s)-$(uname -m)$\"; \"i\")) | .browser_download_url" | grep -v .sha256) -o /usr/local/bin/docker-compose
   chmod +x /usr/local/bin/docker-compose
   docker_compose_version=`docker-compose --version`
