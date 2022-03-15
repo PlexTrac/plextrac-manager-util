@@ -13,7 +13,7 @@ function check_disk_capacity() {
     if [ $usePercentage -ge 85 ]; then
       FAILMSG="${FAILMSG}\n    ${partition} is at ${usePercentage}% usage"
     fi
-  done <<< $(awk 'NR != 1 { print $5 " " $1 }' <<<$dfOutput)
+  done <<< $(awk 'NR != 1 { print $5 " " $1 }' <<<"$dfOutput")
 
   if [ "$FAILMSG" != "" ]; then
     error "Low disk space on ${hostname} at ${currentDate}:\n${RESET}${FAILMSG}\n"
