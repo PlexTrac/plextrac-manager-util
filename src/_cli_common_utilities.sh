@@ -8,13 +8,13 @@ function get_user_approval() {
   PS3='Please select an option: '
   select opt in "Yes" "No" "Exit"; do
     case "${REPLY,,}" in
-      "yes" | "y")
+      "yes" | "y" | 1)
         return 0
         ;;
-      "no" | "n")
+      "no" | "n" | 2)
         return 1
         ;;
-      "q" | "quit" | "exit")
+      "q" | "quit" | "exit" | 3)
         die "User cancelled selection";;
       *)
         error "Invalid selection: $REPLY was not one of the provided options"

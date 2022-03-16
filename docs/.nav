@@ -1,0 +1,4 @@
+title: Bar
+collapse_single_pages: True
+nav:
+  - Foo: migrating.md

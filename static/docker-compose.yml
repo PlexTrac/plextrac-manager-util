@@ -86,6 +86,7 @@ services:
     container_name: redis
     volumes:
     - redis:/etc/redis:rw
+    restart: always
 
 volumes:
   dbdata: {}
