@@ -116,7 +116,7 @@ function install_docker_compose() {
     https://api.github.com/repos/docker/compose/releases/latest | jq -r \
     ".assets[] | select(.name | test(\"^docker-compose-$(uname -s)-$(uname -m)$\"; \"i\")) | .browser_download_url" | grep -v .sha256) -o /usr/local/bin/docker-compose
   chmod +x /usr/local/bin/docker-compose
-  docker_compose_version=`docker-compose --version`
+  docker_compose_version=`/usr/local/bin/docker-compose --version`
   event__log_activity "install:docker-compose" "$docker_compose_version"
   info "docker compose installed, version: $docker_compose_version"
   log "Done."
