@@ -5,5 +5,6 @@ version: '3.8'
 #   plextracnginx:
 #     volumes:
 #       - << local file path here >>:/usr/share/nginx/html/dist/img/PlexTrac_Logo.png
+#       - << local file path here >>:/usr/share/nginx/html/dist/img/PlexTrac_Logo_dark.png
 #       - << local key path here >>:/etc/ssl/app.plextrac.key
 #       - << local cert path here >>:/etc/ssl/app_cert_chain.crt
