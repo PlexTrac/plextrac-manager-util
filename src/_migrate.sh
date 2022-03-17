@@ -87,7 +87,7 @@ function mod_migrate() {
     log "  # plextrac install"
   else
     title "Migration complete"
-    info "Please run 'plextrac install' to complete your installation"
+    info "Please run 'plextrac install --ignore-existing' to complete your installation"
   fi
 }
 

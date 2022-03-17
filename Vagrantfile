@@ -1,25 +1,65 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+supportedBoxes = [
+  {
+    :name     => "amzn",
+    :box      => "bento/amazonlinux-2",
+    :default  => false,
+  },
+  {
+    :name     => "centos7",
+    :box      => "bento/centos-7",
+    :default  => false,
+  },
+  {
+    :name     => "centos8",
+    :box      => "bento/centos-8",
+    :default  => false,
+  },
+  {
+    :name     => "rockylinux",
+    :box      => "bento/rockylinux-8",
+    :default  => false,
+  },
+  {
+    :name     => "ubuntu",
+    :box      => "bento/ubuntu-20.04",
+    :default  => true,
+  },
+]
+
 # All Vagrant configuration is done below. The "2" in Vagrant.configure
 # configures the configuration version (we support older styles for
 # backwards compatibility). Please don't change it unless you know what
 # you're doing.
 Vagrant.configure("2") do |config|
+  if Vagrant.has_plugin?("vagrant-hostmanager")
+    # Manage hosts file entries
+    # Do `vagrant plugin install vagrant-hostmanager` if you want this
+    config.hostmanager.enabled = true
+    config.hostmanager.manage_host = true
+    config.hostmanager.ignore_private_ip = false
+    config.hostmanager.ip_resolver = proc do |vm, resolving_vm|
+      if hostname = (vm.ssh_info && vm.ssh_info[:host])
+        `vagrant ssh -c "hostname -I"`.split()[1]
+      end
+    end
+  end
   # The most common configuration options are documented and commented below.
   # For a complete reference, please see the online documentation at
   # https://docs.vagrantup.com.
 
   # Every Vagrant development environment requires a box. You can search for
   # boxes at https://vagrantcloud.com/search.
-  config.vm.box = "bento/ubuntu-20.04"
-  config.vm.define :"test-cli-setup"
-  config.vm.hostname = "test-cli-setup.local"
-
-  # Disable automatic box update checking. If you disable this, then
-  # boxes will only be checked for updates when the user runs
-  # `vagrant box outdated`. This is not recommended.
-  config.vm.box_check_update = true
+  supportedBoxes.each do |boxConfig|
+    hostname = "test-instance-#{boxConfig[:name]}.plextrac.local"
+    isDefault = boxConfig[:default] ? true : false 
+    config.vm.define hostname, primary: isDefault, autostart: isDefault do |host|
+      host.vm.box = boxConfig[:box]
+      host.vm.box_check_update = true # disable this to skip box updates, but remember to run `vagrant box outdated`
+    end
+  end
 
   # Create a forwarded port mapping which allows access to a specific port
   # within the machine from a port on the host machine. In the example below,
@@ -34,7 +74,7 @@ Vagrant.configure("2") do |config|
 
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
-  config.vm.network "private_network", ip: "192.168.56.37"
+  config.vm.network "private_network", type: "dhcp"
 
   # Create a public network, which generally matched to bridged network.
   # Bridged networks make the machine appear as another physical device on

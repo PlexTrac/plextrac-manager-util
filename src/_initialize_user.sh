@@ -15,7 +15,7 @@ function create_user() {
 
 function configure_user_environment() {
   info "Configuring plextrac user environment..."
-    test -f "${PLEXTRAC_HOME}/.profile" || cp /etc/skel/.profile "${PLEXTRAC_HOME}/.profile"
+    test -f "${PLEXTRAC_HOME}/.profile" || test -f /etc/skel/.profile && cp /etc/skel/.profile "${PLEXTRAC_HOME}/.profile" || log "/etc/skel/.profile does not exist, skipping"
     test -f "${PLEXTRAC_HOME}/.bashrc" || cp /etc/skel/.bashrc "${PLEXTRAC_HOME}/.bashrc"
     mkdir -p "${PLEXTRAC_HOME}/.local/bin"
     sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' "${PLEXTRAC_HOME}/.bashrc"
@@ -25,7 +25,8 @@ function configure_user_environment() {
 function copy_scripts() {
   info "Copying plextrac CLI to user PATH..."
   tmp=`mktemp -p /tmp plextrac-XXX`
-  $(dirname $0)/plextrac dist 2>/dev/null > $tmp && cp -u $tmp "${PLEXTRAC_HOME}/.local/bin/plextrac"
+  debug "tmp script location: $tmp"
+  debug "`$(dirname $0)/plextrac dist 2>/dev/null > $tmp && cp -uv $tmp "${PLEXTRAC_HOME}/.local/bin/plextrac"`"
   chmod +x "${PLEXTRAC_HOME}/.local/bin/plextrac"
   log "Done."
 }

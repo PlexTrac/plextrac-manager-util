@@ -42,7 +42,10 @@ function event__log_activity() {
   local activity_name="${1:-func:${FUNCNAME[1]}}"
   local activity_data="${2:--}"
 
-  debug `printf "Logged event '%s' at %s\n" $activity_name $activity_timestamp | tee -a "${event_log_filepath}"`
+  # old versions of tee don't support -p flag, so check here first by grepping help
+  if `tee --help | grep -q "diagnose errors writing to non pipes"`; then tee_options='-pa'; else tee_options='-a'; fi
+
+  debug "`printf "Logged event '%s' at %s\n" $activity_name $activity_timestamp | tee $tee_options "${event_log_filepath}" 2>&1 || echo "Unable to write to event log"`"
 
   if [ "$activity_data" != "-" ]; then activity_data="`printf "|\n>>>\n%s\n<<<\n" "$activity_data"`"; fi
   debug "`{
@@ -52,7 +55,7 @@ function event__log_activity() {
     echo "  user: ${USER:-$EUID}"
     echo "  data: $activity_data"
     echo ""
-  } |& tee -a "$event_log_filepath"`"
+  } |& tee $tee_options "$event_log_filepath" 2>&1 || echo "Unable to write to event log"`"
 }
 
 function panic() {
@@ -74,5 +77,6 @@ function _load_static() {
     local staticFilesDir="$(dirname $0)/../static"
     export DOCKER_COMPOSE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.yml"`
     export DOCKER_COMPOSE_OVERRIDE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.override.yml"`
+    export SYSTEM_REQUIREMENTS=`cat "$staticFilesDir/system-requirements.json"`
   fi
 }
