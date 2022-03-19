@@ -124,7 +124,11 @@ Vagrant.configure("2") do |config|
   echo ""
   echo -n 'RE9DS0VSX0hVQl9LRVk9JChqcSAnLmF1dGhzLiJodHRwczovL2luZGV4LmRvY2tlci5pby92MS8iLmF1dGgnIH4vLmRvY2tlci9jb25maWcuanNvbiAtciB8IGJhc2U2NCAtZCB8IGN1dCAtZCc6JyAtZjIpOwo=' | base64 -d
   echo ""
-  echo "If on MacOS/Windows, please figure out where that is stored and issue a PR to add support here :)"
+  echo "On MacOS, this can be retrieved using the following command (enter login passphrase in the prompt(s):"
+  echo ""
+  echo -n 'RE9DS0VSX0hVQl9LRVk9JChzZWN1cml0eSBmaW5kLWludGVybmV0LXBhc3N3b3JkIC1hIHBsZXh0cmFjdXNlcnMgLXMgaW5kZXguZG9ja2VyLmlvIC13KTsK' | base64 -d
+  echo ""
+  echo "If on Windows, please figure out where that is stored and issue a PR to add support here :)"
   echo ""
   echo "One-liner configuration for Linux users:"
   echo ""

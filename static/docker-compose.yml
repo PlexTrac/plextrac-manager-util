@@ -1,28 +1,28 @@
-version: '3.8'
+version: "3.8"
 
 services:
   plextracapi:
     environment:
       STARTUP_MODE: API_ONLY
     env_file:
-      - .env
+    - .env
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     restart: always
     volumes:
     - uploads:/usr/src/plextrac-api/uploads:rw
     healthcheck:
       test:
-        - "CMD-SHELL"
-        - "curl http://localhost:4350/api/v2/health/live"
+      - "CMD-SHELL"
+      - "curl http://localhost:4350/api/v2/health/live"
 
   couchbase-migrations:
     profiles:
-      - "database-migrations"
+    - "database-migrations"
     depends_on:
-      - plextracdb
-      - redis
+    - plextracdb
+    - redis
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
-    entrypoint: ''
+    entrypoint: ""
     command: |
       sh -c
         "npm run maintenance:enable &&
@@ -58,8 +58,8 @@ services:
     - couchbase-backups:/backups:rw
     healthcheck:
       test:
-        - "CMD-SHELL"
-        - "curl --head --fail -X GET -u $CB_ADMIN_USER:$CB_ADMIN_PASS -H 'Content-Type: application/json' http://localhost:8091/pools/default/buckets/reportMe || exit 1"
+      - "CMD-SHELL"
+      - "curl --head --fail -X GET -u $CB_ADMIN_USER:$CB_ADMIN_PASS -H 'Content-Type: application/json' http://localhost:8091/pools/default/buckets/reportMe || exit 1"
       interval: 10s
       retries: 6
       start_period: 30s
@@ -80,6 +80,54 @@ services:
     volumes:
     - letsencrypt:/etc/letsencrypt:rw
 
+  notification-engine:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    depends_on:
+    - plextracdb
+    - redis
+    restart: always
+    environment:
+      CB_API_PASS: "${CB_API_PASS:?err}"
+      CB_API_USER: "${CB_API_USER:?err}"
+      COUCHBASE_URL: "http://plextracdb"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+    healthcheck:
+      test:
+      - "CMD"
+      - "npm run healthcheck:notification-engine readiness 10"
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    entrypoint: npm run
+    command: "start:notification-engine"
+
+  notification-sender:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    depends_on:
+    - plextracdb
+    - redis
+    restart: always
+    environment:
+      CB_API_PASS: "${CB_API_PASS:?err}"
+      CB_API_USER: "${CB_API_USER:?err}"
+      COUCHBASE_URL: "http://plextracdb"
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+      NOTIFICATION_DRY_RUN: ${NOTIFICATION_DRY_RUN:-}
+      serviceConfig: ${serviceConfig:-}
+      MAILER_SECURE: ${MAILER_SECURE:-}
+    healthcheck:
+      test:
+      - "CMD"
+      - "npm run healthcheck:notification-sender readiness"
+    entrypoint: npm run
+    command: "start:notification-sender"
+
   redis:
     image: redis:6.2-alpine
     command: "redis-server --requirepass ${REDIS_PASSWORD}"
@@ -95,15 +143,15 @@ volumes:
   redis:
     driver: local
     driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '${PLEXTRAC_HOME:-.}/volumes/redis'
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/volumes/redis"
   couchbase-backups:
     driver: local
     driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '${PLEXTRAC_HOME:-.}/backups/couchbase'
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/backups/couchbase"
 
 networks:
   default:
