@@ -82,6 +82,8 @@ services:
 
   notification-engine:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 0
     depends_on:
     - plextracdb
     - redis
@@ -106,6 +108,8 @@ services:
 
   notification-sender:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 0
     depends_on:
     - plextracdb
     - redis

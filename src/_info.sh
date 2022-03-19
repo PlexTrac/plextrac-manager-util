@@ -30,11 +30,6 @@ function mod_info() {
   info "Disk Statistics"
   msg `check_disk_capacity`
   msg `info_backupDiskUsage`
-  echo >&2 ""
-
-  title "Notifications"
-  info "Summary"
-  msg "`compose_client exec plextracapi npm run status:notifications | fgrep -v '> '`"
 }
 
 function info_TLSCertificateDetails() {

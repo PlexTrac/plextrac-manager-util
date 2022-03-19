@@ -19,6 +19,12 @@ function mod_check() {
         msg "    %s\n" "$pending"
     fi
     VALIDATION_ONLY=1 configure_couchbase_users
+
+    # echo >&2 ""
+
+    # title "Notifications"
+    # info "Summary"
+    # msg "`compose_client exec plextracapi npm run status:notifications | fgrep -v '> '`"
   fi
 }
 
