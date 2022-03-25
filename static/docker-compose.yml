@@ -83,7 +83,7 @@ services:
   notification-engine:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     deploy:
-      replicas: 0
+      replicas: 1
     depends_on:
     - plextracdb
     - redis
@@ -98,7 +98,11 @@ services:
     healthcheck:
       test:
       - "CMD"
-      - "npm run healthcheck:notification-engine readiness 10"
+      - "npm"
+      - "run"
+      - "healthcheck:notification-engine"
+      - "readiness"
+      - "10"
       interval: 5s
       timeout: 5s
       retries: 3
@@ -109,7 +113,7 @@ services:
   notification-sender:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     deploy:
-      replicas: 0
+      replicas: 1
     depends_on:
     - plextracdb
     - redis
@@ -128,7 +132,10 @@ services:
     healthcheck:
       test:
       - "CMD"
-      - "npm run healthcheck:notification-sender readiness"
+      - "npm"
+      - "run"
+      - "healthcheck:notification-sender"
+      - "readiness"
     entrypoint: npm run
     command: "start:notification-sender"
 
