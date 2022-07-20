@@ -68,6 +68,7 @@ services:
     image: "plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
     environment:
       CLIENT_DOMAIN_NAME: "${CLIENT_DOMAIN_NAME:?err}"
+      ENABLE_HSTS: "${ENABLE_HSTS:-}"
       HIDE_COPYRIGHT: "${HIDE_COPYRIGHT-}"
       HIDE_PAGE_TITLE: "${HIDE_PAGE_TITLE-}"
       LETS_ENCRYPT_EMAIL: "${LETS_ENCRYPT_EMAIL:-}"
