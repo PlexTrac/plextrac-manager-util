@@ -37,14 +37,14 @@ services:
   plextracdb:
     environment:
       ADMIN_EMAIL: "${ADMIN_EMAIL:-}"
-      CB_ADMIN_USER: "${CB_ADMIN_USER:?err}"
-      CB_ADMIN_PASS: "${CB_ADMIN_PASS:?err}"
-      CB_API_USER: "${CB_API_USER:?err}"
-      CB_API_PASS: "${CB_API_PASS:?err}"
-      CB_BACKUP_USER: "${CB_BACKUP_USER:?err}"
-      CB_BACKUP_PASS: "${CB_BACKUP_PASS:?err}"
-      CB_BUCKET: "${CB_BUCKET-}"
       BACKUP_DIR: "${BACKUP_DIR-}"
+      CB_ADMIN_PASS: "${CB_ADMIN_PASS:?err}"
+      CB_ADMIN_USER: "${CB_ADMIN_USER:?err}"
+      CB_API_PASS: "${CB_API_PASS:?err}"
+      CB_API_USER: "${CB_API_USER:?err}"
+      CB_BACKUP_PASS: "${CB_BACKUP_PASS:?err}"
+      CB_BACKUP_USER: "${CB_BACKUP_USER:?err}"
+      CB_BUCKET: "${CB_BUCKET-}"
       bucket: "${bucket-}"
     image: plextrac/plextracdb:6.5.1
     ports:
@@ -68,11 +68,11 @@ services:
     image: "plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
     environment:
       CLIENT_DOMAIN_NAME: "${CLIENT_DOMAIN_NAME:?err}"
-      LETS_ENCRYPT_EMAIL: "${LETS_ENCRYPT_EMAIL:-}"
-      USE_CUSTOM_CERT: "${USE_CUSTOM_CERT-}"
       HIDE_COPYRIGHT: "${HIDE_COPYRIGHT-}"
       HIDE_PAGE_TITLE: "${HIDE_PAGE_TITLE-}"
+      LETS_ENCRYPT_EMAIL: "${LETS_ENCRYPT_EMAIL:-}"
       OVERRIDE_SENTRY_FRONTEND_ENABLED: "${OVERRIDE_SENTRY_FRONTEND_ENABLED-}"
+      USE_CUSTOM_CERT: "${USE_CUSTOM_CERT-}"
     ports:
     - 0.0.0.0:80:80/tcp
     - 0.0.0.0:443:443/tcp
@@ -121,14 +121,14 @@ services:
     environment:
       CB_API_PASS: "${CB_API_PASS:?err}"
       CB_API_USER: "${CB_API_USER:?err}"
-      COUCHBASE_URL: "http://plextracdb"
       CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      COUCHBASE_URL: "http://plextracdb"
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      MAILER_SECURE: ${MAILER_SECURE:-}
+      NOTIFICATION_DRY_RUN: ${NOTIFICATION_DRY_RUN:-}
       REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
-      NOTIFICATION_DRY_RUN: ${NOTIFICATION_DRY_RUN:-}
       serviceConfig: ${serviceConfig:-}
-      MAILER_SECURE: ${MAILER_SECURE:-}
     healthcheck:
       test:
       - "CMD"
