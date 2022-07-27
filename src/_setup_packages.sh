@@ -75,9 +75,12 @@ function install_docker() {
     case `systemPackageManager` in
       "apt")
         info "installing docker, this might take some time..."
-        _system_cmd_with_debug_and_fail "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - 2>&1"
-        debug "docker fingerprint: \n`apt-key fingerprint 0EBFCD88 2>&1`"
-        _system_cmd_with_debug_and_fail "add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\" 2>&1"
+        _system_cmd_with_debug_and_fail "mkdir -p /etc/apt/keyrings; \
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+          sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
+        _system_cmd_with_debug_and_fail 'echo "deb [arch=$(dpkg --print-architecture)
+          signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu
+          $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list'
         system_packages__refresh_package_lists
         _system_cmd_with_debug_and_fail "apt install -y docker-ce docker-ce-cli containerd.io 2>&1"
         _system_cmd_with_debug_and_fail "systemctl enable docker 2>&1"
