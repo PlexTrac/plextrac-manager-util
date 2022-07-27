@@ -26,7 +26,7 @@ function copy_scripts() {
   info "Copying plextrac CLI to user PATH..."
   tmp=`mktemp -p /tmp plextrac-XXX`
   debug "tmp script location: $tmp"
-  debug "`$(dirname $0)/plextrac dist 2>/dev/null > $tmp && cp -uv $tmp "${PLEXTRAC_HOME}/.local/bin/plextrac"`"
+  debug "`$0 dist 2>/dev/null > $tmp && cp -uv $tmp "${PLEXTRAC_HOME}/.local/bin/plextrac"`"
   chmod +x "${PLEXTRAC_HOME}/.local/bin/plextrac"
   log "Done."
 }

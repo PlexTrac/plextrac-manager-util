@@ -23,8 +23,8 @@ The latest release can be retrieved from GitHub:
 ```console
 $ curl -Ls `curl -Ls https://api.github.com/repos/PlexTrac/plextrac-manager-util/releases/latest \
     | jq -r '.assets[].browser_download_url'` \
-    > /tmp/plextrac-cli
-$ chmod a+x /tmp/plextrac-cli; sudo /tmp/plextrac-cli initialize
+    > /tmp/plextrac
+$ chmod a+x /tmp/plextrac; sudo /tmp/plextrac initialize
 
 ______ _         _____              
 | ___ \ |       |_   _|             
