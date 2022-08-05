@@ -12,8 +12,12 @@ services:
     - uploads:/usr/src/plextrac-api/uploads:rw
     healthcheck:
       test:
-      - "CMD-SHELL"
-      - "curl http://localhost:4350/api/v2/health/live"
+      # Handle cURL being removed due to upstream vuln
+      - 'python3 - << EOF'
+      - 'import requests'
+      - 'print(requests.get("http://localhost:4350/api/v2/health/live").json())'
+      - 'EOF'
+
 
   couchbase-migrations:
     profiles:
