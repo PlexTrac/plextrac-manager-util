@@ -56,8 +56,9 @@ BACKUP_DIR=/opt/couchbase/backups
 PLEXTRAC_PARSER_URL=https://plextracparser:4443
 UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
-"
 
+\`generate_default_postgres_env\`
+"
 
   # Merge the generated env with the local vars
   # Preference is given to the generated data so we can force new
@@ -89,7 +90,8 @@ PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
 }
 
 function generateSecret() {
-  echo `head -c 64 /dev/urandom | base64 | head -c 32`
+  # replace any non-alphanumeric characters so postgres doesn't choke
+  echo `head -c 64 /dev/urandom | base64 | tr -cd '[:alnum:]._-' | head -c 32`
 }
 
 function login_dockerhub() {

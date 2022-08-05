@@ -1,5 +1,58 @@
 ## Functions for managing the Postgres Database
 
+postgresDatabases=('CORE' 'RUNBOOKS')
+
+function generate_default_postgres_env() {
+  cat <<- ENDPOSTGRES
+`
+  echo PG_HOST=postgres
+  echo POSTGRES_USER=internalonly
+  echo "POSTGRES_PASSWORD=<secret>"
+  for db in ${postgresDatabases[@]}; do
+    echo "PG_${db}_DB=${db,,}"
+    echo "PG_${db}_ADMIN_USER=${db,,}_admin"
+    echo "PG_${db}_ADMIN_PASSWORD=<secret>"
+    echo "PG_${db}_RW_USER=${db,,}_rw"
+    echo "PG_${db}_RW_PASSWORD=<secret>"
+    echo "PG_${db}_RO_USER=${db,,}_ro"
+    echo "PG_${db}_RO_PASSWORD=<secret>"
+  done
+`
+ENDPOSTGRES
+}
+
+
+# -- START SECRET GENERATION SCRIPT --
+#!/bin/bash
+#  
+#  PG_DATABASES=("CORE" "RUNBOOKS")
+#  
+#  function generatePostgresDatabaseCredentials() {
+#    echo "PG_$1_ADMIN_USER=${1,,}_admin"
+#    echo -n "PG_$1_ADMIN_PASSWORD="; generateSecret
+#    echo "PG_$1_RW_USER=${1,,}_rw"
+#    echo -n "PG_$1_RW_PASSWORD="; generateSecret
+#    echo "PG_$1_RO_USER=${1,,}_ro"
+#    echo -n "PG_$1_RO_PASSWORD="; generateSecret
+#  }
+#  
+#  function generateSecret() {
+#    echo `head -c 64 /dev/urandom | base64 | tr -cd '[:alnum:]._-' | head -c 32`
+#  }
+#  
+#  function main() {
+#    echo "PG_HOST=postgres"
+#    echo "POSTGRES_USER=ullr"
+#    echo -n "POSTGRES_PASSWORD="; generateSecret
+#    for db in "${PG_DATABASES[@]}"; do
+#      echo "PG_${db}_DB=`echo $db | awk '{ print tolower($0) }'`"
+#      generatePostgresDatabaseCredentials $db
+#    done
+#  }
+#  
+#  main
+# -- END SECRET GENERATION SCRIPT --
+
 
 # From UAT
 #
@@ -62,34 +115,3 @@
 #      psql -a -v ON_ERROR_STOP=1 --username $POSTGRES_USER -d $POSTGRES_USER
 #  done
 # -- START INITDB SCRIPT --
-# -- START SECRET GENERATION SCRIPT --
-#!/bin/bash
-#  
-#  PG_DATABASES=("CORE" "RUNBOOKS")
-#  
-#  function generatePostgresDatabaseCredentials() {
-#    echo "PG_$1_ADMIN_USER=${1,,}_admin"
-#    echo -n "PG_$1_ADMIN_PASSWORD="; generateSecret
-#    echo "PG_$1_RW_USER=${1,,}_rw"
-#    echo -n "PG_$1_RW_PASSWORD="; generateSecret
-#    echo "PG_$1_RO_USER=${1,,}_ro"
-#    echo -n "PG_$1_RO_PASSWORD="; generateSecret
-#  }
-#  
-#  function generateSecret() {
-#    echo `head -c 64 /dev/urandom | base64 | tr -cd '[:alnum:]._-' | head -c 32`
-#  }
-#  
-#  function main() {
-#    echo "PG_HOST=postgres"
-#    echo "POSTGRES_USER=ullr"
-#    echo -n "POSTGRES_PASSWORD="; generateSecret
-#    for db in "${PG_DATABASES[@]}"; do
-#      echo "PG_${db}_DB=`echo $db | awk '{ print tolower($0) }'`"
-#      generatePostgresDatabaseCredentials $db
-#    done
-#  }
-#  
-#  main
-# -- END SECRET GENERATION SCRIPT --
-
