@@ -13,6 +13,7 @@ services:
     healthcheck:
       test:
       # Handle cURL being removed due to upstream vuln
+      - 'CMD-SHELL'
       - 'python3 - << EOF'
       - 'import requests'
       - 'print(requests.get("http://localhost:4350/api/v2/health/live").json())'
