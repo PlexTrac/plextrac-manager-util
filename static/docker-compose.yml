@@ -153,10 +153,31 @@ services:
     - redis:/etc/redis:rw
     restart: always
 
+  postgres:
+    image: postgres:14-alpine
+    env_file:
+    # The output of the secrets generation needs to be appended to this file
+    - .env
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: '--auth-local=scram-sha-256 --auth-host=scram-sha-256'
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+    # this is where the initdb script & SQL template go
+    - postgres-initdb:/docker-entrypoint-initdb.d
+    - postgres-data:/var/lib/postgresql/data
+
 volumes:
   dbdata: {}
   uploads: {}
   letsencrypt: {}
+  postgres-data: {}
+  postgres-initdb:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/volumes/postgres-initdb"
   redis:
     driver: local
     driver_opts:
