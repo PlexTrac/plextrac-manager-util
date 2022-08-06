@@ -1,6 +1,7 @@
 ## Functions for managing the Postgres Database
 
 postgresDatabases=('CORE' 'RUNBOOKS')
+postgresUsers=('ADMIN' 'RW' 'RO')
 
 function generate_default_postgres_env() {
   cat <<- ENDPOSTGRES
@@ -10,12 +11,10 @@ function generate_default_postgres_env() {
   echo "POSTGRES_PASSWORD=<secret>"
   for db in ${postgresDatabases[@]}; do
     echo "PG_${db}_DB=${db,,}"
-    echo "PG_${db}_ADMIN_USER=${db,,}_admin"
-    echo "PG_${db}_ADMIN_PASSWORD=<secret>"
-    echo "PG_${db}_RW_USER=${db,,}_rw"
-    echo "PG_${db}_RW_PASSWORD=<secret>"
-    echo "PG_${db}_RO_USER=${db,,}_ro"
-    echo "PG_${db}_RO_PASSWORD=<secret>"
+    for user in ${postgresUsers[@]}; do
+      echo "PG_${db}_${user}_USER=${db,,}_${user,,}"
+      echo "PG_${db}_${user}_PASSWORD=<secret>"
+    done
   done
 `
 ENDPOSTGRES
