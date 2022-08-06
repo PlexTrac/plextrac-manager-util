@@ -10,7 +10,7 @@ function generate_default_couchbase_env() {
   echo "POSTGRES_PASSWORD=<secret>"
   echo BACKUP_DIR=/opt/couchbase/backups
   for user in ${couchbaseUsers[@]}; do
-    echo "CB_${user}_USER=pt${db,,}user"
+    echo "CB_${user}_USER=pt${user,,}user"
     echo "CB_${user}_PASS=<secret>"
   done
 `

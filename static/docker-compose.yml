@@ -31,7 +31,6 @@ services:
     environment:
       CB_API_PASS: ${CB_API_PASS}
       CB_API_USER: ${CB_API_USER}
-      OVERRIDE_RUNBOOKS_V2: true
       REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING:-redis}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
 
@@ -160,7 +159,7 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
     # this is where the initdb script & SQL template go
-    - /opt/plextrac/volumes/postgres-initdb:/docker-entrypoint-initdb.d
+    - postgres-initdb:/docker-entrypoint-initdb.d
     - postgres-data:/var/lib/postgresql/data
 
 volumes:
@@ -168,6 +167,12 @@ volumes:
   uploads: {}
   letsencrypt: {}
   postgres-data: {}
+  postgres-initdb:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/volumes/postgres-initdb"
   redis:
     driver: local
     driver_opts:
