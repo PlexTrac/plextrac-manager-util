@@ -155,13 +155,26 @@ services:
 
   postgres:
     image: postgres:14-alpine
-    env_file:
-    # The output of the secrets generation needs to be appended to this file
-    - .env
     environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
+      PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
+      PG_CORE_DB: ${PG_CORE_DB:?err}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+      PG_RUNBOOKS_ADMIN_PASSWORD: ${PG_RUNBOOKS_ADMIN_PASSWORD:?err}
+      PG_RUNBOOKS_ADMIN_USER: ${PG_RUNBOOKS_ADMIN_USER:?err}
+      PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:?err}
+      PG_RUNBOOKS_RO_PASSWORD: ${PG_RUNBOOKS_RO_PASSWORD:?err}
+      PG_RUNBOOKS_RO_USER: ${PG_RUNBOOKS_RO_USER:?err}
+      PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:?err}
+      PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:?err}
       POSTGRES_HOST_AUTH_METHOD: scram-sha-256
       POSTGRES_INITDB_ARGS: '--auth-local=scram-sha-256 --auth-host=scram-sha-256'
-      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?err}
+      POSTGRES_USER: ${POSTGRES_USER:?err}
     volumes:
     # this is where the initdb script & SQL template go
     - postgres-initdb:/docker-entrypoint-initdb.d
