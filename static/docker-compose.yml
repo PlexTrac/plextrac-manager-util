@@ -2,6 +2,10 @@ version: "3.8"
 
 services:
   plextracapi:
+    depends_on:
+    - plextracdb
+    - redis
+    - postgres
     environment:
       STARTUP_MODE: API_ONLY
     env_file:
@@ -26,6 +30,7 @@ services:
     depends_on:
     - plextracdb
     - redis
+    - postgres
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     volumes:
     - uploads:/usr/src/plextrac-api/uploads:rw
@@ -38,12 +43,12 @@ services:
          npm run pg:etl up all &&
          npm run maintenance:disable"
     environment:
-      COUCHBASE_URL: "http://plextracdb"
+      COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
       CB_API_PASS: ${CB_API_PASS}
       CB_API_USER: ${CB_API_USER}
       REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING:-redis}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
-      PG_HOST: postgres
+      PG_HOST: ${PG_HOST:-postgres}
       PG_MIGRATE_PATH: /usr/src/plextrac-api
       PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
       PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
