@@ -21,6 +21,13 @@ function mod_update() {
   pull_docker_images
   mod_start
   mod_check
+  _update_hack_recreatenginx_becauseofstaledns
+}
+
+function _update_hack_recreatenginx_becauseofstaledns() {
+  info "Recreating Nginx Frontend Proxy"
+  debug "Nginx looks up DNS on start and does not refresh unless forced"
+  compose_client up -d --force-recreate $coreFrontendComposeService
 }
 
 function _selfupdate_refreshReleaseInfo() {
