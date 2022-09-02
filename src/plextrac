@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.2.2
+VERSION=0.2.25
 
 trap 'cleanup $?' SIGINT ERR EXIT
 
@@ -21,7 +21,7 @@ function cleanup() {
   local status_code=$1
 
   if [ "${EXITMSG:-}" != "" ]; then
-    if [ $status_code -gt 0 ]; then
+    if [ $status_code -ne 0 ]; then
       error "${EXITMSG}"
     else
       info "${EXITMSG}"
@@ -29,10 +29,14 @@ function cleanup() {
   fi
 
   if [ $status_code -ne 0 ] && [ ${VERBOSE:-false} == "true" ]; then
-    error ""
+    error "${DIM}trace"
     backtrace
   fi
+  if [ $status_code -ne 0 ] && [ ${VERBOSE:-false} == "false" ]; then
+    log "Try running with '-v' for verbose output for more details"
+  fi
 
+  trap - EXIT  # prevent calling cleanup again on exit
   exit $status_code
 }
 
@@ -56,32 +60,42 @@ function interactiveHeader() {
 
 function mod_help() {
   title "Help for the PlexTrac management script"
-  info "Available commands:"
-  log "initialize                           ${DIM}initialize local system for PlexTrac installation${RESET}"
-  log "install                              ${DIM}install PlexTrac (assumes previously initialized system)${RESET}"
-  log "backup                               ${DIM}perform backup on currently running PlexTrac application${RESET}"
-  log "check                                ${DIM}checks for version & status of PlexTrac application${RESET}"
-  log "configure                            ${DIM}does initial configuration required for PlexTrac application${RESET}"
-  log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
-  log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
-  log "restore                              ${DIM}restore instance from backups${RESET}"
   log ""
-  info "Available flags to modify command behavior:"
-  log " -h | --help                         ${DIM}prints this help message${RESET}"
-  log " -d | --debug                        ${DIM}enables debug output${RESET}"
-  log " -v | --verbose                      ${DIM}enables verbose output${RESET}"
-  log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
-  log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
-  log ""
-  info "Usage:"
+  info "Usage:  ${DIM}plextrac command [flags]\n"
+  info "Examples:\n"
+  info "PlexTrac Setup:"
   log "Prepare server for PlexTrac:         ${DIM}sudo ./plextrac initialize${RESET}"
   log "Migrate existing instance:           ${DIM}plextrac migrate && plextrac install -y${RESET}"
   log "Install new instance:                ${DIM}plextrac install -y${RESET}"
+  log ""
+  info "PlexTrac Management:\n"
+  log "Update to latest release:            ${DIM}plextrac update -y${RESET}"
+  log "Perform backup:                      ${DIM}plextrac backup${RESET}"
+  log "Cleanup stale cache & old backups:   ${DIM}plextrac clean${RESET}"
+  log ""
+  info "Available commands:"
+  log "backup                               ${DIM}perform backup on currently running PlexTrac application${RESET}"
+  log "check                                ${DIM}checks for version & status of PlexTrac application${RESET}"
+  log "clean                                ${DIM}archives (compresses) local backups and removes stale copies${RESET}"
+  log "configure                            ${DIM}does initial configuration required for PlexTrac application${RESET}"
+  log "initialize                           ${DIM}initialize local system for PlexTrac installation${RESET}"
+  log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
+  log "install                              ${DIM}install PlexTrac (assumes previously initialized system)${RESET}"
+  log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
+  log "restore                              ${DIM}restore instance from backups${RESET}"
+  log "update                               ${DIM}updates the management utility & applies any configuration or application updates${RESET}"
+  log ""
+  info "Available flags to modify command behavior:"
+  log " -h | --help                         ${DIM}prints this help message${RESET}"
+  log " -d | --debug                        ${DIM}enables debug output VERY NOISY${RESET}"
+  log " -v | --verbose                      ${DIM}enables verbose output, helpful for troubleshooting errors${RESET}"
+  log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
+  log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
 }
 
 
 function main() {
-  ProgName=$(basename $0)
+  export ProgName=$0
   _load_modules
   setup_colors
 
@@ -99,12 +113,26 @@ function main() {
         set -x
         shift
         ;;
+      "-V" | "--version")
+        mod="mod_version"
+        shift
+        ;;
       "-v" | "--verbose")
         VERBOSE=true
         shift
         ;;
       "-y" | "--assume-yes")
         ASSUME_YES=true
+        shift
+        ;;
+      # only used for mod_check
+      "--pre" | "--preinstall")
+        DO_PREINSTALL_CHECKS=1
+        shift
+        ;;
+      # skip checks for existing installation, mostly for doing a migration
+      "--ignore-existing")
+        IGNORE_EXISTING_INSTALLATION=1
         shift
         ;;
       "--install-dir" | "--plextrac-home")
@@ -191,7 +219,7 @@ function mod_initialize() {
   system_packages__do_system_upgrade
   system_packages__install_system_dependencies
   install_docker "${FORCEUPGRADE-}"
-  install_docker_compose "${FORCEUPGRADE-}"
+  install_docker_compose
   title "Setting up local PlexTrac user"
   create_user
   configure_user_environment
@@ -228,6 +256,7 @@ function mod_configure() {
   login_dockerhub
   updateComposeConfig
   create_volume_directories
+  deploy_volume_contents_postgres
 }
 
 function mod_start() {
@@ -250,22 +279,13 @@ function mod_start() {
   msg " Done"
 }
 
-function mod_check() {
-  title "Checking Local Configuration"
-  requires_user_plextrac
-  info "Checking Docker Compose Config"
-  compose_client config -q && info "Config check passed"
-  pending=`composeConfigNeedsUpdated || true`
-  if [ "$pending" != "" ]; then
-    error "Pending Changes:"
-    msg "    %s\n" "$pending"
-  fi
-  VALIDATION_ONLY=1 configure_couchbase_users
-}
-
 function mod_autofix() {
   title "Fixing Auto-Correctable Issues"
   configure_couchbase_users
+}
+
+function mod_version() {
+  echo $VERSION
 }
 
 main "$@"

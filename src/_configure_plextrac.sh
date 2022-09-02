@@ -44,20 +44,14 @@ USE_MAILER_SSL=${USE_MAILER_SSL:-false}
 COUCHBASE_URL=${couchbaseComposeService}
 REDIS_PASSWORD=${REDIS_PASSWORD:-`generateSecret`}
 REDIS_CONNECTION_STRING=redis
-CB_BUCKET=reportMe
-CB_API_USER=${CB_API_USER:-"ptapiuser"}
-CB_ADMIN_USER=${CB_ADMIN_USER:-"ptadminuser"}
-CB_BACKUP_USER=${CB_BACKUP_USER:-"ptbackupuser"}
-CB_API_PASS=${CB_API_PASS:-`generateSecret`}
-CB_ADMIN_PASS=${CB_ADMIN_PASS:-`generateSecret`}
-CB_BACKUP_PASS=${CB_BACKUP_PASS:-`generateSecret`}
 RUNAS_APPUSER=True
-BACKUP_DIR=/opt/couchbase/backups
 PLEXTRAC_PARSER_URL=https://plextracparser:4443
 UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
-"
 
+`generate_default_couchbase_env | setDefaultSecrets`
+`generate_default_postgres_env | setDefaultSecrets`
+"
 
   # Merge the generated env with the local vars
   # Preference is given to the generated data so we can force new
@@ -89,7 +83,21 @@ PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
 }
 
 function generateSecret() {
-  echo `head -c 64 /dev/urandom | base64 | head -c 32`
+  # replace any non-alphanumeric characters so postgres doesn't choke
+  echo `head -c 64 /dev/urandom | base64 | tr -cd '[:alnum:]._-' | head -c 32`
+}
+
+function setDefaultSecrets() {
+  OLDIFS=$IFS
+  export IFS==
+  while read var val; do
+    if [ $val == "<secret>" ]; then
+      val='`generateSecret`'
+    fi
+    eval "echo `printf '%s=${%s:-%s}\n' $var $var $val`"
+    #echo "$var=${var:-$val}"
+  done < "${1:-/dev/stdin}"
+  export IFS=$OLDIFS
 }
 
 function login_dockerhub() {

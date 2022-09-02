@@ -1,50 +1,75 @@
-version: '3.8'
+version: "3.8"
 
 services:
   plextracapi:
+    depends_on:
+    - plextracdb
+    - redis
+    - postgres
     environment:
       STARTUP_MODE: API_ONLY
     env_file:
-      - .env
+    - .env
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     restart: always
     volumes:
     - uploads:/usr/src/plextrac-api/uploads:rw
     healthcheck:
       test:
-        - "CMD-SHELL"
-        - "curl http://localhost:4350/api/v2/health/live"
+      # Handle cURL being removed due to upstream vuln
+      - 'CMD-SHELL'
+      - 'python3 - << EOF'
+      - 'import requests'
+      - 'print(requests.get("http://localhost:4350/api/v2/health/live").json())'
+      - 'EOF'
+
 
   couchbase-migrations:
     profiles:
-      - "database-migrations"
+    - "database-migrations"
     depends_on:
-      - plextracdb
-      - redis
+    - plextracdb
+    - redis
+    - postgres
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
-    entrypoint: ''
+    volumes:
+    - uploads:/usr/src/plextrac-api/uploads:rw
+    entrypoint: ""
     command: |
       sh -c
         "npm run maintenance:enable &&
          npm run db:migrate &&
+         npm run pg:migrate &&
+         npm run pg:etl up all &&
          npm run maintenance:disable"
     environment:
+      COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
       CB_API_PASS: ${CB_API_PASS}
       CB_API_USER: ${CB_API_USER}
       REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING:-redis}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
+      PG_HOST: ${PG_HOST:-postgres}
+      PG_MIGRATE_PATH: /usr/src/plextrac-api
+      PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
+      PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
+      PG_CORE_DB: ${PG_CORE_DB:?err}
+      PG_RUNBOOKS_ADMIN_PASSWORD: ${PG_RUNBOOKS_ADMIN_PASSWORD:?err}
+      PG_RUNBOOKS_ADMIN_USER: ${PG_RUNBOOKS_ADMIN_USER:?err}
+      PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:?err}
+      PG_TENANTS_WRITE_MODE: ${PG_TENANTS_WRITE_MODE:-couchbase_only}
+      PG_TENANTS_READ_MODE: ${PG_TENANTS_READ_MODE:-couchbase_only}
 
   plextracdb:
     environment:
       ADMIN_EMAIL: "${ADMIN_EMAIL:-}"
-      CB_ADMIN_USER: "${CB_ADMIN_USER:?err}"
-      CB_ADMIN_PASS: "${CB_ADMIN_PASS:?err}"
-      CB_API_USER: "${CB_API_USER:?err}"
-      CB_API_PASS: "${CB_API_PASS:?err}"
-      CB_BACKUP_USER: "${CB_BACKUP_USER:?err}"
-      CB_BACKUP_PASS: "${CB_BACKUP_PASS:?err}"
-      CB_BUCKET: "${CB_BUCKET-}"
       BACKUP_DIR: "${BACKUP_DIR-}"
+      CB_ADMIN_PASS: "${CB_ADMIN_PASS:?err}"
+      CB_ADMIN_USER: "${CB_ADMIN_USER:?err}"
+      CB_API_PASS: "${CB_API_PASS:?err}"
+      CB_API_USER: "${CB_API_USER:?err}"
+      CB_BACKUP_PASS: "${CB_BACKUP_PASS:?err}"
+      CB_BACKUP_USER: "${CB_BACKUP_USER:?err}"
+      CB_BUCKET: "${CB_BUCKET-}"
       bucket: "${bucket-}"
     image: plextrac/plextracdb:6.5.1
     ports:
@@ -58,8 +83,8 @@ services:
     - couchbase-backups:/backups:rw
     healthcheck:
       test:
-        - "CMD-SHELL"
-        - "curl --head --fail -X GET -u $CB_ADMIN_USER:$CB_ADMIN_PASS -H 'Content-Type: application/json' http://localhost:8091/pools/default/buckets/reportMe || exit 1"
+      - "CMD-SHELL"
+      - "curl --head --fail -X GET -u $CB_ADMIN_USER:$CB_ADMIN_PASS -H 'Content-Type: application/json' http://localhost:8091/pools/default/buckets/reportMe || exit 1"
       interval: 10s
       retries: 6
       start_period: 30s
@@ -68,11 +93,12 @@ services:
     image: "plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
     environment:
       CLIENT_DOMAIN_NAME: "${CLIENT_DOMAIN_NAME:?err}"
-      LETS_ENCRYPT_EMAIL: "${LETS_ENCRYPT_EMAIL:-}"
-      USE_CUSTOM_CERT: "${USE_CUSTOM_CERT-}"
+      ENABLE_HSTS: "${ENABLE_HSTS:-}"
       HIDE_COPYRIGHT: "${HIDE_COPYRIGHT-}"
       HIDE_PAGE_TITLE: "${HIDE_PAGE_TITLE-}"
+      LETS_ENCRYPT_EMAIL: "${LETS_ENCRYPT_EMAIL:-}"
       OVERRIDE_SENTRY_FRONTEND_ENABLED: "${OVERRIDE_SENTRY_FRONTEND_ENABLED-}"
+      USE_CUSTOM_CERT: "${USE_CUSTOM_CERT-}"
     ports:
     - 0.0.0.0:80:80/tcp
     - 0.0.0.0:443:443/tcp
@@ -80,29 +106,123 @@ services:
     volumes:
     - letsencrypt:/etc/letsencrypt:rw
 
+  notification-engine:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 1
+    depends_on:
+    - plextracdb
+    - redis
+    restart: always
+    environment:
+      CB_API_PASS: "${CB_API_PASS:?err}"
+      CB_API_USER: "${CB_API_USER:?err}"
+      COUCHBASE_URL: "http://plextracdb"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+    healthcheck:
+      test:
+      - "CMD"
+      - "npm"
+      - "run"
+      - "healthcheck:notification-engine"
+      - "readiness"
+      - "10"
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    entrypoint: npm run
+    command: "start:notification-engine"
+
+  notification-sender:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 1
+    depends_on:
+    - plextracdb
+    - redis
+    restart: always
+    environment:
+      CB_API_PASS: "${CB_API_PASS:?err}"
+      CB_API_USER: "${CB_API_USER:?err}"
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      COUCHBASE_URL: "http://plextracdb"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      MAILER_SECURE: ${MAILER_SECURE:-}
+      NOTIFICATION_DRY_RUN: ${NOTIFICATION_DRY_RUN:-}
+      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+      serviceConfig: ${serviceConfig:-}
+    healthcheck:
+      test:
+      - "CMD"
+      - "npm"
+      - "run"
+      - "healthcheck:notification-sender"
+      - "readiness"
+    entrypoint: npm run
+    command: "start:notification-sender"
+
   redis:
     image: redis:6.2-alpine
     command: "redis-server --requirepass ${REDIS_PASSWORD}"
     container_name: redis
     volumes:
     - redis:/etc/redis:rw
+    restart: always
+
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
+      PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
+      PG_CORE_DB: ${PG_CORE_DB:?err}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+      PG_RUNBOOKS_ADMIN_PASSWORD: ${PG_RUNBOOKS_ADMIN_PASSWORD:?err}
+      PG_RUNBOOKS_ADMIN_USER: ${PG_RUNBOOKS_ADMIN_USER:?err}
+      PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:?err}
+      PG_RUNBOOKS_RO_PASSWORD: ${PG_RUNBOOKS_RO_PASSWORD:?err}
+      PG_RUNBOOKS_RO_USER: ${PG_RUNBOOKS_RO_USER:?err}
+      PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:?err}
+      PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:?err}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: '--auth-local=scram-sha-256 --auth-host=scram-sha-256'
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?err}
+      POSTGRES_USER: ${POSTGRES_USER:?err}
+    volumes:
+    # this is where the initdb script & SQL template go
+    - postgres-initdb:/docker-entrypoint-initdb.d
+    - postgres-data:/var/lib/postgresql/data
 
 volumes:
   dbdata: {}
   uploads: {}
   letsencrypt: {}
+  postgres-data: {}
+  postgres-initdb:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/volumes/postgres-initdb"
   redis:
     driver: local
     driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '${PLEXTRAC_HOME:-.}/volumes/redis'
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/volumes/redis"
   couchbase-backups:
     driver: local
     driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '${PLEXTRAC_HOME:-.}/backups/couchbase'
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/backups/couchbase"
 
 networks:
   default:

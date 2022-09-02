@@ -1,0 +1,19 @@
+{
+  "operating_systems": [
+    {
+      "name": "ubuntu",
+      "family": "debian",
+      "versions": [
+        "20.04",
+        "18.04"
+      ]
+    },
+    {
+      "name": "centos",
+      "family": "rhel",
+      "versions": [
+        "7.9.2009"
+      ]
+    }
+  ]
+}

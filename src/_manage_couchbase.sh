@@ -1,5 +1,22 @@
 ## Functions for managing the Couchbase database
 
+couchbaseUsers=('API' 'ADMIN' 'BACKUP')
+
+function generate_default_couchbase_env() {
+  cat <<- ENDCOUCHBASE
+`
+  echo CB_BUCKET=reportMe
+  echo POSTGRES_USER=internalonly
+  echo "POSTGRES_PASSWORD=<secret>"
+  echo BACKUP_DIR=/opt/couchbase/backups
+  for user in ${couchbaseUsers[@]}; do
+    echo "CB_${user}_USER=pt${user,,}user"
+    echo "CB_${user}_PASS=<secret>"
+  done
+`
+ENDCOUCHBASE
+}
+
 function manage_api_user() {
   info "Creating unprivileged user ${CB_API_USER} with access to ${CB_BUCKET}"
   get_user_approval
