@@ -2,6 +2,10 @@ version: "3.8"
 
 services:
   plextracapi:
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
     depends_on:
     - plextracdb
     - redis
