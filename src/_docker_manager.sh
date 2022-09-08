@@ -11,9 +11,11 @@ function compose_client() {
 
 function pull_docker_images() {
   info "Pulling updated docker images"
-  # if [ ${VERBOSE:-false} != true ]; then
-  #   ARGS='-q'
-  # fi
+  if tty -s; then
+    ARGS=''
+  else
+    ARGS='-q'
+  fi
   compose_client pull ${ARGS:-}
   info "Done."
 }
