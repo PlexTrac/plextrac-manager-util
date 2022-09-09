@@ -203,6 +203,7 @@ services:
     # this is where the initdb script & SQL template go
     - postgres-initdb:/docker-entrypoint-initdb.d
     - postgres-data:/var/lib/postgresql/data
+    - postgres-backups:/backups
 
 volumes:
   dbdata: {}
@@ -227,6 +228,12 @@ volumes:
       type: "none"
       o: "bind"
       device: "${PLEXTRAC_HOME:-.}/backups/couchbase"
+  postgres-backups:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/backups/postgres"
 
 networks:
   default:
