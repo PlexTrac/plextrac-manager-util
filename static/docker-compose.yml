@@ -227,13 +227,13 @@ volumes:
     driver_opts:
       type: "none"
       o: "bind"
-      device: "${PLEXTRAC_HOME:-.}/backups/couchbase"
+      device: "${PLEXTRAC_BACKUP_PATH}/couchbase"
   postgres-backups:
     driver: local
     driver_opts:
       type: "none"
       o: "bind"
-      device: "${PLEXTRAC_HOME:-.}/backups/postgres"
+      device: "${PLEXTRAC_BACKUP_PATH}/postgres"
 
 networks:
   default:
