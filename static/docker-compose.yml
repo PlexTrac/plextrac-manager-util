@@ -175,6 +175,8 @@ services:
     container_name: redis
     volumes:
     - redis:/etc/redis:rw
+    ports:
+    - 127.0.0.1:6379:6379/tcp
     restart: always
 
   postgres:
