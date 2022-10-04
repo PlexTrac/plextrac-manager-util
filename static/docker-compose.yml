@@ -203,6 +203,7 @@ services:
     # this is where the initdb script & SQL template go
     - postgres-initdb:/docker-entrypoint-initdb.d
     - postgres-data:/var/lib/postgresql/data
+    restart: always
 
 volumes:
   dbdata: {}
