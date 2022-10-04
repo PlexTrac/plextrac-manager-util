@@ -49,10 +49,11 @@ function backup_fullPostgresBackup() {
   backupTimestamp=$(date -u "+%Y-%m-%dT%H%M%Sz")
   targetPath=/backups/$backupTimestamp
   debug "`compose_client exec -T --user 1337 $postgresComposeService mkdir -p $targetPath`"
+  pgBackupFlags='--format=custom --compress=1 --verbose'
   for db in ${postgresDatabases[@],,}; do
     log "Backing up $db to $targetPath"
     debug "`compose_client exec -T --user 1337 -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
-      pg_dump -U $POSTGRES_USER $db -a -f $targetPath/$db.psql 2>&1`"
+      pg_dump -U $POSTGRES_USER $db $pgBackupFlags --file=$targetPath/$db.psql 2>&1`"
   done
   debug "Compressing Postgres backup"
   debug "`tar -C ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp --remove-files -czvf \
