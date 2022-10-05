@@ -5,6 +5,7 @@ on:
     types:
     - published
     - edited
+    - prereleased
 
 jobs:
   build:
@@ -30,3 +31,4 @@ jobs:
           asset_path: ./plextrac
           asset_name: plextrac
           asset_content_type: text/plain
+
