@@ -72,9 +72,9 @@ function restore_doPostgresRestore() {
       debug "`compose_client exec -T $postgresComposeService\
         tar -xvzf /backups/$backupFile ./$db.psql 2>&1`"
       log "Restoring $db"
-      dbRestoreFlags='--clean --if-exists --section=data --no-owner --no-acl --disable-triggers --verbose'
+      dbRestoreFlags="-d $db --clean --if-exists --no-owner --disable-triggers --verbose"
       debug "`compose_client exec -T -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
-        pg_restore -U $POSTGRES_USER $dbRestoreFlags -f ./$db.psql 2>&1`"
+        pg_restore -U $POSTGRES_USER $dbRestoreFlags ./$db.psql 2>&1`"
       debug "`compose_client exec -T $postgresComposeService \
         rm ./$db.psql 2>&1`"
     done
