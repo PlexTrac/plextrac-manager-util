@@ -144,6 +144,12 @@ function main() {
         FORCEUPGRADE="force"
         shift
         ;;
+      # Enable restoring a specific target
+      "--restore-only")
+        RESTORETARGET=$2
+        shift
+        shift
+        ;;
       "dist")
         mod=mod_dist
         break

@@ -4,9 +4,14 @@
 #   plextrac restore
 
 function mod_restore() {
-  restore_doPostgresRestore
-  restore_doCouchbaseRestore
-  restore_doUploadsRestore
+  restoreTargets=(restore_doPostgresRestore restore_doCouchbaseRestore restore_doUploadsRestore)
+  currentTarget=`tr [:upper:] [:lower:] <<< "${RESTORETARGET:-ALL}"`
+  for target in "${restoreTargets[@]}"; do
+    debug "Checking if $target matches $currentTarget"
+    if [[ $currentTarget == "all" || ${target,,} =~ "restore_do${currentTarget}restore" ]]; then
+      $target
+    fi
+  done
 }
 
 function restore_doUploadsRestore() {
