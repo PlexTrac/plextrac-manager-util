@@ -85,4 +85,8 @@ for db in ${PGDATABASES[@]}; do
     psql -a -v ON_ERROR_STOP=1 --username $POSTGRES_USER -d $POSTGRES_USER
 done
 EOINITDBSCRIPT
+  # postgres container does not have a uid 1337, most reliable way to bootstrap
+  # without adding failure points is just allow other users to read the (not secret)
+  # bootstrapping scripts
+  debug "`chmod -Rc a+r $targetDir`"
 }
