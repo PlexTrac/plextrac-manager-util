@@ -2,6 +2,7 @@
 couchbaseComposeService="plextracdb"
 coreFrontendComposeService="plextracnginx"
 coreBackendComposeService="plextracapi"
+postgresComposeService="postgres"
 
 function compose_client() {
   flags=($@)
