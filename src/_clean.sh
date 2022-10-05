@@ -4,7 +4,7 @@
 #
 # Keeps at least 1 backup, removes any older than RETAIN_BACKUP_DAYS
 
-RETAIN_BACKUP_DAYS=${RETAIN_BACKUP_DAYS:-10}
+RETAIN_BACKUP_DAYS=${RETAIN_BACKUP_DAYS:-3}
 
 function mod_clean() {
   info_backupDiskUsage
@@ -24,12 +24,12 @@ function info_backupDiskUsage() {
 function clean_rotateCompressedArchives() {
   info "Rotating ${RETAIN_BACKUP_DAYS} days of compressed archives from ${PLEXTRAC_BACKUP_PATH}"
 
-  local findString="find ${PLEXTRAC_BACKUP_PATH} -daystart -type f -name '*.tar.gz'"
+  findString="find ${PLEXTRAC_BACKUP_PATH} -daystart -type f -name '*.tar.gz'"
 
-  local totalArchives=`eval $findString -printf '.' | wc -c`
+  totalArchives=`eval $findString -printf '.' | wc -c`
   debug "Total archives in ${PLEXTRAC_BACKUP_PATH}: $totalArchives"
 
-  local rotationCandidates=`eval $findString -mtime +${RETAIN_BACKUP_DAYS}`
+  rotationCandidates=`eval $findString -mtime +${RETAIN_BACKUP_DAYS}`
   debug "Removing `wc -w <<< "$rotationCandidates"` archives"
 
   for i in $rotationCandidates; do
