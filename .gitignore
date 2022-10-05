@@ -2,3 +2,5 @@ dist/*
 .vagrant
 *.bak
 .dccache
+backups
+
