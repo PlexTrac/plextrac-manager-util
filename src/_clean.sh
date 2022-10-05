@@ -64,5 +64,7 @@ function clean_pruneDockerResources() {
 
 function clean_sweepUploadsCache() {
   info "core-backend: Cleaning uploads/exports caches"
-  debug "`compose_client exec -T -w /usr/src/plextrac-api/uploads plextracapi bash -c "find . -type f -regextype egrep -not -regex '.*\.(json|xml|ptrac|csv)' -delete"`"
+  # Leaving the cleanup fairly light, this should help a ton without getting aggressive
+  debug "`compose_client exec -T -w /usr/src/plextrac-api/uploads plextracapi \
+    bash -c "find . -type f -regextype egrep -regex '.*\.(json|xml|ptrac|csv|.nessus)' -delete"`"
 }
