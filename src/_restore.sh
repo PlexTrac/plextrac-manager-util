@@ -79,7 +79,4 @@ function restore_doPostgresRestore() {
         rm ./$db.psql 2>&1`"
     done
   fi
-
-
-
 }
