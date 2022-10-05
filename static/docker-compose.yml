@@ -204,6 +204,7 @@ services:
     - postgres-initdb:/docker-entrypoint-initdb.d
     - postgres-data:/var/lib/postgresql/data
     - postgres-backups:/backups
+    restart: always
 
 volumes:
   dbdata: {}
