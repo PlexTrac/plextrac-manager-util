@@ -7,7 +7,8 @@ postgresComposeService="postgres"
 function compose_client() {
   flags=($@)
   debug "executing docker-compose ${flags[@]}"
-  docker-compose -f "${PLEXTRAC_HOME}/docker-compose.yml" -f "${PLEXTRAC_HOME}/docker-compose.override.yml" ${flags[@]}
+  compose_files=$(for i in `ls docker-compose*.yml`; do printf " -f ${PLEXTRAC_HOME}/%s" "$i"; done )
+  docker-compose $(echo $compose_files) ${flags[@]}
 }
 
 function pull_docker_images() {
