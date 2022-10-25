@@ -90,3 +90,39 @@ EOINITDBSCRIPT
   # bootstrapping scripts
   debug "`chmod -Rc a+r $targetDir`"
 }
+
+function postgres_metrics_validation() {
+  if [ -n "${PG_METRICS_USER}" ]; then
+    info "Checking user $PG_METRICS_USER can access postgres metrics"
+    debug "`compose_client exec -T -u 1337 -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+        psql -a -v -U internalonly -d core 2>&1 <<- EOF 
+CREATE OR REPLACE FUNCTION __tmp_create_user() returns void as \\$\\$
+BEGIN
+  IF NOT EXISTS (
+          SELECT                       -- SELECT list can stay empty for this
+          FROM   pg_catalog.pg_user
+          WHERE  usename = '$PG_METRICS_USER') THEN
+    CREATE USER postgres_exporter;
+  END IF;
+END;
+\\$\\$ language plpgsql;
+
+SELECT __tmp_create_user();
+DROP FUNCTION __tmp_create_user();
+
+ALTER USER postgres_exporter WITH PASSWORD '$PG_METRICS_PASSWORD';
+ALTER USER postgres_exporter SET SEARCH_PATH TO postgres_exporter,pg_catalog;
+
+GRANT pg_monitor to postgres_exporter;
+EOF
+`"
+fi
+
+  # Stand up PlexTrac in Vagrant --
+  # Query inside container with compose_client passing in user / pass and then query
+  # Review _backup.sh for a postgres query / access example
+
+  # This function should be run when? Run on update or arbitrarily -- _check.sh line 21
+  # /vagrant/src/plextrac autofix
+
+}

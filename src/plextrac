@@ -238,9 +238,9 @@ function mod_install() {
   requires_user_plextrac
   mod_configure
   mod_check
-  info "Starting Couchbase before other services"
-  compose_client up -d "$couchbaseComposeService"
-  info "Sleeping to give Couchbase a chance to start up"
+  info "Starting Databases before other services"
+  compose_client up -d "$couchbaseComposeService" "$postgresComposeService"
+  info "Sleeping to give Databases a chance to start up"
   local progressBar
   for i in `seq 1 20`; do
     progressBar=`printf ".%.0s%s"  {1..$i} "${progressBar:-}"`
@@ -288,6 +288,9 @@ function mod_start() {
 function mod_autofix() {
   title "Fixing Auto-Correctable Issues"
   configure_couchbase_users
+  # Add postgres configuration monitor here
+  postgres_metrics_validation
+  
 }
 
 function mod_version() {
