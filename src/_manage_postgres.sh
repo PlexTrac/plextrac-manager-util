@@ -102,7 +102,7 @@ BEGIN
           SELECT                       -- SELECT list can stay empty for this
           FROM   pg_catalog.pg_user
           WHERE  usename = '$PG_METRICS_USER') THEN
-    CREATE USER postgres_exporter;
+    CREATE USER $PG_METRICS_USER;
   END IF;
 END;
 \\$\\$ language plpgsql;
@@ -110,10 +110,10 @@ END;
 SELECT __tmp_create_user();
 DROP FUNCTION __tmp_create_user();
 
-ALTER USER postgres_exporter WITH PASSWORD '$PG_METRICS_PASSWORD';
-ALTER USER postgres_exporter SET SEARCH_PATH TO postgres_exporter,pg_catalog;
+ALTER USER $PG_METRICS_USER WITH PASSWORD '$PG_METRICS_PASSWORD';
+ALTER USER $PG_METRICS_USER SET SEARCH_PATH TO $PG_METRICS_USER,pg_catalog;
 
-GRANT pg_monitor to postgres_exporter;
+GRANT pg_monitor to $PG_METRICS_USER;
 EOF
 `"
 fi
