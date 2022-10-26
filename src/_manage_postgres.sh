@@ -92,7 +92,7 @@ EOINITDBSCRIPT
 }
 
 function postgres_metrics_validation() {
-  if [ -n "${PG_METRICS_USER}" ]; then
+  if [ "${PG_METRICS_USER:-}" != "" ]; then
     info "Checking user $PG_METRICS_USER can access postgres metrics"
     debug "`compose_client exec -T -u 1337 -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
         psql -a -v -U internalonly -d core 2>&1 <<- EOF 
