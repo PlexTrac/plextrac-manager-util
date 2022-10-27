@@ -42,8 +42,8 @@ services:
     command: |
       sh -c
         "npm run maintenance:enable &&
-         npm run db:migrate &&
          npm run pg:migrate &&
+         npm run db:migrate &&
          npm run pg:etl up all &&
          npm run maintenance:disable"
     environment:
@@ -204,6 +204,8 @@ services:
     - postgres-initdb:/docker-entrypoint-initdb.d
     - postgres-data:/var/lib/postgresql/data
     - postgres-backups:/backups
+    ports:
+    - 5432:5432
     restart: always
 
 volumes:
