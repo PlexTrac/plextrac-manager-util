@@ -19,6 +19,8 @@ function mod_check() {
         msg "    %s\n" "$pending"
     fi
     VALIDATION_ONLY=1 configure_couchbase_users
+    postgres_metrics_validation
+
 
     # echo >&2 ""
 

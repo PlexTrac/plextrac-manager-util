@@ -27,6 +27,11 @@ supportedBoxes = [
     :box      => "bento/ubuntu-20.04",
     :default  => true,
   },
+  {
+    :name     => "ubuntu2204",
+    :box      => "bento/ubuntu-22.04",
+    :default  => false,
+  },
 ]
 
 # All Vagrant configuration is done below. The "2" in Vagrant.configure
