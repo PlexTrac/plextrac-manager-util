@@ -18,6 +18,7 @@ services:
     restart: always
     volumes:
     - uploads:/usr/src/plextrac-api/uploads:rw
+    - datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp:r
     healthcheck:
       test:
       # Handle cURL being removed due to upstream vuln
@@ -169,6 +170,41 @@ services:
     entrypoint: npm run
     command: "start:notification-sender"
 
+  datalake-maintainer:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 0
+    depends_on:
+    - postgres
+    - plextracdb
+    - redis
+    restart: always
+    environment:
+      CB_API_PASS: "${CB_API_PASS:?err}"
+      CB_API_USER: "${CB_API_USER:?err}"
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      COUCHBASE_URL: "http://plextracdb"
+      GCP_DATALAKE_SA_KEY_PATH: "${GCP_DATALAKE_SA_KEY_PATH:-/usr/src/plextrac-api/keys/gcp/gcp-datalake-sa-key.json}"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+      PG_CORE_DB: ${PG_CORE_DB:?err}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+    healthcheck:
+      test:
+      - "CMD"
+      - "npm"
+      - "run"
+      - "healthcheck:datalake-maintainer"
+      - "liveness"
+    entrypoint: npm run
+    command: "start:datalake-maintainer"
+    volumes:
+    - datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp:r
+
   redis:
     image: redis:6.2-alpine
     command: "redis-server --requirepass ${REDIS_PASSWORD}"
@@ -225,6 +261,12 @@ volumes:
       type: "none"
       o: "bind"
       device: "${PLEXTRAC_HOME:-.}/volumes/redis"
+  datalake-maintainer-keys:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/volumes/datalake-maintainer-keys"
   couchbase-backups:
     driver: local
     driver_opts:
