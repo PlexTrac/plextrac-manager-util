@@ -1,5 +1,5 @@
 FROM gitpod/workspace-full
 
-RUN curl -O https://releases.hashicorp.com/vagrant/2.2.6/vagrant_2.2.6_x86_64.deb \
+RUN curl -O https://releases.hashicorp.com/vagrant/2.3.3/vagrant_2.3.3-1_amd64.deb \
     && sudo apt install ./*.deb \
     && vagrant plugin install docker
