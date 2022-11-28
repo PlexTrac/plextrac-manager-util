@@ -6,3 +6,8 @@ tasks:
       sleep 5
       vagrant up --provider=docker
       docker image ls
+
+github:
+  prebuilds:
+    pullRequests: true
+    addBadge: true
