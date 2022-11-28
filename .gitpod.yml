@@ -1,5 +1,8 @@
+image:
+  file: .gitpod.Dockerfile
 tasks:
-  - init: |
-      echo 'TODO: build project'
-    command: |
-      echo 'TODO: start app'
+  - command: sudo docker-up
+  - command: |
+      sleep 5
+      vagrant up --provider=docker
+      docker image ls
