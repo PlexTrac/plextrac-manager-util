@@ -5,6 +5,8 @@
 # subcommand function, this is the entrypoint eg `plextrac update`
 function mod_update() {
   title "Updating PlexTrac Instance"
+  # I'm comparing an int :shrug:
+  # shellcheck disable=SC2086
   if [ ${SKIP_SELF_UPGRADE:-0} -eq 0 ]; then
     info "Checking for updates to the PlexTrac Management Utility"
     if selfupdate_checkForNewRelease; then
@@ -26,10 +28,10 @@ function mod_update() {
 function _selfupdate_refreshReleaseInfo() {
   releaseApiUrl='https://api.github.com/repos/PlexTrac/plextrac-manager-util/releases'
   targetRelease="${PLEXTRAC_UTILITY_VERSION:-latest}"
-  if [ $targetRelease == "latest" ]; then
-    releaseApiUrl="${releaseApiUrl}/$targetRelease"
+  if [ "${targetRelease}" == "latest" ]; then
+    releaseApiUrl="${releaseApiUrl}/${targetRelease}"
   else
-    releaseApiUrl="${releaseApiUrl}/tags/$targetRelease"
+    releaseApiUrl="${releaseApiUrl}/tags/${targetRelease}"
   fi
 
   if test -z ${releaseInfo+x}; then
