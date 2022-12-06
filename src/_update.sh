@@ -23,6 +23,7 @@ function mod_update() {
   pull_docker_images
   mod_start
   mod_check
+  checkFailedContainers
 }
 
 function _selfupdate_refreshReleaseInfo() {
