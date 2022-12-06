@@ -48,13 +48,13 @@ function docker_createInitialComposeOverrideFile() {
 function checkFailedContainers() {
   # check current status of containers and restart any that show exited (1), created or unhealthy
   # if that's found, run the update again
-  if [ `compose_client ps | egrep 'exited \(1\)|unhealthy|created'` ]; then
+  if [[ `compose_client ps | egrep 'exited \(1\)|unhealthy|created'` ]]; then
     info "An error occured with one or more containers, attempting to start again"
     # sleep for 5 to give things a moment to settle, then try starting again
     sleep 5
     mod_start
     # check again, then throw an error if containers are still in a bad state
-    if [ `compose_client ps | egrep 'exited \(1\)|unhealthy|created'` ]; then
+    if [[ `compose_client ps | egrep 'exited \(1\)|unhealthy|created'` ]]; then
       error "One or more containers are in a failed state, please contact support!"
       return 1
     fi
