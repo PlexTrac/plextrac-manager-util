@@ -8,12 +8,12 @@ trap 'cleanup $?' SIGINT ERR EXIT
 function backtrace() {
   local deptn=${#FUNCNAME[@]}
 
-  for ((i=1; i<$deptn; i++)); do
+  for ((i=1; i<deptn; i++)); do
     local func="${FUNCNAME[$i]}"
     local line="${BASH_LINENO[$((i-1))]}"
     local src="${BASH_SOURCE[$((i-1))]}"
-    printf >&2 '%*s' $i '' # indent
-    echo >&2 "at: ${UNDERLINE}$func()${RESET}, $src, line $line"
+    >&2 printf '%*s' "$i" '' # indent
+    >&2 echo "at: ${UNDERLINE}$func()${RESET}, $src, line $line"
   done
 }
 
@@ -21,18 +21,18 @@ function cleanup() {
   local status_code=$1
 
   if [ "${EXITMSG:-}" != "" ]; then
-    if [ $status_code -ne 0 ]; then
+    if [ "$status_code" -ne 0 ]; then
       error "${EXITMSG}"
     else
       info "${EXITMSG}"
     fi
   fi
 
-  if [ $status_code -ne 0 ] && [ ${VERBOSE:-false} == "true" ]; then
+  if [ "$status_code" -ne 0 ] && [ "${VERBOSE:-false}" == "true" ]; then
     error "${DIM}trace"
     backtrace
   fi
-  if [ $status_code -ne 0 ] && [ ${VERBOSE:-false} == "false" ]; then
+  if [ "$status_code" -ne 0 ] && [ "${VERBOSE:-false}" == "false" ]; then
     log "Try running with '-v' for verbose output for more details"
   fi
 
@@ -43,18 +43,18 @@ function cleanup() {
 
 function interactiveHeader() {
   if tty -s; then
-    purple=$(tput setaf 135)
-    echo >&2 "${purple}${DIM}" 
-    echo >&2 "______ _         _____              ";
-    echo >&2 "| ___ \ |       |_   _|             ";
-    echo >&2 "| |_/ / | _____  _| |_ __ __ _  ___ ";
-    echo >&2 "|  __/| |/ _ \ \/ / | '__/ _\ |/ __|";
-    echo >&2 "| |   | |  __/>  <| | | | (_| | (__ ";
-    echo >&2 "\_|   |_|\___/_/\_\_/_|  \__,_|\___|";
-    echo >&2 "                                    ";
-    echo >&2 $RESET
-    echo >&2 "${DIM}Instance Management Utility v$VERSION";
-    echo >&2 $RESET
+    purple="$(tput setaf 135)"
+    >&2 echo "${purple}${DIM}";
+    >&2 echo "______ _         _____              ";
+    >&2 echo "| ___ \ |       |_   _|             ";
+    >&2 echo "| |_/ / | _____  _| |_ __ __ _  ___ ";
+    >&2 echo "|  __/| |/ _ \ \/ / | '__/ _\ |/ __|";
+    >&2 echo "| |   | |  __/>  <| | | | (_| | (__ ";
+    >&2 echo "\_|   |_|\___/_/\_\_/_|  \__,_|\___|";
+    >&2 echo "                                    ";
+    >&2 echo $RESET
+    >&2 echo "${DIM}Instance Management Utility v$VERSION";
+    >&2 echo $RESET
   fi
 }
 
@@ -247,11 +247,11 @@ function mod_install() {
     msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
     sleep 2
   done
-  echo -n >&2 "${RESET}"
+  >&2 echo -n "${RESET}"
   log "Done"
   mod_autofix
   pull_docker_images
-  mod_start
+  mod_start 360 # allow up to 6 minutes for startup on install, due to migrations
   mod_info
 }
 
@@ -271,18 +271,33 @@ function mod_start() {
   # Enable database migrations on startup
   compose_client --profile=database-migrations up -d --remove-orphans
 
-  info "Waiting for application startup"
+  waitTimeout=${1:-60}
+  info "Waiting up to ${waitTimeout}s for application startup"
   local progressBar
   # todo: extract this to function waitForCondition
   # it should take an optional param which is a function
   # that should return 0 when ready
-  for i in `seq 1 30`; do
-    progressBar=`printf ".%.0s%s"  {1..$i} "${progressBar:-}"`
-    msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
-    sleep 2
-  done
-  echo -n >&2 "${RESET}"
-  msg " Done"
+  (
+    while true; do
+      progressBar=`printf ".%.0s%s"  {1..$i} "${progressBar:-}"`
+      msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
+      sleep 2
+    done &
+    progressBarPid=$!
+    timeout --preserve-status $waitTimeout docker wait \
+      "$(compose_client ps couchbase-migrations -q)" >/dev/null \
+      || { error "Migrations exceeded timeout"; kill $progressBarPid; exit 1; } &
+
+    timeoutPid=$!
+    trap "kill $progressBarPid $timeoutPid >/dev/null 2>&1 || true" SIGINT SIGTERM
+
+    wait $timeoutPid
+
+    kill $progressBarPid >/dev/null 2>&1 || true
+    >&2 echo -n "${RESET}"
+
+    msg " Done"
+  )
 }
 
 function mod_autofix() {
@@ -294,7 +309,7 @@ function mod_autofix() {
 }
 
 function mod_version() {
-  echo $VERSION
+  echo "${VERSION}"
 }
 
 main "$@"

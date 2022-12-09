@@ -5,6 +5,8 @@
 # subcommand function, this is the entrypoint eg `plextrac update`
 function mod_update() {
   title "Updating PlexTrac Instance"
+  # I'm comparing an int :shrug:
+  # shellcheck disable=SC2086
   if [ ${SKIP_SELF_UPGRADE:-0} -eq 0 ]; then
     info "Checking for updates to the PlexTrac Management Utility"
     if selfupdate_checkForNewRelease; then
@@ -19,17 +21,35 @@ function mod_update() {
   info "Updating PlexTrac instance to latest release..."
   mod_configure
   pull_docker_images
-  mod_start
+
+  # Sometimes containers won't start correctly at first, but will upon a retry
+  maxRetries=2
+  for i in $( seq 1 $maxRetries ); do
+    mod_start
+
+    # Check for failed containers and continue in loop if any are found, otherwise break out of loop
+    compose_client ps | egrep 'exited \(1\)|unhealthy|created' >/dev/null || break
+
+    if [[ $i -ge $maxRetries ]]; then
+      error "One or more containers are in a failed state, please contact support!"
+      exit 1
+    fi
+
+    info "An error occured with one or more containers, attempting to start again"
+    sleep 5
+
+  done
+
   mod_check
 }
 
 function _selfupdate_refreshReleaseInfo() {
   releaseApiUrl='https://api.github.com/repos/PlexTrac/plextrac-manager-util/releases'
   targetRelease="${PLEXTRAC_UTILITY_VERSION:-latest}"
-  if [ $targetRelease == "latest" ]; then
-    releaseApiUrl="${releaseApiUrl}/$targetRelease"
+  if [ "${targetRelease}" == "latest" ]; then
+    releaseApiUrl="${releaseApiUrl}/${targetRelease}"
   else
-    releaseApiUrl="${releaseApiUrl}/tags/$targetRelease"
+    releaseApiUrl="${releaseApiUrl}/tags/${targetRelease}"
   fi
 
   if test -z ${releaseInfo+x}; then
