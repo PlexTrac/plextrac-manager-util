@@ -26,16 +26,18 @@ function mod_update() {
   maxRetries=2
   for i in $( seq 1 $maxRetries ); do
     mod_start
-    
+
     # Check for failed containers and continue in loop if any are found, otherwise break out of loop
     compose_client ps | egrep 'exited \(1\)|unhealthy|created' >/dev/null || break
-    info "An error occured with one or more containers, attempting to start again"
-    sleep 5
-    
-    if [[ $i == $maxRetries ]]; then
+
+    if [[ $i -ge $maxRetries ]]; then
       error "One or more containers are in a failed state, please contact support!"
       exit 1
     fi
+
+    info "An error occured with one or more containers, attempting to start again"
+    sleep 5
+
   done
 
   mod_check

@@ -251,7 +251,7 @@ function mod_install() {
   log "Done"
   mod_autofix
   pull_docker_images
-  mod_start
+  mod_start 360 # allow up to 6 minutes for startup on install, due to migrations
   mod_info
 }
 
@@ -271,20 +271,31 @@ function mod_start() {
   # Enable database migrations on startup
   compose_client --profile=database-migrations up -d --remove-orphans
 
-  info "Waiting for application startup"
+  waitTimeout=${1:-60}
+  info "Waiting up to ${waitTimeout}s for application startup"
   local progressBar
   # todo: extract this to function waitForCondition
   # it should take an optional param which is a function
   # that should return 0 when ready
   (
-    for i in `seq 1 60`; do
+    while true; do
       progressBar=`printf ".%.0s%s"  {1..$i} "${progressBar:-}"`
       msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
       sleep 2
     done &
-    timeout --preserve-status 300 docker wait "$(compose_client ps couchbase-migrations -q)" >/dev/null || { error "Migrations exceeded timeout"; exitStatus=1; }
-    ps $! >/dev/null 2>&1 && kill $! >/dev/null 2>&1; trap 'kill $!' SIGTERM
+    progressBarPid=$!
+    timeout --preserve-status $waitTimeout docker wait \
+      "$(compose_client ps couchbase-migrations -q)" >/dev/null \
+      || { error "Migrations exceeded timeout"; kill $progressBarPid; exit 1; } &
+
+    timeoutPid=$!
+    trap "kill $progressBarPid $timeoutPid" SIGTERM SIGINT
+
+    wait $timeoutPid
+
+    kill $progressBarPid >/dev/null 2>&1
     >&2 echo -n "${RESET}"
+
     if [ "${exitStatus:-0}" -ne 0 ]; then
       return "$exitStatus"
     fi
