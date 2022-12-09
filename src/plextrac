@@ -289,16 +289,12 @@ function mod_start() {
       || { error "Migrations exceeded timeout"; kill $progressBarPid; exit 1; } &
 
     timeoutPid=$!
-    trap "kill $progressBarPid $timeoutPid" SIGTERM SIGINT
+    trap "kill $progressBarPid $timeoutPid >/dev/null 2>&1 || true" SIGINT SIGTERM
 
     wait $timeoutPid
 
-    kill $progressBarPid >/dev/null 2>&1
+    kill $progressBarPid >/dev/null 2>&1 || true
     >&2 echo -n "${RESET}"
-
-    if [ "${exitStatus:-0}" -ne 0 ]; then
-      return "$exitStatus"
-    fi
 
     msg " Done"
   )
