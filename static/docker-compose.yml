@@ -65,6 +65,7 @@ services:
       PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:?err}
       PG_TENANTS_WRITE_MODE: ${PG_TENANTS_WRITE_MODE:-couchbase_only}
       PG_TENANTS_READ_MODE: ${PG_TENANTS_READ_MODE:-couchbase_only}
+      PG_MIGRATE_TENANT: ${PG_MIGRATE_TENANT} # Default value defined in app code
 
   plextracdb:
     environment:
