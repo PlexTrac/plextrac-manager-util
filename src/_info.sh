@@ -30,6 +30,9 @@ function mod_info() {
   info "Disk Statistics"
   msg `check_disk_capacity`
   msg `info_backupDiskUsage`
+
+  #Check for Maintenance Mode
+  msg `check_for_maintenance_mode`
 }
 
 function info_TLSCertificateDetails() {
