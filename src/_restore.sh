@@ -79,7 +79,7 @@ function restore_doPostgresRestore() {
       dbAdminEnvvar="PG_${db^^}_ADMIN_USER"
       dbAdminRole=$(eval echo "\$$dbAdminEnvvar")
       log "Restoring $db with role:${dbAdminRole}"
-      dbRestoreFlags="-d $db --clean --if-exists --no-owner --role=$dbAdminRole  --disable-triggers --verbose"
+      dbRestoreFlags="-d $db --clean --if-exists --no-privileges --no-owner --role=$dbAdminRole  --disable-triggers --verbose"
       debug "`compose_client exec -T -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
         pg_restore -U $POSTGRES_USER $dbRestoreFlags ./$db.psql 2>&1`"
       debug "`compose_client exec -T $postgresComposeService \
