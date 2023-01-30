@@ -21,7 +21,7 @@ function mod_check() {
     VALIDATION_ONLY=1 configure_couchbase_users
     postgres_metrics_validation
     check_for_maintenance_mode
-
+    check_etl_status
 
     # echo >&2 ""
 
@@ -127,4 +127,39 @@ function _check_base_required_packages() {
     fi
   fi
   return $status
+}
+
+function check_etl_status() {
+  title "Checking CB->PG ETL status"
+
+  RAW_OUTPUT=$(`compose_client exec plextracapi npm run pg:etl:status`)
+
+  # Parse the raw output. There will be two markers that can be located easily.
+  # It should look like this:
+  # ---------------- RAW JSON ----------------
+  # { json content here }
+  # ---------------- SUMMARY ----------------
+  # text content here
+  #
+  NEW_LINE="
+"
+  SUMMARY_MARKER=""$NEW_LINE"---------------- SUMMARY ----------------"$NEW_LINE""
+  JSON_MARKER=""$NEW_LINE"---------------- RAW JSON ----------------"$NEW_LINE""
+  
+  SUMMARY_OUTPUT="${RAW_OUTPUT#*"$SUMMARY_MARKER"}" # trim everything before SUMMARY marker 
+
+  JSON_OUTPUT="${RAW_OUTPUT#*"$JSON_MARKER"}" # trim everything before RAW JSON marker
+  JSON_OUTPUT="${JSON_OUTPUT%"$SUMMARY_MARKER"*}" # trim everything after SUMMARY marker
+  
+  ETLS_COMBINED_STATUS=$(echo $JSON_OUTPUT | jq -r .etlsCombinedStatus)
+
+  if [[ "$ETLS_COMBINED_STATUS" == "HEALTHY" ]] 
+  then
+    info "All ETLs are in a healthy status."
+  else
+    error "One or more ETLs are in an unhealthy status."
+  fi
+
+  msg "\n$SUMMARY_OUTPUT\n"
+  debug "$JSON_OUTPUT\n"
 }
