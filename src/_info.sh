@@ -27,7 +27,7 @@ function mod_info() {
   echo >&2 ""
 
   #Check for Maintenance Mode
-  msg `check_for_maintenance_mode`
+  msg check_for_maintenance_mode
 
   title "Host Details"
   info "Disk Statistics"
