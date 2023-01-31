@@ -18,10 +18,11 @@ function mod_check() {
         error "Pending Changes:"
         msg "    %s\n" "$pending"
     fi
-    VALIDATION_ONLY=1 configure_couchbase_users
-    postgres_metrics_validation
-    check_for_maintenance_mode
-
+    if [ ${INSTALL_ONLY:-0} -eq 0 ]; then
+      VALIDATION_ONLY=1 configure_couchbase_users
+      postgres_metrics_validation
+      check_for_maintenance_mode
+    fi
 
     # echo >&2 ""
 
@@ -33,7 +34,7 @@ function mod_check() {
 function check_for_maintenance_mode() {
   title "Checking Maintenance Mode"
   IN_MAINTENANCE="null"
-  IN_MAINTENANCE=$(curl -ks https://${CLIENT_DOMAIN_NAME}/api/v2/health/full | jq .data.inMaintenanceMode)
+  IN_MAINTENANCE=$(curl -ks https://${CLIENT_DOMAIN_NAME}/api/v2/health/full | jq .data.inMaintenanceMode) || IN_MAINTENANCE="null"
   if [ $IN_MAINTENANCE == "true" ]; then
     info "Maintenance Mode: $IN_MAINTENANCE"
   elif [ $IN_MAINTENANCE == "false" ]; then
