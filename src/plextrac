@@ -237,7 +237,13 @@ function mod_install() {
   title "Installing PlexTrac Instance"
   requires_user_plextrac
   mod_configure
-  INSTALL_ONLY=1 mod_check
+  info "Checking Docker Compose Config"
+  compose_client config -q && info "Config check passed"
+  pending=`composeConfigNeedsUpdated || true`
+  if [ "$pending" != "" ]; then
+      error "Pending Changes:"
+      msg "    %s\n" "$pending"
+  fi
   info "Starting Databases before other services"
   compose_client up -d "$couchbaseComposeService" "$postgresComposeService"
   info "Sleeping to give Databases a chance to start up"

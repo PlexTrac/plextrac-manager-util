@@ -18,11 +18,9 @@ function mod_check() {
         error "Pending Changes:"
         msg "    %s\n" "$pending"
     fi
-    if [ ${INSTALL_ONLY:-0} -eq 0 ]; then
-      VALIDATION_ONLY=1 configure_couchbase_users
-      postgres_metrics_validation
-      check_for_maintenance_mode
-    fi
+    VALIDATION_ONLY=1 configure_couchbase_users
+    postgres_metrics_validation
+    check_for_maintenance_mode
 
     # echo >&2 ""
 
