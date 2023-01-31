@@ -130,7 +130,7 @@ function _check_base_required_packages() {
 }
 
 function check_etl_status() {
-  title "Checking CB->PG ETL status"
+  title "Checking Couchbase-to-Postgres ETL status"
 
   RAW_OUTPUT=$(`compose_client exec plextracapi npm run pg:etl:status`)
 
