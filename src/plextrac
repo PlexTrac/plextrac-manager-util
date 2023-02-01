@@ -239,11 +239,6 @@ function mod_install() {
   mod_configure
   info "Checking Docker Compose Config"
   compose_client config -q && info "Config check passed"
-  pending=`composeConfigNeedsUpdated || true`
-  if [ "$pending" != "" ]; then
-      error "Pending Changes:"
-      msg "    %s\n" "$pending"
-  fi
   info "Starting Databases before other services"
   compose_client up -d "$couchbaseComposeService" "$postgresComposeService"
   info "Sleeping to give Databases a chance to start up"
