@@ -237,7 +237,6 @@ function mod_install() {
   title "Installing PlexTrac Instance"
   requires_user_plextrac
   mod_configure
-  mod_check
   info "Starting Databases before other services"
   compose_client up -d "$couchbaseComposeService" "$postgresComposeService"
   info "Sleeping to give Databases a chance to start up"
@@ -261,6 +260,7 @@ function mod_configure() {
   generate_default_config
   login_dockerhub
   updateComposeConfig
+  validateComposeConfig
   create_volume_directories
   deploy_volume_contents_postgres
 }
@@ -305,7 +305,6 @@ function mod_autofix() {
   configure_couchbase_users
   # Add postgres configuration monitor here
   postgres_metrics_validation
-  
 }
 
 function mod_version() {

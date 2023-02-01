@@ -138,6 +138,19 @@ function updateComposeConfig() {
   info "Done."
 }
 
+function validateComposeConfig() {
+  info "Validating Docker Compose Config"
+  composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
+  if [ ${configValidationFailed:-0} -ne 0 ]; then
+    error "Invalid Docker Compose Configuration"
+    log "Please check for valid syntax in override files"
+    debug "$composeConfigCheck"
+    return 1
+  else
+    log "Docker Compose Syntax Valid"
+  fi
+}
+
 function create_volume_directories() {
   title "Create directories for bind mounts"
   debug "Ensuring directories exist for Docker Volumes..."
