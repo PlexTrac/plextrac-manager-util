@@ -139,15 +139,15 @@ function updateComposeConfig() {
 }
 
 function validateComposeConfig() {
-  info "Checking Docker Compose Config"
-  composeConfigCheck=$(compose_client config -q 2>&1 || true)
-  if [ $composeConfigCheck != "" ]; then
+  info "Validating Docker Compose Config"
+  composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
+  if [ ${configValidationFailed:-0} -ne 0 ]; then
     error "Invalid Docker Compose Configuration"
-    msg "Please check for valid syntax in override files"
+    log "Please check for valid syntax in override files"
     debug "$composeConfigCheck"
     return 1
   else
-    info "Config check passed"
+    log "Docker Compose Syntax Valid"
   fi
 }
 
