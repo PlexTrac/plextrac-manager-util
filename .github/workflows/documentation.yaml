@@ -1,0 +1,26 @@
+name: documentation
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - release/**
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # Outputs: ${{ steps.deploy-pat.outputs.token }}
+      - name: Get DeployBot Token (for interacting with other private repos)
+        id: deploy-pat
+        uses: getsentry/action-github-app-token@v1
+        with:
+          app_id: ${{ secrets.DEPLOYBOT_APP_ID }}
+          private_key: ${{ secrets.DEPLOYBOT_PRIVATE_KEY }}
+
+      - name: Trigger MonoDoc Build
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          ref: refs/heads/main # Hard-coding this is not ideal, but reference the 'main' branch of the target repo
+          workflow: ci
+          repo: PlexTrac/platform-docs-monorepo
+          token: ${{ steps.deploy-pat.outputs.token }}

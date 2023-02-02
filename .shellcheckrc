@@ -1,0 +1,4 @@
+external-sources=true
+source-path=./src
+shell=bash
+disable=SC2006
