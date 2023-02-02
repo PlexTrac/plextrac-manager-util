@@ -32,15 +32,8 @@ function mod_check() {
 }
 function check_for_maintenance_mode() {
   title "Checking Maintenance Mode"
-  IN_MAINTENANCE="null"
-  IN_MAINTENANCE=$(curl -ks https://${CLIENT_DOMAIN_NAME}/api/v2/health/full | jq .data.inMaintenanceMode)
-  if [ $IN_MAINTENANCE == "true" ]; then
-    info "Maintenance Mode: $IN_MAINTENANCE"
-  elif [ $IN_MAINTENANCE == "false" ]; then
-    info "Maintenance Mode: $IN_MAINTENANCE"
-  else
-    info "Maintenance Mode: Error"
-  fi
+  IN_MAINTENANCE=$(curl -ks https://${CLIENT_DOMAIN_NAME}/api/v2/health/full | jq .data.inMaintenanceMode) || IN_MAINTENANCE="Unknown"
+  info "Maintenance Mode: $IN_MAINTENANCE"
 }
 
 ###
