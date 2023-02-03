@@ -125,25 +125,16 @@ function _check_base_required_packages() {
 function check_etl_status() {
   title "Checking Couchbase-to-Postgres ETL status"
 
-  RAW_OUTPUT=$(`compose_client exec plextracapi npm run pg:etl:status`)
+  RAW_OUTPUT=$(compose_client exec plextracapi npm run pg:etl:status)
 
-  # Parse the raw output. There will be two markers that can be located easily.
-  # It should look like this:
-  # ---------------- RAW JSON ----------------
-  # { json content here }
-  # ---------------- SUMMARY ----------------
-  # text content here
-  #
-  NEW_LINE="
-"
-  SUMMARY_MARKER=""$NEW_LINE"---------------- SUMMARY ----------------"$NEW_LINE""
-  JSON_MARKER=""$NEW_LINE"---------------- RAW JSON ----------------"$NEW_LINE""
-  
-  SUMMARY_OUTPUT="${RAW_OUTPUT#*"$SUMMARY_MARKER"}" # trim everything before SUMMARY marker 
+  # Find the json content by looking for the first line that starts
+  # with an opening brace and the first line that starts with a closing brace.
+  JSON_OUTPUT=$(echo "$RAW_OUTPUT" | sed '/^{/,/^}/!d')
 
-  JSON_OUTPUT="${RAW_OUTPUT#*"$JSON_MARKER"}" # trim everything before RAW JSON marker
-  JSON_OUTPUT="${JSON_OUTPUT%"$SUMMARY_MARKER"*}" # trim everything after SUMMARY marker
-  
+  # Find the summary content by finding the first line that starts
+  # with a closing brace and selecting all remaining lines after that one.
+  SUMMARY_OUTPUT=$(echo "$RAW_OUTPUT" | sed '1,/^}/d')
+
   ETLS_COMBINED_STATUS=$(echo $JSON_OUTPUT | jq -r .etlsCombinedStatus)
 
   if [[ "$ETLS_COMBINED_STATUS" == "HEALTHY" ]] 
@@ -153,6 +144,6 @@ function check_etl_status() {
     error "One or more ETLs are in an unhealthy status."
   fi
 
-  msg "\n$SUMMARY_OUTPUT\n"
+  msg "$SUMMARY_OUTPUT\n"
   debug "$JSON_OUTPUT\n"
 }
