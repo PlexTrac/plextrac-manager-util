@@ -34,7 +34,7 @@ COOKIE_KEY=${COOKIE_KEY:-`generateSecret`}
 PROVIDER_CODE_KEY=${PROVIDER_CODE_KEY:-`generateSecret`}
 PLEXTRAC_HOME=$PLEXTRAC_HOME
 CLIENT_DOMAIN_NAME=${CLIENT_DOMAIN_NAME:-$(hostname -f)}
-DOCKER_HUB_USER=${DOCKER_HUB_USER:-plextracusers}
+DOCKER_HUB_USER=${DOCKER_HUB_USER:-ptcustomers}
 DOCKER_HUB_KEY=${DOCKER_HUB_KEY:-}
 ADMIN_EMAIL=${ADMIN_EMAIL:-}
 LETS_ENCRYPT_EMAIL=${LETS_ENCRYPT_EMAIL:-}
@@ -136,6 +136,19 @@ function updateComposeConfig() {
     fi
   fi
   info "Done."
+}
+
+function validateComposeConfig() {
+  info "Validating Docker Compose Config"
+  composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
+  if [ ${configValidationFailed:-0} -ne 0 ]; then
+    error "Invalid Docker Compose Configuration"
+    log "Please check for valid syntax in override files"
+    debug "$composeConfigCheck"
+    return 1
+  else
+    log "Docker Compose Syntax Valid"
+  fi
 }
 
 function create_volume_directories() {

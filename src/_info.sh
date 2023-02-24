@@ -26,10 +26,14 @@ function mod_info() {
   msg "    %s\n" "$active"
   echo >&2 ""
 
+  #Check for Maintenance Mode
+  check_for_maintenance_mode
+
   title "Host Details"
   info "Disk Statistics"
   msg `check_disk_capacity`
   msg `info_backupDiskUsage`
+
 }
 
 function info_TLSCertificateDetails() {

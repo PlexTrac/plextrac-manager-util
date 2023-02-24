@@ -20,7 +20,7 @@ function mod_check() {
     fi
     VALIDATION_ONLY=1 configure_couchbase_users
     postgres_metrics_validation
-
+    check_for_maintenance_mode
 
     # echo >&2 ""
 
@@ -28,6 +28,11 @@ function mod_check() {
     # info "Summary"
     # msg "`compose_client exec plextracapi npm run status:notifications | fgrep -v '> '`"
   fi
+}
+function check_for_maintenance_mode() {
+  title "Checking Maintenance Mode"
+  IN_MAINTENANCE=$(curl -ks https://${CLIENT_DOMAIN_NAME}/api/v2/health/full | jq .data.inMaintenanceMode) || IN_MAINTENANCE="Unknown"
+  info "Maintenance Mode: $IN_MAINTENANCE"
 }
 
 ###
