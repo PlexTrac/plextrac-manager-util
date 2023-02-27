@@ -252,6 +252,10 @@ function mod_install() {
   pull_docker_images
   mod_start 360 # allow up to 6 minutes for startup on install, due to migrations
   mod_info
+  info "Post installation note:"
+  log "If you wish to have access to historical logs, you can configure docker to send logs to journald."
+  log "Please see the config steps at"
+  log "https://docs.plextrac.com/plextrac-documentation/product-documentation-1/on-premise-management/setting-up-historical-logs"
 }
 
 function mod_configure() {
