@@ -23,9 +23,9 @@ function backup_fullUploadsBackup() {
   info "$coreBackendComposeService: Performing backup of uploads directory"
   uploadsBackupDir="${PLEXTRAC_BACKUP_PATH}/uploads"
   mkdir -p $uploadsBackupDir
-  debug "`compose_client run --workdir /usr/src/plextrac-api --rm --entrypoint='' -T \
-    $coreBackendComposeService tar -czf - uploads > \
-    ${uploadsBackupDir}/$(date -u "+%Y-%m-%dT%H%M%Sz").tar.gz`"
+  debug "`compose_client run --user 1337 -v ${uploadsBackupDir}:/backups \
+    --workdir /usr/src/plextrac-api --rm --entrypoint='' -T  $coreBackendComposeService \
+    tar -czf /backups/$(date -u "+%Y-%m-%dT%H%M%Sz").tar.gz uploads`"
   log "Done."
 }
 
