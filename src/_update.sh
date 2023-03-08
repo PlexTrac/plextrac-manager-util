@@ -28,14 +28,14 @@ function mod_update() {
     mod_start
 
     # Check for failed containers and continue in loop if any are found, otherwise break out of loop
-    compose_client ps | egrep 'exited \(1\)|unhealthy|created' >/dev/null || break
+    compose_client ps | egrep -i 'exited \(1\)|unhealthy|created|starting' >/dev/null || break
 
     if [[ $i -ge $maxRetries ]]; then
       error "One or more containers are in a failed state, please contact support!"
       exit 1
     fi
 
-    info "An error occured with one or more containers, attempting to start again"
+    info "An error occurred with one or more containers, attempting to start again"
     sleep 5
 
   done
