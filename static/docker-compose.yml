@@ -112,6 +112,13 @@ services:
     restart: always
     volumes:
     - letsencrypt:/etc/letsencrypt:rw
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'echo "GET /" | openssl s_client -quiet -connect localhost:443'
+      interval: 5s
+      retries: 8
+      start_period: 5s
 
   notification-engine:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
