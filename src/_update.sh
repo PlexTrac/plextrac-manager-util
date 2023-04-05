@@ -25,7 +25,7 @@ function mod_update() {
   # Sometimes containers won't start correctly at first, but will upon a retry
   maxRetries=2
   for i in $( seq 1 $maxRetries ); do
-    mod_start
+    mod_start || sleep 5 # Wait before going on to health checks, they should handle triggering retries if mod_start errors
 
     # Check for failed containers and continue in loop if any are found, otherwise break out of loop
     compose_client ps | egrep -i 'exited \(1\)|unhealthy|created|starting' >/dev/null || break
