@@ -32,6 +32,9 @@ function restore_doUploadsRestore() {
 
 function restore_doCouchbaseRestore() {
   title "Restoring Couchbase from backup"
+  debug "Fixing permissions"
+  debug "`compose_client exec -T $couchbaseComposeService \
+    chown -R 1337:1337 /backups 2>&1`"
   latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`"
   backupFile=`basename $latestBackup`
   info "Latest backup: $latestBackup"
@@ -47,7 +50,7 @@ function restore_doCouchbaseRestore() {
 
     log "Running database restore"
     compose_client exec $couchbaseComposeService cbrestore /backups http://localhost:8091 \
-      -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" -x conflict_resolve=0,data_only=1
+      -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
 
     log "Cleaning up extracted backup files"
     dirName=`basename -s .tar.gz $backupFile`
