@@ -144,6 +144,11 @@ function main() {
         FORCEUPGRADE="force"
         shift
         ;;
+      # Enable restoring during installation (before migrations)
+      "--restore")
+        RESTOREONINSTALL=1
+        shift
+        ;;
       # Enable restoring a specific target
       "--restore-only")
         RESTORETARGET=$2
@@ -249,6 +254,20 @@ function mod_install() {
   >&2 echo -n "${RESET}"
   log "Done"
   mod_autofix
+  if [ ${RESTOREONINSTALL:-0} -eq 1 ]; then
+    info "Restoring from backups"
+    log "Restoring databases first"
+    RESTORETARGET="couchbase" mod_restore
+    if [ -n "$(ls -A -- ${PLEXTRAC_BACKUP_PATH}/postgres/)" ]; then
+      RESTORETARGET="postgres" mod_restore
+    fi
+    if [ -n "$(ls -A -- ${PLEXTRAC_BACKUP_PATH}/uploads/)" ]; then
+      log "Starting API to prepare for uploads restore"
+      compose_client up -d "$coreBackendComposeService"
+      log "Restoring uploads"
+      RESTORETARGET="uploads" mod_restore
+    fi
+  fi
   pull_docker_images
   mod_start 360 # allow up to 6 minutes for startup on install, due to migrations
   mod_info
