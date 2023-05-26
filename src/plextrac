@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.3.14
+VERSION=0.3.16
 
 trap 'cleanup $?' SIGINT ERR EXIT
 
@@ -269,7 +269,7 @@ function mod_install() {
     fi
   fi
   pull_docker_images
-  mod_start 360 # allow up to 6 minutes for startup on install, due to migrations
+  mod_start 480 # allow up to 8 minutes for startup on install, due to migrations
   mod_info
   info "Post installation note:"
   log "If you wish to have access to historical logs, you can configure docker to send logs to journald."
@@ -294,7 +294,7 @@ function mod_start() {
   # Enable database migrations on startup
   compose_client --profile=database-migrations up -d --remove-orphans
 
-  waitTimeout=${1:-60}
+  waitTimeout=${1:-90}
   info "Waiting up to ${waitTimeout}s for application startup"
   local progressBar
   # todo: extract this to function waitForCondition
