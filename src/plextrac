@@ -81,7 +81,7 @@ function mod_help() {
   log "initialize                           ${DIM}initialize local system for PlexTrac installation${RESET}"
   log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
   log "install                              ${DIM}install PlexTrac (assumes previously initialized system)${RESET}"
-  log "logs                                 ${DIM}display logs from PlexTrac services. Usage: ${GREEN}plextrac logs [-s SERVICE]${RESET}"
+  log "logs                                 ${DIM}display logs from PlexTrac services. Usage: ${GREEN}plextrac logs [-s plextracapi|plextracnginx|plextracdb|etc]${RESET}"
   log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
   log "restore                              ${DIM}restore instance from backups${RESET}"
   log "update                               ${DIM}updates the management utility & applies any configuration or application updates${RESET}"
