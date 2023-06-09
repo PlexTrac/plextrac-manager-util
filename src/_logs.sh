@@ -1,11 +1,11 @@
 # Access logs of a running instance
 # Usage:
-#   plextrac logs
+#   plextrac logs [service]
 
 function mod_logs() {
   tail_logs
 }
 
 function tail_logs() {
-    compose_client logs -f --tail=50
+    compose_client logs -f --tail=50 ${LOG_SERVICE-''}
 }
