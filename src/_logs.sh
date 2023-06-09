@@ -1,6 +1,6 @@
 # Access logs of a running instance
 # Usage:
-#   plextrac logs [service]
+#   plextrac logs [-s SERVICE]
 
 function mod_logs() {
   tail_logs
