@@ -25,7 +25,7 @@ function system_packages__do_system_upgrade() {
       debug "$out"
       ;;
     "yum")
-      out=`yum install -q -y epel-release && yum upgrade -q -y 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
+      out=`yum upgrade -q -y --nobest 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
       debug "$out"
       ;;
     *)  
@@ -90,12 +90,8 @@ function install_docker() {
       "yum")
         info "installing docker, this might take some time..."
         _system_cmd_with_debug_and_fail "yum install -q -y yum-utils"
-        # RHEL and CentOS have different repos
-        if [[ `grep 'CentOS' /etc/redhat-release` ]]; then
+        # RHEL Docker repo has been deprecated, so only CentOS repo is used
           _system_cmd_with_debug_and_fail "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo"
-        else
-          _system_cmd_with_debug_and_fail "yum-config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo"
-        fi
         system_packages__refresh_package_lists
         _system_cmd_with_debug_and_fail "yum install -q -y docker-ce docker-ce-cli containerd.io 2>&1"
         _system_cmd_with_debug_and_fail "systemctl enable docker 2>&1"
