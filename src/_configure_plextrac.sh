@@ -28,6 +28,7 @@ function generate_default_config() {
 
   # Generate base env, using imported vars from above where applicable
   generatedEnv="
+API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE=${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:-`generateSecret`}
 JWT_KEY=${JWT_KEY:-`generateSecret`}
 MFA_KEY=${MFA_KEY:-`generateSecret`}
 COOKIE_KEY=${COOKIE_KEY:-`generateSecret`}
