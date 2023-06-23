@@ -64,14 +64,14 @@ function mod_help() {
   info "Usage:  ${DIM}plextrac command [flags]\n"
   info "Examples:\n"
   info "PlexTrac Setup:"
-  log "Prepare server for PlexTrac:         ${DIM}sudo ./plextrac initialize${RESET}"
-  log "Migrate existing instance:           ${DIM}plextrac migrate && plextrac install -y${RESET}"
-  log "Install new instance:                ${DIM}plextrac install -y${RESET}"
+  log "Prepare server for PlexTrac:         ${DIM}${GREEN}sudo ./plextrac initialize${RESET}"
+  log "Migrate existing instance:           ${DIM}${GREEN}plextrac migrate && plextrac install -y${RESET}"
+  log "Install new instance:                ${DIM}${GREEN}plextrac install -y${RESET}"
   log ""
   info "PlexTrac Management:\n"
-  log "Update to latest release:            ${DIM}plextrac update -y${RESET}"
-  log "Perform backup:                      ${DIM}plextrac backup${RESET}"
-  log "Cleanup stale cache & old backups:   ${DIM}plextrac clean${RESET}"
+  log "Update to latest release:            ${DIM}${GREEN}plextrac update -y${RESET}"
+  log "Perform backup:                      ${DIM}${GREEN}plextrac backup${RESET}"
+  log "Cleanup stale cache & old backups:   ${DIM}${GREEN}plextrac clean${RESET}"
   log ""
   info "Available commands:"
   log "backup                               ${DIM}perform backup on currently running PlexTrac application${RESET}"
@@ -82,6 +82,7 @@ function mod_help() {
   log "initialize                           ${DIM}initialize local system for PlexTrac installation${RESET}"
   log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
   log "install                              ${DIM}install PlexTrac (assumes previously initialized system)${RESET}"
+  log "logs                                 ${DIM}display logs from PlexTrac services. Usage: ${GREEN}plextrac logs [-s|--service plextracapi|plextracnginx|plextracdb|etc]${RESET}"
   log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
   log "restore                              ${DIM}restore instance from backups${RESET}"
   log "update                               ${DIM}updates the management utility & applies any configuration or application updates${RESET}"
@@ -159,6 +160,11 @@ function main() {
       "dist")
         mod=mod_dist
         break
+        ;;
+      "-s" | "--service")
+        LOG_SERVICE=${2-''}
+        shift
+        shift
         ;;
       *)
         if declare -f mod_$1 >/dev/null 2>&1; then
