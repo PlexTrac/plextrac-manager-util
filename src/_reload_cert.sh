@@ -20,9 +20,9 @@ function mod_reload-cert() {
     # IF LETS_ENCRYPT = FALSE
     # Assume custom_certificate key/pem has been replaced and simply re-inject via NGINX recreate
     info "Custom or Self-signed certificate detected!"
-    info "Would you like to reload your custom or recreate self-signed certificates?"
+    info "Would you like to reload your custom or self-signed SSL certificates? This will recreate the NGINX container"
     if get_user_approval; then
-      info "Reloading certificate..."
+      info "Reloading certificates..."
       compose_client up -d --force-recreate plextracnginx
     else
       die "No changes made!"
