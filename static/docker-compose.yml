@@ -19,6 +19,7 @@ services:
     volumes:
     - uploads:/usr/src/plextrac-api/uploads:rw
     - datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp:r
+    - localesOverride:/usr/src/plextrac-api/localesOverride:rw
     healthcheck:
       test:
       # Handle cURL being removed due to upstream vuln
@@ -258,6 +259,7 @@ volumes:
   dbdata: {}
   uploads: {}
   letsencrypt: {}
+  localesOverride: {}
   postgres-data: {}
   postgres-initdb:
     driver: local
