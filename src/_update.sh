@@ -27,8 +27,13 @@ function mod_update() {
   for i in $( seq 1 $maxRetries ); do
     mod_start || sleep 5 # Wait before going on to health checks, they should handle triggering retries if mod_start errors
 
-    # Check for failed containers and continue in loop if any are found, otherwise break out of loop
-    compose_client ps | egrep -i 'exited \(1\)|unhealthy|created|starting' >/dev/null || break
+    unhealthy_services=$(compose_client ps -a --format json | \
+      jq -r '.[] | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | \
+      xargs -r printf "%s;")
+
+    if [[ "${unhealthy_services}" == "" ]]; then break; fi
+
+    info "Detected unhealthy services: ${unhealthy_services}"
 
     if [[ $i -ge $maxRetries ]]; then
       error "One or more containers are in a failed state, please contact support!"
