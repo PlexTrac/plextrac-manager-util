@@ -30,53 +30,53 @@ services:
       - 'EOF'
 
 
-  couchbase-migrations:
-    profiles:
-    - "database-migrations"
-    depends_on:
-    - plextracdb
-    - redis
-    - postgres
-    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
-    volumes:
-    - uploads:/usr/src/plextrac-api/uploads:rw
-    entrypoint: ""
-    command: |
-      sh -c
-        "npm run maintenance:enable &&
-         npm run pg:migrate &&
-         npm run db:migrate &&
-         npm run pg:etl up all &&
-         npm run maintenance:disable"
-    environment:
-      COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
-      CB_API_PASS: ${CB_API_PASS}
-      CB_API_USER: ${CB_API_USER}
-      REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING:-redis}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
-      PG_HOST: ${PG_HOST:-postgres}
-      PG_MIGRATE_PATH: /usr/src/plextrac-api
-      PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
-      PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
-      PG_CORE_DB: ${PG_CORE_DB:?err}
-      PG_RUNBOOKS_ADMIN_PASSWORD: ${PG_RUNBOOKS_ADMIN_PASSWORD:?err}
-      PG_RUNBOOKS_ADMIN_USER: ${PG_RUNBOOKS_ADMIN_USER:?err}
-      PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:?err}
-      PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:?err}
-      PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:?err}
-      PG_TENANTS_WRITE_MODE: ${PG_TENANTS_WRITE_MODE:-couchbase_only}
-      PG_TENANTS_READ_MODE: ${PG_TENANTS_READ_MODE:-couchbase_only}
+#  couchbase-migrations:
+#    profiles:
+#    - "database-migrations"
+#    depends_on:
+#    - plextracdb
+#    - redis
+#    - postgres
+#    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+#    volumes:
+#    - uploads:/usr/src/plextrac-api/uploads:rw
+#    entrypoint: ""
+#    command: |
+#      sh -c
+#        "npm run maintenance:enable &&
+#         npm run pg:migrate &&
+#         npm run db:migrate &&
+#         npm run pg:etl up all &&
+#         npm run maintenance:disable"
+#    environment:
+#      COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
+#      CB_API_PASS: ${CB_API_PASS}
+#      CB_API_USER: ${CB_API_USER}
+#      REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING:-redis}
+#      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+#      PG_HOST: ${PG_HOST:-postgres}
+#      PG_MIGRATE_PATH: /usr/src/plextrac-api
+#      PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:-}
+#      PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:-}
+#      PG_CORE_DB: ${PG_CORE_DB:-}
+#      PG_RUNBOOKS_ADMIN_PASSWORD: ${PG_RUNBOOKS_ADMIN_PASSWORD:-}
+#      PG_RUNBOOKS_ADMIN_USER: ${PG_RUNBOOKS_ADMIN_USER:-}
+#      PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:-}
+#      PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:-}
+#      PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:-}
+#      PG_TENANTS_WRITE_MODE: ${PG_TENANTS_WRITE_MODE:-couchbase_only}
+#      PG_TENANTS_READ_MODE: ${PG_TENANTS_READ_MODE:-couchbase_only}
 
   plextracdb:
     environment:
       ADMIN_EMAIL: "${ADMIN_EMAIL:-}"
       BACKUP_DIR: "${BACKUP_DIR-}"
-      CB_ADMIN_PASS: "${CB_ADMIN_PASS:?err}"
-      CB_ADMIN_USER: "${CB_ADMIN_USER:?err}"
-      CB_API_PASS: "${CB_API_PASS:?err}"
-      CB_API_USER: "${CB_API_USER:?err}"
-      CB_BACKUP_PASS: "${CB_BACKUP_PASS:?err}"
-      CB_BACKUP_USER: "${CB_BACKUP_USER:?err}"
+      CB_ADMIN_PASS: "${CB_ADMIN_PASS:-}"
+      CB_ADMIN_USER: "${CB_ADMIN_USER:-}"
+      CB_API_PASS: "${CB_API_PASS:-}"
+      CB_API_USER: "${CB_API_USER:-}"
+      CB_BACKUP_PASS: "${CB_BACKUP_PASS:-}"
+      CB_BACKUP_USER: "${CB_BACKUP_USER:-}"
       CB_BUCKET: "${CB_BUCKET-}"
       bucket: "${bucket-}"
     image: plextrac/plextracdb:6.5.1
@@ -100,7 +100,7 @@ services:
   plextracnginx:
     image: "plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
     environment:
-      CLIENT_DOMAIN_NAME: "${CLIENT_DOMAIN_NAME:?err}"
+      CLIENT_DOMAIN_NAME: "${CLIENT_DOMAIN_NAME:-}"
       ENABLE_HSTS: "${ENABLE_HSTS:-}"
       HIDE_COPYRIGHT: "${HIDE_COPYRIGHT-}"
       HIDE_PAGE_TITLE: "${HIDE_PAGE_TITLE-}"
@@ -130,13 +130,13 @@ services:
     - redis
     restart: always
     environment:
-      CB_API_PASS: "${CB_API_PASS:?err}"
-      CB_API_USER: "${CB_API_USER:?err}"
+      CB_API_PASS: "${CB_API_PASS:-}"
+      CB_API_USER: "${CB_API_USER:-}"
       COUCHBASE_URL: "http://plextracdb"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
       REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
-      API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE: "${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
+      API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE: "${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:-}"
     healthcheck:
       test:
       - "CMD"
@@ -161,15 +161,15 @@ services:
     - redis
     restart: always
     environment:
-      CB_API_PASS: "${CB_API_PASS:?err}"
-      CB_API_USER: "${CB_API_USER:?err}"
-      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      CB_API_PASS: "${CB_API_PASS:-}"
+      CB_API_USER: "${CB_API_USER:-}"
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:-}
       COUCHBASE_URL: "http://plextracdb"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       MAILER_SECURE: ${MAILER_SECURE:-}
       NOTIFICATION_DRY_RUN: ${NOTIFICATION_DRY_RUN:-}
       REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
       serviceConfig: ${serviceConfig:-}
     healthcheck:
       test:
@@ -191,19 +191,19 @@ services:
     - redis
     restart: always
     environment:
-      CB_API_PASS: "${CB_API_PASS:?err}"
-      CB_API_USER: "${CB_API_USER:?err}"
-      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      CB_API_PASS: "${CB_API_PASS:-}"
+      CB_API_USER: "${CB_API_USER:-}"
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:-}
       COUCHBASE_URL: "http://plextracdb"
       GCP_DATALAKE_SA_KEY_PATH: "${GCP_DATALAKE_SA_KEY_PATH:-/usr/src/plextrac-api/keys/gcp/gcp-datalake-sa-key.json}"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
-      PG_CORE_DB: ${PG_CORE_DB:?err}
-      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
-      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
-      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
-      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
+      PG_CORE_DB: ${PG_CORE_DB:-}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:-}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:-}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:-}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:-}
     healthcheck:
       test:
       - "CMD"
@@ -228,24 +228,24 @@ services:
     image: postgres:14-alpine
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata
-      PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
-      PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
-      PG_CORE_DB: ${PG_CORE_DB:?err}
-      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
-      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
-      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
-      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
-      PG_RUNBOOKS_ADMIN_PASSWORD: ${PG_RUNBOOKS_ADMIN_PASSWORD:?err}
-      PG_RUNBOOKS_ADMIN_USER: ${PG_RUNBOOKS_ADMIN_USER:?err}
-      PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:?err}
-      PG_RUNBOOKS_RO_PASSWORD: ${PG_RUNBOOKS_RO_PASSWORD:?err}
-      PG_RUNBOOKS_RO_USER: ${PG_RUNBOOKS_RO_USER:?err}
-      PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:?err}
-      PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:?err}
+      PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:-}
+      PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:-}
+      PG_CORE_DB: ${PG_CORE_DB:-}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:-}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:-}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:-}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:-}
+      PG_RUNBOOKS_ADMIN_PASSWORD: ${PG_RUNBOOKS_ADMIN_PASSWORD:-}
+      PG_RUNBOOKS_ADMIN_USER: ${PG_RUNBOOKS_ADMIN_USER:-}
+      PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:-}
+      PG_RUNBOOKS_RO_PASSWORD: ${PG_RUNBOOKS_RO_PASSWORD:-}
+      PG_RUNBOOKS_RO_USER: ${PG_RUNBOOKS_RO_USER:-}
+      PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:-}
+      PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:-}
       POSTGRES_HOST_AUTH_METHOD: scram-sha-256
       POSTGRES_INITDB_ARGS: '--auth-local=scram-sha-256 --auth-host=scram-sha-256'
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?err}
-      POSTGRES_USER: ${POSTGRES_USER:?err}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_USER: ${POSTGRES_USER:-}
     volumes:
     # this is where the initdb script & SQL template go
     - postgres-initdb:/docker-entrypoint-initdb.d
@@ -293,6 +293,5 @@ volumes:
       device: "${PLEXTRAC_BACKUP_PATH}/postgres"
 
 networks:
-  default:
+  swarm:
     name: plextrac
-    driver: bridge
