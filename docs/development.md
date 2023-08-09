@@ -11,7 +11,8 @@ This repo is bundled with a [Vagrant](https://www.vagrantup.com/) configuration 
 be tested inside a virtual machine without polluting your host machine.
 
 You'll need to have [Vagrant](https://www.vagrantup.com/) installed before you can use the
-preconfigured virtual machine.
+preconfigured virtual machine. Optionally, install the `vagrant-hostmanager` plugin to allow Vagrant
+to manage host entries for you.
 
 1.  Start up the Vagrant virtual machine:
 
@@ -42,9 +43,9 @@ preconfigured virtual machine.
 
         OVERRIDE_TRANSACTION_ID_LOGGING=true
 
-5.  Start the Plextrac application
+5.  Install the Plextrac application
 
-        plextrac start
+        plextrac install
 
 6.  You can tail logs:
 
