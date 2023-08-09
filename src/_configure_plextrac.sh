@@ -90,10 +90,12 @@ function generateSecret() {
 }
 
 function generateEncryptionKeys() {
-
-  output=compose_client run --entrypoint= plextracapi npm run generate:encryption:keys || true;
+  # Invokes the encryption key generator in a docker container if it exists
+  # Fails gracefully otherwise and just outputs an empty string
+  output=`compose_client exec -T plextracapi \
+    npm run generate:encryption:keys 2>&1` || { debug "Skipping encryption keys setup:"; debug "$output"; output=""; }
   # tail -n 1 check if output -ne ''
-  echo 'dummy output'
+  echo "$output" | tail -n1
 }
 
 function setDefaultSecrets() {
