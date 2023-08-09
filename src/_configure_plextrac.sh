@@ -49,6 +49,7 @@ RUNAS_APPUSER=True
 PLEXTRAC_PARSER_URL=https://plextracparser:4443
 UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
+ENCRYPTION_KEYS=${ENCRYPTION_KEYS:-`generateEncryptionKeys`}
 
 `generate_default_couchbase_env | setDefaultSecrets`
 `generate_default_postgres_env | setDefaultSecrets`
@@ -86,6 +87,13 @@ PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
 function generateSecret() {
   # replace any non-alphanumeric characters so postgres doesn't choke
   echo `head -c 64 /dev/urandom | base64 | tr -cd '[:alnum:]._-' | head -c 32`
+}
+
+function generateEncryptionKeys() {
+
+  output=compose_client run --entrypoint= plextracapi npm run generate:encryption:keys || true;
+  # tail -n 1 check if output -ne ''
+  echo 'dummy output'
 }
 
 function setDefaultSecrets() {
