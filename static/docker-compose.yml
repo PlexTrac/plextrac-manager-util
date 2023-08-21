@@ -142,7 +142,6 @@ services:
       - "CMD"
       - "npm"
       - "run"
-      - "--no-update-notifier"
       - "healthcheck:notification-engine"
       - "readiness"
       - "10"
