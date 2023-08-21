@@ -142,9 +142,12 @@ services:
       - "CMD"
       - "npm"
       - "run"
+      - "--no-update-notifier"
       - "healthcheck:notification-engine"
       - "readiness"
       - "10"
+      - "--"
+      - "--no-update-notifier"
       interval: 5s
       timeout: 5s
       retries: 3
@@ -178,6 +181,8 @@ services:
       - "run"
       - "healthcheck:notification-sender"
       - "readiness"
+      - "--"
+      - "--no-update-notifier"
     entrypoint: npm run
     command: "start:notification-sender"
 
@@ -211,6 +216,8 @@ services:
       - "run"
       - "healthcheck:datalake-maintainer"
       - "liveness"
+      - "--"
+      - "--no-update-notifier"
     entrypoint: npm run
     command: "start:datalake-maintainer"
     volumes:
