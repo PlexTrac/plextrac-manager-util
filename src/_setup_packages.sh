@@ -45,20 +45,22 @@ function system_packages__install_system_dependencies() {
       out=`apt-get install -y \
         apt-transport-https \
         ca-certificates \
-        curl \
+        wget \
         gnupg-agent \
         software-properties-common \
         jq \
         unzip \
+        bc \
         2>&1` || { error "Failed to install system dependencies"; debug "$out"; return 1; }
       debug "$out"
       ;;
     "yum")
       out=`yum install -q -y \
         ca-certificates \
-        curl \
+        wget \
         jq \
         unzip \
+        bc \
         2>&1` || { error "Failed to install system dependencies"; debug "$out"; return 1; }
       debug "$out"
       ;;
@@ -76,7 +78,7 @@ function install_docker() {
       "apt")
         info "installing docker, this might take some time..."
         _system_cmd_with_debug_and_fail "mkdir -p /etc/apt/keyrings; \
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+          wget --output-document - --quiet https://download.docker.com/linux/ubuntu/gpg | \
           sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
         _system_cmd_with_debug_and_fail 'echo "deb [arch=$(dpkg --print-architecture)
           signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu
@@ -111,9 +113,9 @@ function install_docker() {
 
 function install_docker_compose() {
   info "upgrading docker-compose..."
-  curl -sL $(curl -sL \
-    https://api.github.com/repos/docker/compose/releases/latest | jq -r \
-    ".assets[] | select(.name | test(\"^docker-compose-$(uname -s)-$(uname -m)$\"; \"i\")) | .browser_download_url" | grep -v .sha256) -o /usr/local/bin/docker-compose
+  wget $(wget -O - -q https://api.github.com/repos/docker/compose/releases/latest | jq -r \
+    ".assets[] | select(.name | test(\"^docker-compose-$(uname -s)-$(uname -m)$\"; \"i\")) | .browser_download_url" | grep -v .sha256) \
+    -O /usr/local/bin/docker-compose
   chmod +x /usr/local/bin/docker-compose
   docker_compose_version=`/usr/local/bin/docker-compose --version`
   event__log_activity "install:docker-compose" "$docker_compose_version"

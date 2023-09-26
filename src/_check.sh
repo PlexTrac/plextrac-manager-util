@@ -31,7 +31,7 @@ function mod_check() {
 }
 function check_for_maintenance_mode() {
   title "Checking Maintenance Mode"
-  IN_MAINTENANCE=$(curl -ks https://localhost/api/v2/health/full | jq .data.inMaintenanceMode) || IN_MAINTENANCE="Unknown"
+  IN_MAINTENANCE=$(wget -O - -q https://localhost/api/v2/health/full | jq .data.inMaintenanceMode) || IN_MAINTENANCE="Unknown"
   info "Maintenance Mode: $IN_MAINTENANCE"
 }
 
@@ -87,7 +87,7 @@ function _check_os_supported_flavor_and_release() {
 
 # Check for some base required packages to even validate the system
 function _check_base_required_packages() {
-  requiredCommands=('jq' 'lsb_release' 'curl')
+  requiredCommands=('jq' 'lsb_release' 'wget')
   missingCommands=()
   status=0
   for cmd in ${requiredCommands[@]}; do
@@ -104,7 +104,7 @@ function _check_base_required_packages() {
       installCmd="${BOLD}\$${RESET} ${CYAN}"
       yum repolist -q | grep epel || installCmd+='yum install --assumeyes epel-release && '
 
-      declare -A cmdToPkg=([jq]=jq [lsb_release]=redhat-lsb-core [curl]=curl)
+      declare -A cmdToPkg=([jq]=jq [lsb_release]=redhat-lsb-core [wget]=wget)
       installCmd="$installCmd""yum install --assumeyes`for cmd in ${missingCommands[@]}; do echo -n " ${cmdToPkg[$cmd]}"; done`"
 
       log "${BOLD}Please enable the EPEL repo and install required packages:"
@@ -112,7 +112,7 @@ function _check_base_required_packages() {
     fi
     # debian based systems should all be roughly similar
     if command -v apt-get >/dev/null 2>&1; then
-      declare -A cmdToPkg=([jq]=jq [lsb_release]=lsb-release [curl]=curl)
+      declare -A cmdToPkg=([jq]=jq [lsb_release]=lsb-release [wget]=wget)
       installCandidates=`for cmd in ${missingCommands[@]}; do echo -n " ${cmdToPkg[$cmd]}"; done`
       log "${BOLD}Please install required packages:"
       log "${BOLD}\$${RESET} ${CYAN}apt-get install -y ${installCandidates}"
