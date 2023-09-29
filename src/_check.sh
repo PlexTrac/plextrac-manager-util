@@ -18,6 +18,7 @@ function mod_check() {
         error "Pending Changes:"
         msg "    %s\n" "$pending"
     fi
+    etl_permission_check
     VALIDATION_ONLY=1 configure_couchbase_users
     postgres_metrics_validation
     check_for_maintenance_mode
@@ -35,7 +36,15 @@ function check_for_maintenance_mode() {
   info "Maintenance Mode: $IN_MAINTENANCE"
 }
 
-###
+function etl_permission_check() {
+  local owner=`compose_client exec plextracapi stat -c '%U' uploads/etl-logs`
+  info "Checking volume permissions"
+  if [ "$owner" != "plextrac" ]
+    then
+      info "Fixing volume permission"
+      compose_client exec plextracapi chown -R plextrac:plextrac uploads/etl-logs
+  fi
+}
 
 # Check for an existing installation
 function _check_no_existing_installation() {
