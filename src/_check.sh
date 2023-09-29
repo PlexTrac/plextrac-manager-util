@@ -37,12 +37,19 @@ function check_for_maintenance_mode() {
 }
 
 function etl_permission_check() {
-  local owner=`compose_client exec plextracapi stat -c '%U' uploads/etl-logs`
-  info "Checking volume permissions"
-  if [ "$owner" != "plextrac" ]
-    then
-      info "Fixing volume permission"
-      compose_client exec plextracapi chown -R plextrac:plextrac uploads/etl-logs
+  local dir=`compose_client exec plextracapi find -type d -name etl-logs`
+  if [ -n "$dir" ]
+  then
+    local owner=`compose_client exec plextracapi stat -c '%U' uploads/etl-logs`
+    info "Checking and fixing volume permissions"
+    if [ "$owner" != "plextrac" ]
+      then
+        info "Fixing volume permission"
+        compose_client exec plextracapi chown -R plextrac:plextrac uploads/etl-logs
+    fi
+  else
+    info "Fixing etl folder creation"
+    compose_client exec plextracapi mkdir uploads/etl-logs
   fi
 }
 
