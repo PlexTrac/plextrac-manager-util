@@ -21,10 +21,13 @@ function mod_update() {
 
   info "Updating PlexTrac instance to latest release..."
   mod_configure
-  #precheck: get image information
+  title "Pulling latest container images"
   pull_docker_images
-  #postcheck get image information
-  mod_rollout
+  if [ "$IMAGE_CHANGED" == true ]
+    then
+      title "Executing Rolling Deployment"
+      mod_rollout
+  fi
 
   # Sometimes containers won't start correctly at first, but will upon a retry
   maxRetries=2
