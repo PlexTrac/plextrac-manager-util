@@ -14,12 +14,14 @@ function compose_client() {
 
 function pull_docker_images() {
   info "Pulling updated docker images"
+  #precheck
   if tty -s; then
     ARGS=''
   else
     ARGS='-q'
   fi
   compose_client pull ${ARGS:-}
+  #postcheck
   info "Done."
 }
 

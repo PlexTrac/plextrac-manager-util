@@ -18,9 +18,13 @@ function mod_update() {
   else
     info "Skipping self upgrade"
   fi
+
   info "Updating PlexTrac instance to latest release..."
   mod_configure
+  #precheck: get image information
   pull_docker_images
+  #postcheck get image information
+  mod_rollout
 
   # Sometimes containers won't start correctly at first, but will upon a retry
   maxRetries=2
