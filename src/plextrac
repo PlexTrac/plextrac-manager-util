@@ -93,6 +93,7 @@ function mod_help() {
   log " -v | --verbose                      ${DIM}enables verbose output, helpful for troubleshooting errors${RESET}"
   log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
   log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
+  log " --install-timeout NUM               ${DIM}seconds to wait for install migrations to complete. The default is 600 (10 mins)${RESET}"
 }
 
 
@@ -163,6 +164,12 @@ function main() {
         ;;
       "-s" | "--service")
         LOG_SERVICE=${2-''}
+        shift
+        shift
+        ;;
+      # only used for mod_install
+      "--install-timeout")
+        INSTALL_WAIT_TIMEOUT=$2
         shift
         shift
         ;;
@@ -276,7 +283,7 @@ function mod_install() {
     fi
   fi
   pull_docker_images
-  mod_start 480 # allow up to 8 minutes for startup on install, due to migrations
+  mod_start "${INSTALL_WAIT_TIMEOUT:-600}" # allow up to 10 or specified minutes for startup on install, due to migrations
   mod_info
   info "Post installation note:"
   log "If you wish to have access to historical logs, you can configure docker to send logs to journald."
@@ -309,7 +316,7 @@ function mod_start() {
   # that should return 0 when ready
   (
     while true; do
-      progressBar=`printf ".%.0s%s"  {1..$i} "${progressBar:-}"`
+      progressBar=$(printf ".%s" "${progressBar:-}")
       msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
       sleep 2
     done &
