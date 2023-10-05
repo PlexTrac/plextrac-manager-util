@@ -31,7 +31,7 @@ function mod_check() {
 }
 function check_for_maintenance_mode() {
   title "Checking Maintenance Mode"
-  IN_MAINTENANCE=$(wget -O - -q https://localhost/api/v2/health/full | jq .data.inMaintenanceMode) || IN_MAINTENANCE="Unknown"
+  IN_MAINTENANCE=$(wget -O - -q https://127.0.0.1/api/v2/health/full | jq .data.inMaintenanceMode --no-check-certificate) || IN_MAINTENANCE="Unknown"
   info "Maintenance Mode: $IN_MAINTENANCE"
 }
 
