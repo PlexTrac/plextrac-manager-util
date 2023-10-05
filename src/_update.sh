@@ -59,6 +59,7 @@ function _selfupdate_refreshReleaseInfo() {
 
   if test -z ${releaseInfo+x}; then
     export releaseInfo="`wget -O - -q $releaseApiUrl`"
+    info "$releaseApiUrl"
     if [ $? -gt 0 ] || [ "$releaseInfo" == "" ]; then die "Failed to get updated release from GitHub"; fi
     debug "`jq . <<< "$releaseInfo"`"
   fi
@@ -106,10 +107,10 @@ function selfupdate_doUpgrade() {
   tempDir=`mktemp -d -t plextrac-$releaseVersion-XXX`
   debug "Tempdir: $tempDir"
   target="${PLEXTRAC_HOME}/.local/bin/plextrac"
-
+  
   debug "`wget $releaseApiUrl -O $tempDir/$(jq '.[].name, " ", .browser_download_url' -r <<<$scriptAsset) 2>&1 || error "Release download failed"`"
-  debug "`wget -O $tempDir/$(jq '.name, " ", .browser_download_url' -r <<<$scriptAsset) 2>&1 || error "Release download failed"`"
-  debug "`wget -O $tempDir/$(jq '.name, " ", .browser_download_url' -r <<<$scriptAssetSHA256SUM) 2>&1 || error "Checksum download failed"`"
+  debug "`wget -O $tempDir/$(jq -re '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
+  debug "`wget -O $tempDir/$(jq -re '.name, " ", .browser_download_url' <<<$scriptAssetSHA256SUM) 2>&1 || error "Checksum download failed"`"
   checksumoutput=`pushd $tempDir >/dev/null && sha256sum -c sha256sum-plextrac.txt 2>&1` || die "checksum failed: $checksumoutput"
   debug "$checksumoutput"
   tempScript="$tempDir/plextrac"

@@ -78,7 +78,7 @@ function install_docker() {
       "apt")
         info "installing docker, this might take some time..."
         _system_cmd_with_debug_and_fail "mkdir -p /etc/apt/keyrings; \
-          wget --output-document - --quiet https://download.docker.com/linux/ubuntu/gpg | \
+          wget -O - -q https://download.docker.com/linux/ubuntu/gpg | \
           sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
         _system_cmd_with_debug_and_fail 'echo "deb [arch=$(dpkg --print-architecture)
           signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu
