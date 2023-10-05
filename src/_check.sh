@@ -36,7 +36,8 @@ function check_for_maintenance_mode() {
   info "Maintenance Mode: $IN_MAINTENANCE"
 }
 
-function etl_permission_check() {
+function mod_etl_fix() {
+  requires_user_root
   local dir=`compose_client exec plextracapi find -type d -name etl-logs`
   if [ -n "$dir" ]
   then
@@ -50,6 +51,7 @@ function etl_permission_check() {
   else
     info "Fixing etl folder creation"
     compose_client exec plextracapi mkdir uploads/etl-logs
+    compose_client exec plextracapi chown -R plextrac:plextrac uploads/etl-logs
   fi
 }
 
