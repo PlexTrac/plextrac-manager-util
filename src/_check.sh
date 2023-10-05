@@ -18,7 +18,7 @@ function mod_check() {
         error "Pending Changes:"
         msg "    %s\n" "$pending"
     fi
-    etl_permission_check
+    mod_etl_fix
     VALIDATION_ONLY=1 configure_couchbase_users
     postgres_metrics_validation
     check_for_maintenance_mode
@@ -37,19 +37,20 @@ function check_for_maintenance_mode() {
 }
 
 function mod_etl_fix() {
-  requires_user_root
   local dir=`compose_client exec plextracapi find -type d -name etl-logs`
   if [ -n "$dir" ]
   then
     local owner=`compose_client exec plextracapi stat -c '%U' uploads/etl-logs`
-    info "Checking and fixing volume permissions"
+    info "Checking volume permissions"
     if [ "$owner" != "plextrac" ]
       then
-        info "Fixing volume permission"
+        info "Fixing ETL Folder permission"
+        info "Folder owned as UID 0, need to run plextrac etl_fix as root/sudo"
+        requires_user_root
         compose_client exec plextracapi chown -R plextrac:plextrac uploads/etl-logs
     fi
   else
-    info "Fixing etl folder creation"
+    info "Fixing ETL Folder creation"
     compose_client exec plextracapi mkdir uploads/etl-logs
     compose_client exec plextracapi chown -R plextrac:plextrac uploads/etl-logs
   fi
