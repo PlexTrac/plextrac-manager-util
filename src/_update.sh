@@ -28,7 +28,7 @@ function mod_update() {
     mod_start || sleep 5 # Wait before going on to health checks, they should handle triggering retries if mod_start errors
 
     unhealthy_services=$(compose_client ps -a --format json | \
-      jq -r '.[] | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | \
+      jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | \
       xargs -r printf "%s;")
 
     if [[ "${unhealthy_services}" == "" ]]; then break; fi
