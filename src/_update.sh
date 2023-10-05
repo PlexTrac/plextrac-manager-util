@@ -46,6 +46,8 @@ function mod_update() {
   done
 
   mod_check
+
+  title "Update complete"
 }
 
 function _selfupdate_refreshReleaseInfo() {
