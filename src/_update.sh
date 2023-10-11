@@ -28,7 +28,7 @@ function mod_update() {
     mod_start || sleep 5 # Wait before going on to health checks, they should handle triggering retries if mod_start errors
 
     unhealthy_services=$(compose_client ps -a --format json | \
-      jq -r '.[] | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | \
+      jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | \
       xargs -r printf "%s;")
 
     if [[ "${unhealthy_services}" == "" ]]; then break; fi
@@ -46,6 +46,8 @@ function mod_update() {
   done
 
   mod_check
+
+  title "Update complete"
 }
 
 function _selfupdate_refreshReleaseInfo() {
@@ -58,7 +60,8 @@ function _selfupdate_refreshReleaseInfo() {
   fi
 
   if test -z ${releaseInfo+x}; then
-    export releaseInfo="`curl -Ls --fail $releaseApiUrl`"
+    export releaseInfo="`wget -O - -q $releaseApiUrl`"
+    info "$releaseApiUrl"
     if [ $? -gt 0 ] || [ "$releaseInfo" == "" ]; then die "Failed to get updated release from GitHub"; fi
     debug "`jq . <<< "$releaseInfo"`"
   fi
@@ -106,9 +109,10 @@ function selfupdate_doUpgrade() {
   tempDir=`mktemp -d -t plextrac-$releaseVersion-XXX`
   debug "Tempdir: $tempDir"
   target="${PLEXTRAC_HOME}/.local/bin/plextrac"
-
-  debug "`curl -w %{url_effective} -L -o $tempDir/$(jq '.name, " ", .browser_download_url' -r <<<$scriptAsset) 2>&1 || error "Release download failed"`"
-  debug "`curl -w %{url_effective} -L -o $tempDir/$(jq '.name, " ", .browser_download_url' -r <<<$scriptAssetSHA256SUM) 2>&1 || error "Checksum download failed"`"
+  
+  debug "`wget $releaseApiUrl -O $tempDir/$(jq -re '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
+  debug "`wget -O $tempDir/$(jq -re '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
+  debug "`wget -O $tempDir/$(jq -re '.name, " ", .browser_download_url' <<<$scriptAssetSHA256SUM) 2>&1 || error "Checksum download failed"`"
   checksumoutput=`pushd $tempDir >/dev/null && sha256sum -c sha256sum-plextrac.txt 2>&1` || die "checksum failed: $checksumoutput"
   debug "$checksumoutput"
   tempScript="$tempDir/plextrac"
