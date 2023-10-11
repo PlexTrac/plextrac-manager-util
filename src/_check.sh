@@ -37,6 +37,7 @@ function check_for_maintenance_mode() {
 }
 
 function mod_etl_fix() {
+  debug "Running ETL Fix"
   local dir=`compose_client exec plextracapi find -type d -name etl-logs`
   if [ -n "$dir" ]
   then
@@ -44,10 +45,10 @@ function mod_etl_fix() {
     info "Checking volume permissions"
     if [ "$owner" != "plextrac" ]
       then
-        info "Fixing ETL Folder permission"
-        info "Folder owned as UID 0, need to run plextrac etl_fix as root/sudo"
-        requires_user_root
-        compose_client exec plextracapi chown -R plextrac:plextrac uploads/etl-logs
+        info "Volume permissions are wrong; initiating fix"
+        compose_client exec -u 0 plextracapi chown -R plextrac:plextrac uploads/etl-logs
+    else
+      info "Volume permissions are correct"
     fi
   else
     info "Fixing ETL Folder creation"
