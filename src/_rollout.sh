@@ -27,7 +27,7 @@ scale() {
 
 mod_rollout() {
   # Added removal of the couchbase-migrations container due to this not getting attached to the new network scaled
-  if [ $(docker compose ps -a --format json | jq -re '.[].Name' | grep couchbase-migrations) != "" ]
+  if [ `docker compose ps -a --format json | jq -re '.[].Name' | grep couchbase-migrations)` ]
     then
       debug "Removing 'couchbase-migrations' container"
       docker rm -f `docker compose ps -a --format json | jq -re '.[].Name' | grep couchbase-migrations` > /dev/null 2>&1
