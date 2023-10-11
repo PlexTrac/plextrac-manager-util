@@ -27,7 +27,7 @@ scale() {
 
 mod_rollout() {
   # Added removal of the couchbase-migrations container due to this not getting attached to the new network scaled
-  if [ `docker compose ps -a --format json | jq -re '.[].Name' | grep couchbase-migrations)` ]
+  if [ `docker compose ps -a --format json | jq -re '.[].Name' | grep couchbase-migrations` ]
     then
       debug "Removing 'couchbase-migrations' container"
       docker rm -f `docker compose ps -a --format json | jq -re '.[].Name' | grep couchbase-migrations` > /dev/null 2>&1
@@ -39,15 +39,17 @@ mod_rollout() {
     "notification-sender"
     "plextracapi"
   )
-  #service_list=$(for i in `docker compose config --format json | jq -re '.services|keys[]'`; do \
-  #  docker compose config --format json | jq -re --arg v "$i" '.services | "\($v)=\(.[$v].image)"'; \
-  #  done | grep plextracapi | sort -u | cut -d '=' -f1)
+
   debug "$service_list"
   for s in ${service_list[@]}
-  #for s in `echo -ne "$service_list"`
+    do
+      debug "Stabilizing Service: $s"
+      debug "`compose_client up -d --no-recreate $s > /dev/null 2>&1`"
+  done
+  for s in ${service_list[@]}
     do
       SERVICE=$s
-      SCALE=$(docker compose config --format json | jq -re --arg v "$SERVICE" '.services | .[$v].deploy.replicas | select(. != null)')
+      SCALE=$(compose_client config --format json | jq -re --arg v "$SERVICE" '.services | .[$v].deploy.replicas | select(. != null)')
       if [ $SCALE == 0 ]
         then
           debug "$SERVICE show $SCALE replicas; skipping"
