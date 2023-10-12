@@ -67,6 +67,7 @@ function _selfupdate_refreshReleaseInfo() {
   fi
 
   if test -z ${releaseInfo+x}; then
+    _check_base_required_packages
     export releaseInfo="`wget -O - -q $releaseApiUrl`"
     info "$releaseApiUrl"
     if [ $? -gt 0 ] || [ "$releaseInfo" == "" ]; then die "Failed to get updated release from GitHub"; fi
