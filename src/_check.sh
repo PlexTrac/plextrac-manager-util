@@ -10,6 +10,7 @@ function mod_check() {
     _check_no_existing_installation
   else
     title "Running checks on installation at '${PLEXTRAC_HOME}'"
+    _check_base_required_packages
     requires_user_plextrac
     info "Checking Docker Compose Config"
     compose_client config -q && info "Config check passed"
