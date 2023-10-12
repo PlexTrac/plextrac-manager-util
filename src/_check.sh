@@ -18,6 +18,7 @@ function mod_check() {
         error "Pending Changes:"
         msg "    %s\n" "$pending"
     fi
+    mod_etl_fix
     VALIDATION_ONLY=1 configure_couchbase_users
     postgres_metrics_validation
     check_for_maintenance_mode
@@ -35,7 +36,26 @@ function check_for_maintenance_mode() {
   info "Maintenance Mode: $IN_MAINTENANCE"
 }
 
-###
+function mod_etl_fix() {
+  debug "Running ETL Fix"
+  local dir=`compose_client exec plextracapi find -type d -name etl-logs`
+  if [ -n "$dir" ]
+  then
+    local owner=`compose_client exec plextracapi stat -c '%U' uploads/etl-logs`
+    info "Checking volume permissions"
+    if [ "$owner" != "plextrac" ]
+      then
+        info "Volume permissions are wrong; initiating fix"
+        compose_client exec -u 0 plextracapi chown -R plextrac:plextrac uploads/etl-logs
+    else
+      info "Volume permissions are correct"
+    fi
+  else
+    info "Fixing ETL Folder creation"
+    compose_client exec plextracapi mkdir uploads/etl-logs
+    compose_client exec plextracapi chown -R plextrac:plextrac uploads/etl-logs
+  fi
+}
 
 # Check for an existing installation
 function _check_no_existing_installation() {
