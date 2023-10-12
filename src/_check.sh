@@ -10,6 +10,7 @@ function mod_check() {
     _check_no_existing_installation
   else
     title "Running checks on installation at '${PLEXTRAC_HOME}'"
+    _check_base_required_packages
     requires_user_plextrac
     info "Checking Docker Compose Config"
     compose_client config -q && info "Config check passed"
@@ -107,7 +108,7 @@ function _check_os_supported_flavor_and_release() {
 
 # Check for some base required packages to even validate the system
 function _check_base_required_packages() {
-  requiredCommands=('jq' 'lsb_release' 'wget')
+  requiredCommands=('jq' 'lsb_release' 'wget' 'bc')
   missingCommands=()
   status=0
   for cmd in ${requiredCommands[@]}; do
