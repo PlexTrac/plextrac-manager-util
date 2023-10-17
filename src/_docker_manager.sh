@@ -7,9 +7,9 @@ postgresComposeService="postgres"
 function compose_client() {
   flags=($@)
   compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
-  debug "docker-compose flags: ${flags[@]}"
-  debug "docker-compose configs: ${compose_files}"
-  docker-compose $(echo $compose_files) ${flags[@]}
+  debug "docker compose flags: ${flags[@]}"
+  debug "docker compose configs: ${compose_files}"
+  docker compose $(echo $compose_files) ${flags[@]}
 }
 
 function image_version_check() {
@@ -21,11 +21,11 @@ function image_version_check() {
       current_services=""
       current_image_digests=""
       # Get list of expected services from the `docker compose config`
-      expected_services=$(docker compose config --format json | jq -re .services[].image | sort -u)
+      expected_services=$(compose_client config --format json | jq -r .services[].image | sort -u)
       debug "Expected Services `echo "$expected_services" | wc -l`"
       debug "$expected_services"
-      current_services=$(for i in `compose_client images -q`; do docker image inspect "$i" --format json | jq -re '(.[].RepoTags[])'; done | sort)
-      current_image_digests=$(for i in `grep -F -x -f <(echo "$expected_services") <(echo "$current_services")`; do docker image inspect $i --format json | jq -re '.[].RepoDigests[]'; done | sort)
+      current_services=$(for i in `docker image ls -q`; do docker image inspect "$i" --format json | jq -r '(.[].RepoTags[])'; done | sort)
+      current_image_digests=$(for i in `grep -F -x -f <(echo "$expected_services") <(echo "$current_services")`; do docker image inspect $i --format json | jq -r '.[].Id'; done | sort)
       debug "Current Images Matching `echo "$current_image_digests" | wc -l`"
       debug "$current_image_digests"
       if [ "$(echo "$current_image_digests" | wc -l)" -ne "$(echo "$expected_services" | wc -l)" ]
@@ -39,8 +39,8 @@ function image_version_check() {
     else
       if [ $IMAGE_CHANGED == false ]
         then
-          local new_services=$(for i in `compose_client images -q`; do docker image inspect $i --format json | jq -re '(.[].RepoTags[])'; done | sort -u)
-          local new_image_digests=$(for i in `grep -F -x -f <(echo "$expected_services") <(echo "$new_services")`; do docker image inspect $i --format json | jq -re '.[].RepoDigests[]'; done | sort)
+          local new_services=$(for i in `compose_client images -q`; do docker image inspect $i --format json | jq -r '(.[].RepoTags[])'; done | sort -u)
+          local new_image_digests=$(for i in `grep -F -x -f <(echo "$expected_services") <(echo "$new_services")`; do docker image inspect $i --format json | jq -r '.[].Id'; done | sort)
           debug "New Images Matching `echo "$new_image_digests" | wc -l`"
           debug "$new_image_digests"
           if [ "$new_image_digests" = "$current_image_digests" ]
