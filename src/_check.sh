@@ -39,10 +39,10 @@ function check_for_maintenance_mode() {
 
 function mod_etl_fix() {
   debug "Running ETL Fix"
-  local dir=`compose_client exec plextracapi find -type d -name etl-logs`
+  local dir=`docker compose exec plextracapi find -type d -name etl-logs`
   if [ -n "$dir" ]
   then
-    local owner=`compose_client exec plextracapi stat -c '%U' uploads/etl-logs`
+    local owner=`docker compose exec plextracapi stat -c '%U' uploads/etl-logs`
     info "Checking volume permissions"
     if [ "$owner" != "plextrac" ]
       then
@@ -108,7 +108,7 @@ function _check_os_supported_flavor_and_release() {
 
 # Check for some base required packages to even validate the system
 function _check_base_required_packages() {
-  requiredCommands=('jq' 'lsb_release' 'wget' 'bc')
+  requiredCommands=('jq' 'lsb_release' 'wget' 'bc' 'docker')
   missingCommands=()
   status=0
   for cmd in ${requiredCommands[@]}; do
