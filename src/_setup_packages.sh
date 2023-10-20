@@ -84,7 +84,7 @@ function install_docker() {
           signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu
           $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list'
         system_packages__refresh_package_lists
-        _system_cmd_with_debug_and_fail "apt install -y docker-ce docker-ce-cli containerd.io 2>&1"
+        _system_cmd_with_debug_and_fail "apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>&1"
         _system_cmd_with_debug_and_fail "systemctl enable docker 2>&1"
         event__log_activity "install:docker" `docker --version`
         debug `docker --version`
@@ -95,7 +95,7 @@ function install_docker() {
         # RHEL Docker repo has been deprecated, so only CentOS repo is used
           _system_cmd_with_debug_and_fail "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo"
         system_packages__refresh_package_lists
-        _system_cmd_with_debug_and_fail "yum install -q -y docker-ce docker-ce-cli containerd.io 2>&1"
+        _system_cmd_with_debug_and_fail "yum install -q -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>&1"
         _system_cmd_with_debug_and_fail "systemctl enable docker 2>&1"
         event__log_activity "install:docker" `docker --version`
         debug `docker --version`
@@ -112,15 +112,32 @@ function install_docker() {
 }
 
 function install_docker_compose() {
-  info "upgrading docker-compose..."
-  wget $(wget -O - -q https://api.github.com/repos/docker/compose/releases/latest | jq -r \
-    ".assets[] | select(.name | test(\"^docker-compose-$(uname -s)-$(uname -m)$\"; \"i\")) | .browser_download_url" | grep -v .sha256) \
-    -O /usr/local/bin/docker-compose
-  chmod +x /usr/local/bin/docker-compose
-  docker_compose_version=`/usr/local/bin/docker-compose --version`
-  event__log_activity "install:docker-compose" "$docker_compose_version"
-  info "docker compose installed, version: $docker_compose_version"
-  log "Done."
+  if ! command -v docker compose &> /dev/null || [ "${1:-}" == "force" ]; then
+    case `systemPackageManager` in
+      "apt")
+        info "Installing docker compose..."
+        system_packages__refresh_package_lists
+              _system_cmd_with_debug_and_fail "apt install -y docker-compose-plugin 2>&1"
+        docker_compose_version=$(docker compose version)
+        event__log_activity "install:docker-compose" `docker compose version`
+        info "docker compose installed, version: `docker compose version`"
+        ;;
+      "yum")
+        info "Installing docker compose..."
+        system_packages__refresh_package_lists
+        _system_cmd_with_debug_and_fail "yum install -q -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>&1"
+        event__log_activity "install:docker-compose" `docker compose version`
+        info "docker compose installed, version: `docker compose version`"
+        ;;
+      *)
+        error "unsupported"
+        exit 1
+        ;;
+    esac
+    log "Done."
+  else
+    info "docker compose already installed, version: `docker compose version`"
+  fi
 }
 
 function _system_cmd_with_debug_and_fail() {

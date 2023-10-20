@@ -14,7 +14,7 @@ function mod_info() {
   info "Services:"
   msg "    %s\n" "`releaseDetails`"
 
-  title "Docker-Compose"
+  title "Docker Compose"
 
   info "Active Container Images"
   images=`compose_client images`
