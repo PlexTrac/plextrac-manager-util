@@ -20,6 +20,7 @@ function mod_update() {
   fi
 
   info "Updating PlexTrac instance to latest release..."
+  mod_cb_check
   mod_configure
   title "Pulling latest container images"
   pull_docker_images
@@ -140,4 +141,40 @@ function selfupdate_doUpgrade() {
 
   eval "SKIP_SELF_UPGRADE=1 $ProgName $_INITIAL_CMD_ARGS"
   exit $?
+}
+
+function mod_cb_check() {
+  if [ ${SKIP_CB_UPGRADE:-0} -eq 0 ]; then
+    title "Checking Couchbase Version..."
+    cb_version=`compose_client ps plextracdb --format json | jq -r '.Image' | cut -d ':' -f2`
+    if [[ $cb_version == *"6.5"* ]]
+      then
+        error "Outdate version of Couchbase Detected: $cb_version"
+        error "Recommended version: 7.2.0"
+        title "Couchbase Upgrade Path"
+        info "${DIM}${PURPLE}PlexTrac${RESET} has updated the database version Cloudhosted environments to 7.2.0."
+        info "All of our QA, internal testing, and code validation is switching to use exclusively ${DIM}${RED}Couchbase 7.2.0 and Postgres${RESET}"
+        info "If you would like to ${DIM}${RED}upgrade${RESET} your version of Couchbase, please accomplish the following steps:"
+        log ""
+        info "1. Perform a full backup of ${DIM}${PURPLE}PlexTrac${RESET}: ${DIM}${ORANGE}plextrac backup${RESET}"
+        error "  - PLEASE ensure you have a valid and working back prior to upgrade your database"
+        info "2. Add this your ${DIM}${GREEN}docker-compose.override.yaml${RESET} file:"
+        log ""
+        log "  services:"
+        log "    plextracdb:"
+        log "      image: plextrac/plextracdb:7.2.0"
+        log ""
+        info "3. Run ${DIM}${ORANGE}plextrac update${RESET}"
+        log ""
+        error "Please understand this is a point in time upgrade, and if issues or problems occur then you'll need to undo the above changes, and then RESTORE from that point in time, full backup"
+        error "  - This may result in data loss if you roll back to a prior backup!!!"
+        log ""
+        log ""
+        error "Do you want to continue with your update and continue using Couchbase v6.5.1?"
+        get_user_approval
+    elif [[ $cb_version == *"7.2"* ]]
+      then
+        info "Up to date!"
+    fi
+  fi
 }
