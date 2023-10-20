@@ -51,15 +51,15 @@ to manage host entries for you.
 
     ...for a specific service:
 
-        docker-compose logs -f <SERVICE_NAME>
+        docker compose logs -f <SERVICE_NAME>
 
     Example:
 
-        docker-compose logs -f plextracapi
+        docker compose logs -f plextracapi
 
     ...or for the entire stack all at once:
 
-        docker-compose logs -f
+        docker compose logs -f
 
 ## Development
 
