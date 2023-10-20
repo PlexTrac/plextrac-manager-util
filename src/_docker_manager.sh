@@ -7,9 +7,9 @@ postgresComposeService="postgres"
 function compose_client() {
   flags=($@)
   compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
-  debug "docker-compose flags: ${flags[@]}"
-  debug "docker-compose configs: ${compose_files}"
-  docker-compose $(echo $compose_files) ${flags[@]}
+  debug "docker compose flags: ${flags[@]}"
+  debug "docker compose configs: ${compose_files}"
+  docker compose $(echo $compose_files) ${flags[@]}
 }
 
 function image_version_check() {

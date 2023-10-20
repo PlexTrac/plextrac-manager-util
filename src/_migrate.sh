@@ -147,14 +147,14 @@ function checkExistingConfigForOverrides() {
   esac
 
   info "Checking legacy configuration"
-  dcCMD="docker-compose -f $legacyComposeFile -f $legacyDatabaseFile"
+  dcCMD="docker compose -f $legacyComposeFile -f $legacyDatabaseFile"
   ${dcCMD} config -q || die "Invalid legacy configuration - please contact support"
 
   decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
   #diff -N --unified=2 --color=always --label existing --label "updated" $targetComposeFile <(echo "$decodedComposeFile") || return 0
   diff --unified --color=always --show-function-line='^\s\{2\}\w\+' \
     <($dcCMD config --no-interpolate) \
-    <(docker-compose -f - <<< "${decodedComposeFile}" -f $composeOverrideFile config --no-interpolate) || return 0
+    <(docker compose -f - <<< "${decodedComposeFile}" -f ${composeOverrideFile} config --no-interpolate) || return 0
   return 1
   #diff --color=always -y --left-column <($dcCMD config --format=json | jq -S . -r) <(docker-compose -f - <<< "$decodedComposeFile" -f $composeOverrideFile config --format=json | jq -S . -r) | grep -v '^\+'
 }
