@@ -108,10 +108,10 @@ function _check_os_supported_flavor_and_release() {
 
 # Check for some base required packages to even validate the system
 function _check_base_required_packages() {
-  requiredCommands=('jq' 'lsb_release' 'wget' 'bc')
+  declare -a requiredCommands=("jq" "lsb_release" "wget" "bc" "docker compose")
   missingCommands=()
   status=0
-  for cmd in ${requiredCommands[@]}; do
+  for cmd in "${requiredCommands[@]}"; do
     debug "--"
     debug "Checking if '$cmd' is available"
     output="`command -V "$cmd" 2>&1`" || { debug "Missing required command '$cmd'"; debug "$output";
@@ -125,16 +125,16 @@ function _check_base_required_packages() {
       installCmd="${BOLD}\$${RESET} ${CYAN}"
       yum repolist -q | grep epel || installCmd+='yum install --assumeyes epel-release && '
 
-      declare -A cmdToPkg=([jq]=jq [lsb_release]=redhat-lsb-core [wget]=wget)
-      installCmd="$installCmd""yum install --assumeyes`for cmd in ${missingCommands[@]}; do echo -n " ${cmdToPkg[$cmd]}"; done`"
+      declare -A cmdToPkg=([jq]=jq [lsb_release]=redhat-lsb-core [wget]=wget [docker compose]=docker-compose-plugin)
+      installCmd="$installCmd""yum install --assumeyes`for cmd in "${missingCommands[@]}"; do echo -n " ${cmdToPkg[$cmd]}"; done`"
 
       log "${BOLD}Please enable the EPEL repo and install required packages:"
       log "$installCmd"
     fi
     # debian based systems should all be roughly similar
     if command -v apt-get >/dev/null 2>&1; then
-      declare -A cmdToPkg=([jq]=jq [lsb_release]=lsb-release [wget]=wget)
-      installCandidates=`for cmd in ${missingCommands[@]}; do echo -n " ${cmdToPkg[$cmd]}"; done`
+      declare -A cmdToPkg=([jq]=jq [lsb_release]=lsb-release [wget]=wget [docker compose]=docker-compose-plugin)
+      installCandidates=`for cmd in "${missingCommands[@]}"; do echo -n " ${cmdToPkg[$cmd]}"; done`
       log "${BOLD}Please install required packages:"
       log "${BOLD}\$${RESET} ${CYAN}apt-get install -y ${installCandidates}"
     fi
