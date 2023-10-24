@@ -27,10 +27,10 @@ scale() {
 
 mod_rollout() {
   # Added removal of the couchbase-migrations container due to this not getting attached to the new network scaled
-  if [ `docker compose ps -a --format json | jq -re '.Name' | grep couchbase-migrations` ]
+  if [ `compose_client ps -a --format json | jq -r '.Name' | grep couchbase-migrations` ]
     then
       debug "Removing 'couchbase-migrations' container"
-      docker rm -f `docker compose ps -a --format json | jq -re '.Name' | grep couchbase-migrations` > /dev/null 2>&1
+      docker rm -f `compose_client ps -a --format json | jq -r '.Name' | grep couchbase-migrations` > /dev/null 2>&1
   fi
   # Get list of services from Docker Compose Config
   service_list=(
@@ -49,7 +49,7 @@ mod_rollout() {
   for s in ${service_list[@]}
     do
       SERVICE=$s
-      SCALE=$(compose_client config --format json | jq -re --arg v "$SERVICE" '.services | .[$v].deploy.replicas | select(. != null)')
+      SCALE=$(compose_client config --format json | jq -r --arg v "$SERVICE" '.services | .[$v].deploy.replicas | select(. != null)')
       if [ $SCALE == 0 ]
         then
           debug "$SERVICE show $SCALE replicas; skipping"
