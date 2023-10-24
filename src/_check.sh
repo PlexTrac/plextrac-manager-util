@@ -108,7 +108,7 @@ function _check_os_supported_flavor_and_release() {
 
 # Check for some base required packages to even validate the system
 function _check_base_required_packages() {
-  requiredCommands=('jq' 'lsb_release' 'wget' 'bc' 'docker')
+  requiredCommands=('jq' 'lsb_release' 'wget' 'bc')
   missingCommands=()
   status=0
   for cmd in ${requiredCommands[@]}; do
