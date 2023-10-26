@@ -119,9 +119,9 @@ function selfupdate_doUpgrade() {
   debug "Tempdir: $tempDir"
   target="${PLEXTRAC_HOME}/.local/bin/plextrac"
   
-  debug "`wget $releaseApiUrl -O $tempDir/$(jq -re '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
-  debug "`wget -O $tempDir/$(jq -re '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
-  debug "`wget -O $tempDir/$(jq -re '.name, " ", .browser_download_url' <<<$scriptAssetSHA256SUM) 2>&1 || error "Checksum download failed"`"
+  debug "`wget $releaseApiUrl -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
+  debug "`wget -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
+  debug "`wget -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAssetSHA256SUM) 2>&1 || error "Checksum download failed"`"
   checksumoutput=`pushd $tempDir >/dev/null && sha256sum -c sha256sum-plextrac.txt 2>&1` || die "checksum failed: $checksumoutput"
   debug "$checksumoutput"
   tempScript="$tempDir/plextrac"
