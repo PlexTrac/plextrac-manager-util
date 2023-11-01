@@ -25,12 +25,12 @@ supportedBoxes = [
   {
     :name     => "ubuntu",
     :box      => "bento/ubuntu-20.04",
-    :default  => true,
+    :default  => false,
   },
   {
     :name     => "ubuntu2204",
     :box      => "bento/ubuntu-22.04",
-    :default  => false,
+    :default  => true,
   },
 ]
 

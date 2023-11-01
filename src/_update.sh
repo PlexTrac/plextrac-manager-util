@@ -1,10 +1,54 @@
 # Instance & Utility Update Management
 #
 # Usage: plextrac update
+ver_between() {
+    # args: min, actual, max
+    printf '%s\n' "$@" | sort -V -C
+}
+
+function mod_ver_check() {
+  # Get running version of Backend
+  running_backend_version="$(for i in `docker compose ps plextracapi -q`; do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+  # Validate that the app is running and returning a version
+  if [[ $running_backend_version != "" ]]
+    then
+      # Get the major and minor version from the running containers
+      maj_ver=$(echo "$running_backend_version" | cut -d '.' -f1)
+      min_ver=$(echo "$running_backend_version" | cut -d '.' -f2)
+      # Get the available versions from DockerHub and save to array
+      upstream_tags=(`skopeo list-tags docker://plextrac/plextracapi | jq -r .Tags[] | grep -E '(^[0-9]\.[0-9]*$)' | sort -V`)
+      # Statically set the version we're expecting breaking changes to begin
+      breaking_ver="1.62"
+      running_ver="$maj_ver.$min_ver"
+      # This grabs the last element in the version sorted list which should always be the highest version available on DockerHub"
+      latest_ver="${upstream_tags[-1]}"
+      debug "Breaking Version: $breaking_ver"
+      debug "Running Version: $running_ver"
+      debug "Latest Version: $latest_ver"
+      debug "Upgrade Strategy: $UPGRADE_STRATEGY"
+
+      # Check if 1.62 is avaiable to the public yet
+      if (( $(echo "$latest_ver >= $breaking_ver" | bc -l) ))
+        then
+          info "1.62 available to public"
+      else
+          # if breaking version isn't available, do nothing and update like normal
+          debug "breaking version $breaking_ver not publically avaialble yet. Proceeding with update normally"
+      fi
+      
+      
+      # Check if the running version
+      if [[ $breaking_ver < $running_ver ]]; then info "YES"; else info "NO"; fi
+    else
+      # BACKEND not running or returning version
+      debug "plextracapi not running or returning version"
+      contigous_update=false
+  fi
+}
 
 # subcommand function, this is the entrypoint eg `plextrac update`
 function mod_update() {
-  title "Updating PlexTrac Instance"
+  title "Updating PlexTrac"
   # I'm comparing an int :shrug:
   # shellcheck disable=SC2086
   if [ ${SKIP_SELF_UPGRADE:-0} -eq 0 ]; then
@@ -18,6 +62,7 @@ function mod_update() {
   else
     info "Skipping self upgrade"
   fi
+  # Check what version this customer is on
 
   info "Updating PlexTrac instance to latest release..."
   mod_configure
