@@ -1,3 +1,5 @@
+# TODO: Change plextrac start to NOT pull images
+# Docker compose up pull image?
 # Need this as a global variable
 upgrade_path=()
 
@@ -136,6 +138,8 @@ function version_check() {
           do
             if [[ ${upstream_tags[i]} = $running_ver ]]
               then
+                # TODO remove this function because it won't upgrade if 1.60.10 comes out
+                # Potentially validate if running == latest and pull images anyway?
                 debug "correcting upstream_tags to remove running version"
                 unset 'upstream_tags[i]'
             fi
