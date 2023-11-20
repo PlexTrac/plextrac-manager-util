@@ -18,19 +18,29 @@ supportedBoxes = [
     :default  => false,
   },
   {
-    :name     => "rockylinux",
+    :name     => "centos9",
+    :box      => "bento/centos-9",
+    :default  => false,
+  },
+  {
+    :name     => "rockylinux8",
     :box      => "bento/rockylinux-8",
+    :default  => false,
+  },
+  {
+    :name     => "rockylinux9",
+    :box      => "bento/rockylinux-9",
     :default  => false,
   },
   {
     :name     => "ubuntu",
     :box      => "bento/ubuntu-20.04",
-    :default  => true,
+    :default  => false,
   },
   {
     :name     => "ubuntu2204",
     :box      => "bento/ubuntu-22.04",
-    :default  => false,
+    :default  => true,
   },
 ]
 
