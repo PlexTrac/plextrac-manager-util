@@ -79,6 +79,9 @@ function _getServiceContainerVersion() {
   service=$1
   imageId=`_getImageForService $service`
   version=`docker image inspect $imageId --format='{{ index .Config.Labels "org.opencontainers.image.version" }}' 2>/dev/null || echo ''`
+  if [ "$version" == "20.04" ]; then
+    version="7.2.0"
+  fi
   if [ "$version" == "" ]; then
     case $service in
       "$coreBackendComposeService")

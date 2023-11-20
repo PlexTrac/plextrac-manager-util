@@ -116,7 +116,7 @@ function _check_base_required_packages() {
     debug "Checking if '$cmd' is available"
     output="`command -V "$cmd" 2>&1`" || { debug "Missing required command '$cmd'"; debug "$output";
                                          missingCommands+=("$cmd"); status=1 ; continue; }
-    log "$cmd is available"
+    debug "$cmd is available"
   done
   if [ $status -ne 0 ]; then
     error "Missing required commands: ${missingCommands[*]}"
@@ -138,6 +138,8 @@ function _check_base_required_packages() {
       log "${BOLD}Please install required packages:"
       log "${BOLD}\$${RESET} ${CYAN}apt-get install -y ${installCandidates}"
     fi
+  else
+    info "All expected packages present: ${requiredCommands[@]}"
   fi
   return $status
 }
