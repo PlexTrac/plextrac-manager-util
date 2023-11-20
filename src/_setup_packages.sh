@@ -17,6 +17,17 @@ function system_packages__refresh_package_lists() {
 
 function system_packages__do_system_upgrade() {
   info "Updating OS packages, this make take some time!"
+  nobest="--nobest"
+  if [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep CentOS)" ]; then
+    nobest=""
+    package_needed_for_centOS7="epel-release"
+    docker_restart="/bin/systemctl restart docker.service"
+  elif [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep RHEL)" ]; then
+    info "RHEL"  
+  elif [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep RockyLinux)" ]; then
+    info "RockyLinux"
+  fi
+  title "$(grep '^NAME' /etc/os-release | cut -d '=' -f2)"
   system_packages__refresh_package_lists
   debug "Running system upgrade"
   case `systemPackageManager` in
@@ -25,7 +36,7 @@ function system_packages__do_system_upgrade() {
       debug "$out"
       ;;
     "yum")
-      out=`yum upgrade -q -y --nobest 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
+      out=`yum upgrade -q -y "$nobest" 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
       debug "$out"
       ;;
     *)  
@@ -60,6 +71,7 @@ function system_packages__install_system_dependencies() {
         wget \
         jq \
         unzip \
+        redhat-lsb-core \
         bc \
         2>&1` || { error "Failed to install system dependencies"; debug "$out"; return 1; }
       debug "$out"

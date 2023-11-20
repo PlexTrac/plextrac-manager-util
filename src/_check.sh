@@ -108,7 +108,7 @@ function _check_os_supported_flavor_and_release() {
 
 # Check for some base required packages to even validate the system
 function _check_base_required_packages() {
-  requiredCommands=('jq' 'lsb_release' 'wget' 'bc')
+  requiredCommands=('jq' 'lsb_release' 'wget' 'unzip' 'bc')
   missingCommands=()
   status=0
   for cmd in ${requiredCommands[@]}; do
@@ -133,7 +133,7 @@ function _check_base_required_packages() {
     fi
     # debian based systems should all be roughly similar
     if command -v apt-get >/dev/null 2>&1; then
-      declare -A cmdToPkg=([jq]=jq [lsb_release]=lsb-release [wget]=wget)
+      declare -A cmdToPkg=([jq]=jq [lsb_release]=lsb_release [wget]=wget)
       installCandidates=`for cmd in ${missingCommands[@]}; do echo -n " ${cmdToPkg[$cmd]}"; done`
       log "${BOLD}Please install required packages:"
       log "${BOLD}\$${RESET} ${CYAN}apt-get install -y ${installCandidates}"
