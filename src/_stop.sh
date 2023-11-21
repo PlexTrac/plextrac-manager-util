@@ -10,5 +10,9 @@ function mod_stop() {
   sleep 2
   debug "Stopping Couchbase, Postres, and Redis"
   compose_client stop redis plextracdb postgres
+  sleep 2
+  debug "Ensuring all services are stopped"
+  compose_client stop
+  info "-----"
   info "PlexTrac stopped. It's now safe to update and restart"
 }
