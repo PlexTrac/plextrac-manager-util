@@ -8,6 +8,16 @@ supportedBoxes = [
     :default  => false,
   },
   {
+    :name     => "debian11",
+    :box      => "bento/debian-11",
+    :default  => false,
+  },
+  {
+    :name     => "debian12",
+    :box      => "bento/debian-12",
+    :default  => false,
+  },
+  {
     :name     => "centos7",
     :box      => "bento/centos-stream-7",
     :default  => false,
