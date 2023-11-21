@@ -88,10 +88,10 @@ function install_docker() {
       "apt")
         info "installing docker, this might take some time..."
         _system_cmd_with_debug_and_fail "mkdir -p /etc/apt/keyrings; \
-          wget -O - -q https://download.docker.com/linux/ubuntu/gpg | \
+          wget -O - -q https://download.docker.com/linux/$(grep -E '^ID=' /etc/os-release | cut -d '=' -f2)/gpg | \
           sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
         _system_cmd_with_debug_and_fail 'echo "deb [arch=$(dpkg --print-architecture)
-          signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu
+          signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(grep -E '^ID=' /etc/os-release | cut -d '=' -f2)
           $(cat /etc/os-release | grep VERSION_CODENAME | cut -d '=' -f2) stable" | sudo tee /etc/apt/sources.list.d/docker.list'
         system_packages__refresh_package_lists
         _system_cmd_with_debug_and_fail "apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>&1"
