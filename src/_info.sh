@@ -39,7 +39,7 @@ function mod_info() {
 function info_TLSCertificateDetails() {
   local certInfo opensslOutput
   local issuer expires subject
-  if opensslOutput="`echo | openssl s_client -servername localhost -connect localhost:443 2>/dev/null || true`"; then
+  if opensslOutput="`echo | openssl s_client -servername localhost -connect 127.0.0.1:443 2>/dev/null || true`"; then
     certInfo="`echo "$opensslOutput" | openssl x509 -noout -dates -checkend 6048000 -subject -issuer || true`"
     debug "$certInfo"
     echo "Issuer: \t`awk -F'=' '/issuer/ { $1=""; $2=""; print }' <<<"$certInfo" | sed 's/ //g'`"

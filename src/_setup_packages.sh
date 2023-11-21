@@ -107,6 +107,7 @@ function install_docker() {
         system_packages__refresh_package_lists
         _system_cmd_with_debug_and_fail "yum install -q -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>&1"
         _system_cmd_with_debug_and_fail "systemctl enable docker 2>&1"
+        debug "restarting docker service"
         _system_cmd_with_debug_and_fail "/bin/systemctl restart docker.service"
         event__log_activity "install:docker" `docker --version`
         debug `docker --version`
