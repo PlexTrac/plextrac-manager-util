@@ -93,9 +93,9 @@ function _check_os_supported_flavor_and_release() {
   debug "`jq -r '(["NAME", "VERSIONS"] | (., map(length*"-"))), (.operating_systems[] | [.name, .versions[]]) | @tsv' <<<"$SYSTEM_REQUIREMENTS"`"
   debug ""
 
-  name=`lsb_release -si | tr '[:upper:]' '[:lower:]'`
+  name=$(head -1 /etc/os-release | cut -d '=' -f2 | tr -d '"')
   debug "Detected OS name: '${name}'"
-  release=`lsb_release -sr`
+  release=$(cat /etc/os-release | grep VERSION_ID | cut -d '=' -f2 | tr -d '"')
   debug "Detected OS release/version: '${release}'"
 
   query=".operating_systems[] | select((.name==\"$name\" and .versions[]==\"$release\")) | .family"
@@ -108,7 +108,7 @@ function _check_os_supported_flavor_and_release() {
 
 # Check for some base required packages to even validate the system
 function _check_base_required_packages() {
-  requiredCommands=('jq' 'lsb_release' 'wget' 'unzip' 'bc')
+  requiredCommands=('jq' 'wget' 'unzip' 'bc')
   missingCommands=()
   status=0
   for cmd in ${requiredCommands[@]}; do
@@ -125,7 +125,7 @@ function _check_base_required_packages() {
       installCmd="${BOLD}\$${RESET} ${CYAN}"
       yum repolist -q | grep epel || installCmd+='yum install --assumeyes epel-release && '
 
-      declare -A cmdToPkg=([jq]=jq [lsb_release]=redhat-lsb-core [wget]=wget)
+      declare -A cmdToPkg=([jq]=jq [wget]=wget)
       installCmd="$installCmd""yum install --assumeyes`for cmd in ${missingCommands[@]}; do echo -n " ${cmdToPkg[$cmd]}"; done`"
 
       log "${BOLD}Please enable the EPEL repo and install required packages:"
@@ -133,7 +133,7 @@ function _check_base_required_packages() {
     fi
     # debian based systems should all be roughly similar
     if command -v apt-get >/dev/null 2>&1; then
-      declare -A cmdToPkg=([jq]=jq [lsb_release]=lsb_release [wget]=wget)
+      declare -A cmdToPkg=([jq]=jq [wget]=wget)
       installCandidates=`for cmd in ${missingCommands[@]}; do echo -n " ${cmdToPkg[$cmd]}"; done`
       log "${BOLD}Please install required packages:"
       log "${BOLD}\$${RESET} ${CYAN}apt-get install -y ${installCandidates}"
