@@ -26,7 +26,7 @@ function system_packages__do_system_upgrade() {
   elif [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep RockyLinux)" ]; then
     info "RockyLinux"
   fi
-  debug "$(grep '^NAME' /etc/os-release | cut -d '=' -f2)"
+  debug "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | tr -d '"')"
   system_packages__refresh_package_lists
   debug "Running system upgrade"
   case `systemPackageManager` in

@@ -9,17 +9,17 @@ supportedBoxes = [
   },
   {
     :name     => "centos7",
-    :box      => "bento/centos-7",
+    :box      => "bento/centos-stream-7",
     :default  => false,
   },
   {
     :name     => "centos8",
-    :box      => "bento/centos-8",
+    :box      => "bento/centos-stream-8",
     :default  => false,
   },
   {
     :name     => "centos9",
-    :box      => "bento/centos-9",
+    :box      => "bento/centos-stream-9",
     :default  => false,
   },
   {
