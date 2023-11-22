@@ -36,7 +36,6 @@ function mod_update() {
                 UPGRADE_STRATEGY="$i"
                 debug "Upgrade Strategy is $UPGRADE_STRATEGY"
                 title "Pulling latest container images"
-                exit
                 pull_docker_images
                 if [ "$IMAGE_CHANGED" == true ]
                   then
@@ -93,7 +92,6 @@ function mod_update() {
       mod_check
       title "Update complete"
   fi
-  # -------- END OF NEW
 }
 
 function _selfupdate_refreshReleaseInfo() {

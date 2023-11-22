@@ -8,7 +8,7 @@ function upgrade_time_estimate() {
   if (( ${#upgrade_path[@]} >= 1 ))
     then
       time_estimate=$(echo "${#upgrade_path[@]} * 15" | bc -l)
-      error "Detected ${#upgrade_path[@]} upgrade(s). Each upgrade can take up to 15 minutes to pull the new version, and update the running application. Given the number of upgrades, the projected upgade time is $time_estimate. Are you sure you want to continue?"
+      error "Detected ${#upgrade_path[@]} upgrade(s). Each upgrade can take up to 15 minutes to pull the new version, and update the running application. Given the number of upgrades, the projected upgade time is $time_estimate minutes. Are you sure you want to continue?"
       get_user_approval
   fi
 }
@@ -58,7 +58,7 @@ function version_check() {
     #######################
     title "Latest_Stable Version"
     # Set vars
-    breaking_ver="1.62"
+    breaking_ver="1.59"
     latest_ver=""
     page=1
 
@@ -72,7 +72,7 @@ function version_check() {
       page=$(($page + 1))
       if [ -n $latest_ver ]; then break; fi
     done
-    # Set latest_var to first index item which should be the "latest"
+    # Set latest_ver to first index item which should be the "latest"
     latest_ver="${latest_ver[0]}"
 
     ### Compare stable and latest
@@ -90,7 +90,7 @@ function version_check() {
       
       # IF LATEST_STABLE >= 1.63
       else
-        debug "stable version is greater than $breaking_ver. Running contiguous update"
+        debug "Stable version is greater than $breaking_ver. Running contiguous update"
         contiguous_update=true
     fi
 
@@ -114,7 +114,6 @@ function version_check() {
             else
               upstream_tags+=(`wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true`)
             fi
-            debug "Page of results: $page"
             page=$[$page+1]
         done
         # Compare stable vs latest_tag and if stable is older than the newest tag, then remove the newest tag to ensure we don't update past stable
@@ -138,8 +137,6 @@ function version_check() {
           do
             if [[ ${upstream_tags[i]} = $running_ver ]]
               then
-                # TODO remove this function because it won't upgrade if 1.60.10 comes out
-                # Potentially validate if running == latest and pull images anyway?
                 debug "correcting upstream_tags to remove running version"
                 unset 'upstream_tags[i]'
             fi
@@ -149,11 +146,22 @@ function version_check() {
         done
         upstream_tags=("${new_array[@]}")
         unset new_array
-        debug "New upgrade path: ${upstream_tags[@]}"
         # This grabs the first element in the version sorted list which should always be the highest version available on DockerHub; this should match stable's version"
-        latest_ver="${upstream_tags[0]}"
-        TIFS=$'\n' upgrade_path=($(sort -V <<<"${upstream_tags[*]}"))
-        unset TIFS
+        if [[ -n "${upstream_tags[@]}" ]]; then
+          debug "Setting latest upstream version var to array first index"
+          latest_ver="${upstream_tags[0]}"
+        else
+          debug "Setting latest to running version"
+          latest_ver=$running_ver
+          # Set Contiguous updates to false here to ensure that since the app is on latest version, it still attempts to pull patch version updates
+          contiguous_update=false
+        fi
+        # Sort the upstream tags we've chosen as the upgrade path
+        IFS=$'\n' upgrade_path=($(sort -V <<<"${upstream_tags[*]}"))
+        # Reset IFS to default value
+        IFS=$' \t\n'
+
+
         debug "------------"
         debug "Listing version information"
         debug "------------"
@@ -164,9 +172,6 @@ function version_check() {
         debug "Latest Version: $latest_ver"
         debug "Upgrade path: [${upgrade_path[@]}]"
         debug "Number of upgrades: ${#upgrade_path[@]}"
-      # TODO: How to handle NON-CONTIGUOUS Update
-      else
-        debug "Else"
     fi
   ## IF NOT STABLE
   else
