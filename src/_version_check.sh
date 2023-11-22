@@ -15,9 +15,9 @@ function upgrade_time_estimate() {
 
 function upgrade_warning() {
   debug "upgrade_warning function running"
-  error "Its been detected that you're on a pinned version of PlexTrac other than stable. Beginning with version 1.62, PlexTrac is going to require contiguous updates to ensure code migrations are successful and enable us to continue to move forward with improving the platform."
+  error "Its been detected that you're on a pinned version of PlexTrac other than stable. Beginning with version 1.62, PlexTrac is going to require contiguous updates to ensure code migrations are successful and enable us to continue to move forward with improving the platform. We recommend updating to the next minor version available compared to the running version $running_backend_version"
   error "Are you sure you want to update to $UPGRADE_STRATEGY?"
-  get_user_approval
+  get_user_approval hardcheck
 }
 
 function version_check() {
@@ -65,37 +65,45 @@ function version_check() {
     # Set the needed JWT Token to interact with the DockerHUB API
     # TODO: What is JWT is empty or in Airgapped / on-prem env?
     JWT_TOKEN=$(wget --header="Content-Type: application/json" --post-data='{"username": "'$DOCKER_HUB_USER'", "password": "'$DOCKER_HUB_KEY'"}' -O - https://hub.docker.com/v2/users/login/ -q | jq -r .token)
+    JWT_TOKEN=""
+    if [[ -n "$JWT_TOKEN" ]]; then
+        # Get latest from DockerHUB and assign to array
+        while [ $page -lt 600 ]; do
+          latest_ver=($(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true))
+          page=$(($page + 1))
+          if [ -n $latest_ver ]; then break; fi
+        done
+        # Set latest_ver to first index item which should be the "latest"
+        latest_ver="${latest_ver[0]}"
 
-    # Get latest from DockerHUB and assign to array
-    while [ $page -lt 600 ]; do
-      latest_ver=($(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true))
-      page=$(($page + 1))
-      if [ -n $latest_ver ]; then break; fi
-    done
-    # Set latest_ver to first index item which should be the "latest"
-    latest_ver="${latest_ver[0]}"
-
-    ### Compare stable and latest
-    # Get date stable was pushed
-    stable_date=$(date -d $(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/stable" -q | jq -r .tag_last_pushed) +%s)
-    # Get date for the latest version tag was pushed
-    latest_date=$(date -d $(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/$latest_ver" -q | jq -r .tag_last_pushed) +%s)
-    
-    ## LOGIC: LATEST_STABLE
-    # IF LATEST_STABLE <= 1.62
-    if (( $(echo "$latest_ver <= $breaking_ver" | bc -l) ))
-      then 
-        debug "$breaking_ver not publically available. Updating normally without warning"
-        contiguous_update=false
-      
-      # IF LATEST_STABLE >= 1.63
+        ### Compare stable and latest
+        # Get date stable was pushed
+        stable_date=$(date -d $(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/stable" -q | jq -r .tag_last_pushed) +%s)
+        # Get date for the latest version tag was pushed
+        latest_date=$(date -d $(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/$latest_ver" -q | jq -r .tag_last_pushed) +%s)
+        
+        ## LOGIC: LATEST_STABLE
+        # IF LATEST_STABLE <= 1.62
+        if (( $(echo "$latest_ver <= $breaking_ver" | bc -l) ))
+          then 
+            debug "$breaking_ver not publically available. Updating normally without warning"
+            contiguous_update=false
+          
+          # IF LATEST_STABLE >= 1.63
+          else
+            debug "Stable version is greater than $breaking_ver. Running contiguous update"
+            contiguous_update=true
+        fi
+      # If the JWT token is empty for on-prem envs
       else
-        debug "Stable version is greater than $breaking_ver. Running contiguous update"
-        contiguous_update=true
+        contiguous_update=false
+        error "Unable to validate versioned images from DockerHub. Likely On-prem or Air-gapped"
+        msg "-------"
+        error "Beginning with version 1.62, PlexTrac is going to require contiguous updates to ensure code migrations are successful and enable us to continue to move forward with improving the platform. We recommend updating to the next minor version available compared to the running version $running_backend_version"
+        error "Are you sure you want to update to $UPGRADE_STRATEGY? (y/n)"
+        get_user_approval hardcheck
     fi
 
-    # TEST
-    contiguous_update=true
     upstream_tags=()
     page=1
     if [ "$contiguous_update" = true ]
