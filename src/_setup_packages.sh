@@ -20,11 +20,8 @@ function system_packages__do_system_upgrade() {
   nobest="--nobest"
   if [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep CentOS)" ]; then
     nobest=""
-  elif [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep RHEL)" ]; then
-    info "RHEL"
-
-  elif [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep RockyLinux)" ]; then
-    info "RockyLinux"
+  elif [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep Hat)" ]; then
+    nobest="--nobest"
   fi
   debug "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | tr -d '"')"
   system_packages__refresh_package_lists
