@@ -65,7 +65,6 @@ function version_check() {
     # Set the needed JWT Token to interact with the DockerHUB API
     # TODO: What is JWT is empty or in Airgapped / on-prem env?
     JWT_TOKEN=$(wget --header="Content-Type: application/json" --post-data='{"username": "'$DOCKER_HUB_USER'", "password": "'$DOCKER_HUB_KEY'"}' -O - https://hub.docker.com/v2/users/login/ -q | jq -r .token)
-    JWT_TOKEN=""
     if [[ -n "$JWT_TOKEN" ]]; then
         # Get latest from DockerHUB and assign to array
         while [ $page -lt 600 ]; do
