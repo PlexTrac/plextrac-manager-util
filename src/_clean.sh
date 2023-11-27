@@ -66,6 +66,5 @@ function clean_sweepUploadsCache() {
   info "core-backend: Cleaning uploads/exports caches"
   # Leaving the cleanup fairly light, this should help a ton without getting aggressive
   debug "`compose_client exec -T -w /usr/src/plextrac-api/uploads plextracapi \
-    find . -maxdepth 1 -type f -regextype posix-extended -regex '^.*\.(json|xml|ptrac|csv|nessus)$' -delete`"
-    #New way: find . -maxdepth 1 -type f -regex '^.*\.\(json\|xml\|ptrac\|csv\|nessus\)$' -delete`"
+    find . -maxdepth 1 -type f -regex '^.*\.\(json\|xml\|ptrac\|csv\|nessus\)$' -delete`"
 }

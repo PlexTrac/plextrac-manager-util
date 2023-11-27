@@ -21,7 +21,7 @@ function manage_api_user() {
   info "Creating unprivileged user ${CB_API_USER} with access to ${CB_BUCKET}"
   get_user_approval
   compose_client exec -T $couchbaseComposeService \
-    couchbase-cli user-manage --set -c localhost:8091 -u "${CB_ADMIN_USER}" -p "${CB_ADMIN_PASS}" \
+    couchbase-cli user-manage --set -c 127.0.0.1:8091 -u "${CB_ADMIN_USER}" -p "${CB_ADMIN_PASS}" \
       --rbac-username "${CB_API_USER}" --rbac-password "${CB_API_PASS}" --rbac-name='PlexTrac-API-User' \
       --roles bucket_full_access[${CB_BUCKET}] --auth-domain local
 }
@@ -30,7 +30,7 @@ function manage_backup_user() {
   info "Creating backup user ${CB_BACKUP_USER} with access to ${CB_BUCKET}"
   get_user_approval
   compose_client exec -T $couchbaseComposeService \
-    couchbase-cli user-manage --set -c localhost:8091 -u "${CB_ADMIN_USER}" -p "${CB_ADMIN_PASS}" \
+    couchbase-cli user-manage --set -c 127.0.0.1:8091 -u "${CB_ADMIN_USER}" -p "${CB_ADMIN_PASS}" \
       --rbac-username "${CB_BACKUP_USER}" --rbac-password "${CB_BACKUP_PASS}" --rbac-name='PlexTrac-Backup-User' \
       --roles bucket_full_access[${CB_BUCKET}] --auth-domain local
 }
@@ -41,7 +41,7 @@ function test_couchbase_access() {
   bucket=${3:-reportMe}
   info "Checking user $user can access couchbase"
   bucketList=$(compose_client exec -T -- $couchbaseComposeService \
-                 couchbase-cli bucket-list -c localhost:8091 -u $user -p $pass -o json || echo "noaccess")
+                 couchbase-cli bucket-list -c 127.0.0.1:8091 -u $user -p $pass -o json || echo "noaccess")
   if [ "$bucketList" != "noaccess" ]; then
     bucketList=$(jq '.[].name' <<<$bucketList -r 2>/dev/null)
     debug ".. $user found '$bucketList'"

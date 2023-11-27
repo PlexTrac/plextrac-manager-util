@@ -24,8 +24,10 @@ function image_version_check() {
       expected_services=$(compose_client config --format json | jq -r .services[].image | sort -u)
       debug "Expected Services `echo "$expected_services" | wc -l`"
       debug "$expected_services"
-      current_services=$(for i in `docker image ls -q`; do docker image inspect "$i" --format json | jq -r '(.[].RepoTags[])'; done | sort)
-      current_image_digests=$(for i in `grep -F -x -f <(echo "$expected_services") <(echo "$current_services")`; do docker image inspect $i --format json | jq -r '.[].Id'; done | sort)
+      current_services=$(for i in `docker image ls -q`; do docker image inspect "$i" --format json | jq -r '(.[].RepoTags[])'; done | sort -u)
+      current_image_digests=$(for i in `grep -F -x -f <(echo "$expected_services") <(echo "$current_services")`; do docker image inspect $i --format json | jq -r '.[].Id'; done | sort -u)
+      debug "Current Services"
+      debug "$current_services"
       debug "Current Images Matching `echo "$current_image_digests" | wc -l`"
       debug "$current_image_digests"
       if [ "$(echo "$current_image_digests" | wc -l)" -ne "$(echo "$expected_services" | wc -l)" ]
