@@ -64,6 +64,7 @@ mod_rollout() {
       fi
       if [[ $s == "datalake-maintainer" ]]; then
         #If this is the datalake maintainer, then abort the scaling
+        debug "Datalake Maintainer detected; skipping"
         continue
       fi
 
