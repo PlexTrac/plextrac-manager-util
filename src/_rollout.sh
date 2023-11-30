@@ -55,7 +55,6 @@ mod_rollout() {
           debug "$SERVICE show $SCALE replicas; skipping"
           continue
       fi
-
       if [[ "$(compose_client ps --quiet "$SERVICE")" == "" ]]
         then
           debug "Service '$SERVICE' is not running. Starting the service."
@@ -63,7 +62,6 @@ mod_rollout() {
           debug "$SERVICE created"
           continue
       fi
-
       if [[ $s == "datalake-maintainer" ]]; then
         #If this is the datalake maintainer, then abort the scaling
         continue
