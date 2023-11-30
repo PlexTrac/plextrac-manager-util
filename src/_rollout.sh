@@ -49,12 +49,6 @@ mod_rollout() {
   for s in ${service_list[@]}
     do
       SERVICE=$s
-      
-      if [[ $s == "datalake-maintainer" ]]; then
-        #If this is the datalake maintainer, then abort the scaling
-        continue
-      fi
-      
       SCALE=$(compose_client config --format json | jq -r --arg v "$SERVICE" '.services | .[$v].deploy.replicas | select(. != null)')
       if [ $SCALE == 0 ]
         then
@@ -62,13 +56,17 @@ mod_rollout() {
           continue
       fi
 
-
       if [[ "$(compose_client ps --quiet "$SERVICE")" == "" ]]
         then
           debug "Service '$SERVICE' is not running. Starting the service."
           compose_client up --detach --no-recreate "$SERVICE"
           debug "$SERVICE created"
           continue
+      fi
+
+      if [[ $s == "datalake-maintainer" ]]; then
+        #If this is the datalake maintainer, then abort the scaling
+        continue
       fi
 
       OLD_CONTAINER_IDS_STRING=$(compose_client ps --quiet "$SERVICE")
