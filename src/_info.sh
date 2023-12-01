@@ -41,7 +41,7 @@ function mod_info() {
 function info_TLSCertificateDetails() {
   local certInfo opensslOutput
   local issuer expires subject
-  if opensslOutput="`echo | openssl s_client -servername localhost -connect localhost:443 2>/dev/null || true`"; then
+  if opensslOutput="`echo | openssl s_client -servername localhost -connect 127.0.0.1:443 2>/dev/null || true`"; then
     certInfo="`echo "$opensslOutput" | openssl x509 -noout -dates -checkend 6048000 -subject -issuer || true`"
     debug "$certInfo"
     echo "Issuer: \t`awk -F'=' '/issuer/ { $1=""; $2=""; print }' <<<"$certInfo" | sed 's/ //g'`"
@@ -81,6 +81,9 @@ function _getServiceContainerVersion() {
   service=$1
   imageId=`_getImageForService $service`
   version=`docker image inspect $imageId --format='{{ index .Config.Labels "org.opencontainers.image.version" }}' 2>/dev/null || echo ''`
+  if [ "$version" == "20.04" ]; then
+    version="7.2.0"
+  fi
   if [ "$version" == "" ]; then
     case $service in
       "$coreBackendComposeService")

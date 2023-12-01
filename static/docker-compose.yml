@@ -26,7 +26,7 @@ services:
       - 'CMD-SHELL'
       - 'python3 - << EOF'
       - 'import requests'
-      - 'print(requests.get("http://localhost:4350/api/v2/health/live").json())'
+      - 'print(requests.get("http://127.0.0.1:4350/api/v2/health/live").json())'
       - 'EOF'
 
 
@@ -116,7 +116,7 @@ services:
     healthcheck:
       test:
         - "CMD-SHELL"
-        - 'echo "GET /" | openssl s_client -quiet -connect localhost:443'
+        - 'echo "GET /" | openssl s_client -quiet -connect 127.0.0.1:443'
       interval: 5s
       retries: 8
       start_period: 5s

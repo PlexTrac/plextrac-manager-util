@@ -34,7 +34,7 @@ function backup_fullCouchbaseBackup() {
   debug "`compose_client exec -T $couchbaseComposeService \
     chown -R 1337:1337 /backups 2>&1`"
   debug "`compose_client exec -T --user 1337 $couchbaseComposeService \
-    cbbackup -m full "http://localhost:8091" /backups -u ${CB_BACKUP_USER} -p ${CB_BACKUP_PASS} 2>&1`"
+    cbbackup -m full "http://127.0.0.1:8091" /backups -u ${CB_BACKUP_USER} -p ${CB_BACKUP_PASS} 2>&1`"
   latestBackup=`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`
   backupDir=`basename $latestBackup`
   debug "Compressing Couchbase backup"

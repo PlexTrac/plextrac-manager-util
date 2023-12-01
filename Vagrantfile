@@ -8,18 +8,38 @@ supportedBoxes = [
     :default  => false,
   },
   {
+    :name     => "debian11",
+    :box      => "bento/debian-11",
+    :default  => false,
+  },
+  {
+    :name     => "debian12",
+    :box      => "bento/debian-12",
+    :default  => false,
+  },
+  {
     :name     => "centos7",
-    :box      => "bento/centos-7",
+    :box      => "bento/centos-stream-7",
     :default  => false,
   },
   {
     :name     => "centos8",
-    :box      => "bento/centos-8",
+    :box      => "bento/centos-stream-8",
     :default  => false,
   },
   {
-    :name     => "rockylinux",
+    :name     => "centos9",
+    :box      => "bento/centos-stream-9",
+    :default  => false,
+  },
+  {
+    :name     => "rockylinux8",
     :box      => "bento/rockylinux-8",
+    :default  => false,
+  },
+  {
+    :name     => "rockylinux9",
+    :box      => "bento/rockylinux-9",
     :default  => false,
   },
   {
