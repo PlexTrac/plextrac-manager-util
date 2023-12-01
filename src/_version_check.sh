@@ -1,5 +1,3 @@
-# TODO: Change plextrac start to NOT pull images
-# Docker compose up pull image?
 # Need this as a global variable
 upgrade_path=()
 
@@ -15,7 +13,7 @@ function upgrade_time_estimate() {
 
 function upgrade_warning() {
   debug "upgrade_warning function running"
-  error "Its been detected that you're on a pinned version of PlexTrac other than stable. Beginning with version 1.62, PlexTrac is going to require contiguous updates to ensure code migrations are successful and enable us to continue to move forward with improving the platform. We recommend updating to the next minor version available compared to the running version $running_backend_version"
+  error "Its been detected that you're on a pinned version of PlexTrac other than stable. Beginning with version 2.0, PlexTrac is going to require contiguous updates to ensure code migrations are successful and enable us to continue to move forward with improving the platform. We recommend updating to the next minor version available compared to the running version $running_backend_version"
   error "Are you sure you want to update to $UPGRADE_STRATEGY?"
   get_user_approval hardcheck
 }
@@ -25,7 +23,7 @@ function version_check() {
   ### -- Running Version
   #######################
   ## LOGIC: RunVer
-  title "Running Version"
+  debug "Running Version"
   # Get running version of Backend
   running_backend_version="$(for i in $(docker compose ps plextracapi -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
 
@@ -47,7 +45,7 @@ function version_check() {
   ### -- Pinned Version
   #######################
   ## LOGIC: PinVer
-  title "Pinned Version"
+  debug "Pinned Version"
   # Check what the pinned version (UPGRADE_STRATEGY) is and see if a contiguous update will apply
   ## IF STABLE
   if [[ "$UPGRADE_STRATEGY" == "stable" ]]; then
@@ -56,14 +54,13 @@ function version_check() {
     #######################
     ### -- Latest Stable Version
     #######################
-    title "Latest_Stable Version"
+    debug "Latest_Stable Version"
     # Set vars
-    breaking_ver="1.59"
+    breaking_ver="2.0"
     latest_ver=""
     page=1
 
     # Set the needed JWT Token to interact with the DockerHUB API
-    # TODO: What is JWT is empty or in Airgapped / on-prem env?
     JWT_TOKEN=$(wget --header="Content-Type: application/json" --post-data='{"username": "'$DOCKER_HUB_USER'", "password": "'$DOCKER_HUB_KEY'"}' -O - https://hub.docker.com/v2/users/login/ -q | jq -r .token)
     if [[ -n "$JWT_TOKEN" ]]; then
         # Get latest from DockerHUB and assign to array
@@ -82,13 +79,13 @@ function version_check() {
         latest_date=$(date -d $(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/$latest_ver" -q | jq -r .tag_last_pushed) +%s)
         
         ## LOGIC: LATEST_STABLE
-        # IF LATEST_STABLE <= 1.62
+        # IF LATEST_STABLE <= 2.0
         if (( $(echo "$latest_ver <= $breaking_ver" | bc -l) ))
           then 
             debug "$breaking_ver not publically available. Updating normally without warning"
             contiguous_update=false
           
-          # IF LATEST_STABLE >= 1.63
+          # IF LATEST_STABLE >= 2.1
           else
             debug "Stable version is greater than $breaking_ver. Running contiguous update"
             contiguous_update=true
@@ -98,7 +95,7 @@ function version_check() {
         contiguous_update=false
         error "Unable to validate versioned images from DockerHub. Likely On-prem or Air-gapped"
         msg "-------"
-        error "Beginning with version 1.62, PlexTrac is going to require contiguous updates to ensure code migrations are successful and enable us to continue to move forward with improving the platform. We recommend updating to the next minor version available compared to the running version $running_backend_version"
+        error "Beginning with version 2.0, PlexTrac is going to require contiguous updates to ensure code migrations are successful and enable us to continue to move forward with improving the platform. We recommend updating to the next minor version available compared to the running version $running_backend_version"
         error "Are you sure you want to update to $UPGRADE_STRATEGY? (y/n)"
         get_user_approval hardcheck
     fi
@@ -185,7 +182,6 @@ function version_check() {
     # Running Pinned Version; Normal update with warning
     debug "PinVer: Running as a non-stable, pinned version -- proceed with warning and update"
     contiguous_update=false
-    # TODO: warning function
     upgrade_warning
   fi
 }

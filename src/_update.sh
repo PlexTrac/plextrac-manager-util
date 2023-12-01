@@ -17,7 +17,7 @@ function mod_update() {
     fi
   else
     info "Skipping self upgrade"
-    error "PlexTrac began/will begin doing contiguous updates to the PlexTrac application starting with the v1.62 release. From that point forward, all releases will need to be updated with minor version increments. Skipping updating the PlexTrac Manager Util can have adverse affects on the application if a minor version update is skipped. Are you sure you want to continue skipping updates to this utility?"
+    error "PlexTrac began/will begin doing contiguous updates to the PlexTrac application starting with the v2.0 release. From that point forward, all releases will need to be updated with minor version increments. Skipping updating the PlexTrac Manager Util can have adverse affects on the application if a minor version update is skipped. Are you sure you want to continue skipping updates to this utility?"
     get_user_approval
   fi
   info "Updating PlexTrac instance to latest release..."
