@@ -28,7 +28,8 @@ services:
       - 'import requests'
       - 'print(requests.get("http://127.0.0.1:4350/api/v2/health/live").json())'
       - 'EOF'
-
+    entrypoint: npm run
+    command: "start"
 
   couchbase-migrations:
     profiles:
@@ -48,24 +49,10 @@ services:
          npm run db:migrate &&
          npm run pg:etl up all &&
          npm run maintenance:disable"
+    env_file:
+    - .env
     environment:
-      COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
-      CB_API_PASS: ${CB_API_PASS}
-      CB_API_USER: ${CB_API_USER}
-      REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING:-redis}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
-      PG_HOST: ${PG_HOST:-postgres}
       PG_MIGRATE_PATH: /usr/src/plextrac-api
-      PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
-      PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
-      PG_CORE_DB: ${PG_CORE_DB:?err}
-      PG_RUNBOOKS_ADMIN_PASSWORD: ${PG_RUNBOOKS_ADMIN_PASSWORD:?err}
-      PG_RUNBOOKS_ADMIN_USER: ${PG_RUNBOOKS_ADMIN_USER:?err}
-      PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:?err}
-      PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:?err}
-      PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:?err}
-      PG_TENANTS_WRITE_MODE: ${PG_TENANTS_WRITE_MODE:-couchbase_only}
-      PG_TENANTS_READ_MODE: ${PG_TENANTS_READ_MODE:-couchbase_only}
 
   plextracdb:
     environment:
@@ -129,14 +116,8 @@ services:
     - plextracdb
     - redis
     restart: always
-    environment:
-      CB_API_PASS: "${CB_API_PASS:?err}"
-      CB_API_USER: "${CB_API_USER:?err}"
-      COUCHBASE_URL: "http://plextracdb"
-      LOG_LEVEL: "${LOG_LEVEL:-info}"
-      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
-      API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE: "${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
+    env_file:
+    - .env
     healthcheck:
       test:
       - "CMD"
@@ -162,17 +143,8 @@ services:
     - plextracdb
     - redis
     restart: always
-    environment:
-      CB_API_PASS: "${CB_API_PASS:?err}"
-      CB_API_USER: "${CB_API_USER:?err}"
-      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
-      COUCHBASE_URL: "http://plextracdb"
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      MAILER_SECURE: ${MAILER_SECURE:-}
-      NOTIFICATION_DRY_RUN: ${NOTIFICATION_DRY_RUN:-}
-      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
-      serviceConfig: ${serviceConfig:-}
+    env_file:
+    - .env
     healthcheck:
       test:
       - "CMD"
@@ -194,20 +166,10 @@ services:
     - plextracdb
     - redis
     restart: always
+    env_file:
+    - .env
     environment:
-      CB_API_PASS: "${CB_API_PASS:?err}"
-      CB_API_USER: "${CB_API_USER:?err}"
-      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
-      COUCHBASE_URL: "http://plextracdb"
       GCP_DATALAKE_SA_KEY_PATH: "${GCP_DATALAKE_SA_KEY_PATH:-/usr/src/plextrac-api/keys/gcp/gcp-datalake-sa-key.json}"
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
-      PG_CORE_DB: ${PG_CORE_DB:?err}
-      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
-      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
-      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
-      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
     healthcheck:
       test:
       - "CMD"
