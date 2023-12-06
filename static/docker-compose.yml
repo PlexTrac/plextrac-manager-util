@@ -51,8 +51,6 @@ services:
          npm run maintenance:disable"
     env_file:
     - .env
-    environment:
-      PG_MIGRATE_PATH: /usr/src/plextrac-api
 
   plextracdb:
     environment:
