@@ -51,7 +51,7 @@ function restore_doCouchbaseRestore() {
     log "Running database restore"
     # We have the TTY enabled by default so the output from cbrestore is intelligible
     tty -s || { debug "Disabling TTY allocation for Couchbase restore due to non-interactive invocation"; ttyFlag="-T"; }
-    compose_client exec ${ttyFlag:-} $couchbaseComposeService cbrestore /backups http://localhost:8091 \
+    compose_client exec ${ttyFlag:-} $couchbaseComposeService cbrestore /backups http://127.0.0.1:8091 \
       -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
 
     log "Cleaning up extracted backup files"

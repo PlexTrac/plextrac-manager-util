@@ -62,6 +62,11 @@ mod_rollout() {
           debug "$SERVICE created"
           continue
       fi
+      if [[ $s == "datalake-maintainer" ]]; then
+        #If this is the datalake maintainer, then abort the scaling
+        debug "Datalake Maintainer detected; skipping"
+        continue
+      fi
 
       OLD_CONTAINER_IDS_STRING=$(compose_client ps --quiet "$SERVICE")
       readarray -t OLD_CONTAINER_IDS <<<"$OLD_CONTAINER_IDS_STRING"

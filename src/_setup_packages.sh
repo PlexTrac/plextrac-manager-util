@@ -10,13 +10,20 @@ function system_packages__refresh_package_lists() {
       _system_cmd_with_debug_and_fail "apt-get update 2>&1"
       ;;
     "yum")
-      _system_cmd_with_debug_and_fail "yum check-update 2>&1 || true # hide exit code for successful check and pending upgrades"
+      _system_cmd_with_debug_and_fail "yum check-update 2>&1 || true" # hide exit code for successful check and pending upgrades"
       ;;
   esac
 }
 
 function system_packages__do_system_upgrade() {
   info "Updating OS packages, this make take some time!"
+  nobest="--nobest"
+  if [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep CentOS)" ]; then
+    nobest=""
+  elif [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep Hat)" ]; then
+    nobest="--nobest"
+  fi
+  debug "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | tr -d '"')"
   system_packages__refresh_package_lists
   debug "Running system upgrade"
   case `systemPackageManager` in
@@ -25,7 +32,7 @@ function system_packages__do_system_upgrade() {
       debug "$out"
       ;;
     "yum")
-      out=`yum upgrade -q -y --nobest 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
+      out=`yum upgrade -q -y $nobest 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
       debug "$out"
       ;;
     *)  
@@ -78,11 +85,11 @@ function install_docker() {
       "apt")
         info "installing docker, this might take some time..."
         _system_cmd_with_debug_and_fail "mkdir -p /etc/apt/keyrings; \
-          wget -O - -q https://download.docker.com/linux/ubuntu/gpg | \
+          wget -O - -q https://download.docker.com/linux/$(grep -E '^ID=' /etc/os-release | cut -d '=' -f2)/gpg | \
           sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
         _system_cmd_with_debug_and_fail 'echo "deb [arch=$(dpkg --print-architecture)
-          signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu
-          $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list'
+          signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(grep -E '^ID=' /etc/os-release | cut -d '=' -f2)
+          $(cat /etc/os-release | grep VERSION_CODENAME | cut -d '=' -f2) stable" | sudo tee /etc/apt/sources.list.d/docker.list'
         system_packages__refresh_package_lists
         _system_cmd_with_debug_and_fail "apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>&1"
         _system_cmd_with_debug_and_fail "systemctl enable docker 2>&1"
@@ -97,6 +104,8 @@ function install_docker() {
         system_packages__refresh_package_lists
         _system_cmd_with_debug_and_fail "yum install -q -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>&1"
         _system_cmd_with_debug_and_fail "systemctl enable docker 2>&1"
+        debug "restarting docker service"
+        _system_cmd_with_debug_and_fail "/bin/systemctl restart docker.service"
         event__log_activity "install:docker" `docker --version`
         debug `docker --version`
         ;;
