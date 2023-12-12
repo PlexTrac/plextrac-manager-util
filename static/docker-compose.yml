@@ -249,12 +249,9 @@ services:
       PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:?err}
       PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:?err}
       POSTGRES_HOST_AUTH_METHOD: scram-sha-256
-      POSTGRES_INITDB_ARGS: '--auth-local=scram-sha-256 --auth-host=scram-sha-256'
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?err}
       POSTGRES_USER: ${POSTGRES_USER:?err}
     volumes:
-    # this is where the initdb script & SQL template go
-    - postgres-initdb:/docker-entrypoint-initdb.d
     - postgres-data:/var/lib/postgresql/data
     - postgres-backups:/backups
     ports:
@@ -267,12 +264,6 @@ volumes:
   letsencrypt: {}
   localesOverride: {}
   postgres-data: {}
-  postgres-initdb:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "${PLEXTRAC_HOME:-.}/volumes/postgres-initdb"
   redis:
     driver: local
     driver_opts:
