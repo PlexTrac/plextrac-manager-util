@@ -71,12 +71,6 @@ function version_check() {
         done
         # Set latest_ver to first index item which should be the "latest"
         latest_ver="${latest_ver[0]}"
-
-        ### Compare stable and latest
-        # Get date stable was pushed
-        stable_date=$(date -d $(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/stable" -q | jq -r .tag_last_pushed) +%s)
-        # Get date for the latest version tag was pushed
-        latest_date=$(date -d $(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/$latest_ver" -q | jq -r .tag_last_pushed) +%s)
         
         ## LOGIC: LATEST_STABLE
         # IF LATEST_STABLE <= 2.0
@@ -85,7 +79,7 @@ function version_check() {
             debug "$breaking_ver not publically available. Updating normally without warning"
             contiguous_update=false
           
-          # IF LATEST_STABLE >= 2.1
+          # IF LATEST_STABLE >= 2.0
           else
             debug "Stable version is greater than $breaking_ver. Running contiguous update"
             contiguous_update=true
@@ -120,21 +114,6 @@ function version_check() {
             fi
             page=$[$page+1]
         done
-        # Compare stable vs latest_tag and if stable is older than the newest tag, then remove the newest tag to ensure we don't update past stable
-        if [ $stable_date -le $latest_date ]; then
-          debug "Stable is older than latest version"
-          # If stable is older, remove latest from upgrade path
-          for i in ${!upstream_tags[@]}
-            do
-              if [[ ${upstream_tags[i]} = $latest_ver ]]
-                then
-                  debug "correcting upstream_tags to remove latest"
-                  unset 'upstream_tags[i]'
-              fi
-          done
-        else
-          debug "Stable is pinned to the latest version $latest_ver"
-        fi
         
         # Remove the running version from the Upgrade path
         for i in ${!upstream_tags[@]}
