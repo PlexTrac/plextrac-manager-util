@@ -111,6 +111,12 @@ function login_dockerhub() {
   output="`docker login -u ${DOCKER_HUB_USER:-plextracusers} --password-stdin 2>&1 <<< "${DOCKER_HUB_KEY}"`" || die "${output}"
   debug "$output"
   log "Done."
+
+  if [ -n ${IMAGE_REGISTRY:-} ]; then
+    output="`docker login ${IMAGE_REGISTRY} -u ${IMAGE_REGISTRY_USER:-plextracusers} --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}"`" || die "${output}"
+    debug "$output"
+    log "Done."
+  fi
 }
 
 function updateComposeConfig() {
