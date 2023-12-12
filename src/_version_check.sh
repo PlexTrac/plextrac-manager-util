@@ -34,7 +34,7 @@ function version_check() {
     # Get the major and minor version from the running containers
     maj_ver=$(echo "$running_backend_version" | cut -d '.' -f1)
     min_ver=$(echo "$running_backend_version" | cut -d '.' -f2)
-    # Set the running version format as x.x
+    running_ver=$(echo $running_backend_version | awk -F. '{print $1"."$2}')
     running_ver="$maj_ver.$min_ver"
   else
     debug "RunVer: plextracapi is NOT running"
