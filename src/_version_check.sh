@@ -67,6 +67,7 @@ function version_check() {
         while [ $page -lt 600 ]; do
           latest_ver=($(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true))
           page=$(($page + 1))
+          debug "$latest_ver"
           if [ -n "$latest_ver" ]; then break; fi
         done
         # Set latest_ver to first index item which should be the "latest"
@@ -103,15 +104,16 @@ function version_check() {
         while [ $page -lt 600 ]
           do
             # Get the available versions from DockerHub and save to array
-            upstream_tags+=(`wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true`)
-            if [[ ${upstream_tags[*]} =~ $breaking_ver ]]
+            if [[ $(echo "${upstream_tags[@]}" | grep "$breaking_ver" || true) ]]
               then
                 debug "Found breaking version $breaking_ver"; break;
-            elif [[ ${upstream_tags[*]} =~ $running_ver ]]
+            elif [[ $(echo "${upstream_tags[@]}" | grep "$running_ver" || true) ]]
               then
                 debug "Found running version $running_backend_version"; break;
-            page=$($page+1)
+            else
+              upstream_tags+=(`wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true`)
             fi
+            page=$[$page+1]
         done
         
         # Remove the running version from the Upgrade path
