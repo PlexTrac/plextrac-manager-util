@@ -112,7 +112,7 @@ function login_dockerhub() {
   debug "$output"
   log "Done."
 
-  if [ -n ${IMAGE_REGISTRY:-} ]; then
+  if [ -n "${IMAGE_REGISTRY:-}" ]; then
     output="`docker login ${IMAGE_REGISTRY} -u ${IMAGE_REGISTRY_USER:-plextracusers} --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}"`" || die "${output}"
     debug "$output"
     log "Done."
