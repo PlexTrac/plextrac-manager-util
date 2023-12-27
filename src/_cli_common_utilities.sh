@@ -4,12 +4,7 @@ function get_user_approval() {
   # If non-interactive, log failure and return 1
   # If -y/--assume-yes/ASSUME_YES flags/envvars are set, return 0
   # If -y/--assume-yes/ASSUME_YES flags/envvars are NOT allowed, skip returning 0
-  # If a parameter is passed when the fucntion is called, its assumed this will ignore -y --yes flags
-  if [[ -n ${1:-} ]]; then
-      debug "hardstop requested; disallowing return 0 from -y or --assume-yes"
-    else
-      if [ ${ASSUME_YES:-false} == "true" ]; then return 0; fi
-  fi
+  if [ ${ASSUME_YES:-false} == "true" ]; then return 0; fi
   tty -s || die "Unable to request user approval in non-interactive shell, try passing the -y or --assume-yes CLI flag"
   PS3='Please select an option: '
   select opt in "Yes" "No" "Exit"; do

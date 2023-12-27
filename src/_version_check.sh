@@ -15,7 +15,7 @@ function upgrade_warning() {
   debug "upgrade_warning function running"
   error "Its been detected that you're on a pinned version of PlexTrac other than stable. Beginning with version 2.0, PlexTrac is going to require contiguous updates to ensure code migrations are successful and enable us to continue to move forward with improving the platform. We recommend updating to the next minor version available compared to the running version $running_backend_version"
   error "Are you sure you want to update to $UPGRADE_STRATEGY?"
-  get_user_approval hardstop
+  get_user_approval
 }
 
 function version_check() {
@@ -91,7 +91,7 @@ function version_check() {
         msg "-------"
         error "Beginning with version 2.0, PlexTrac is going to require contiguous updates to ensure code migrations are successful and enable us to continue to move forward with improving the platform. We recommend updating to the next minor version available compared to the running version $running_backend_version"
         error "Are you sure you want to update to $UPGRADE_STRATEGY? (y/n)"
-        get_user_approval hardcheck
+        get_user_approval
     fi
 
     upstream_tags=()
