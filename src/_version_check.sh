@@ -67,7 +67,7 @@ function version_check() {
         while [ $page -lt 600 ]; do
           latest_ver=($(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true))
           page=$(($page + 1))
-          if [ -n $latest_ver ]; then break; fi
+          if [ -n "$latest_ver" ]; then break; fi
         done
         # Set latest_ver to first index item which should be the "latest"
         latest_ver="${latest_ver[0]}"
@@ -104,33 +104,20 @@ function version_check() {
           do
             # Get the available versions from DockerHub and save to array
             upstream_tags+=(`wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true`)
-            if [[ ${upstream_tags[@]} =~ "$breaking_ver" ]]
+            if [[ ${upstream_tags[*]} =~ $breaking_ver ]]
               then
                 debug "Found breaking version $breaking_ver"; break;
-            elif [[ ${upstream_tags[@] =~ "$running_ver" ]]
+            elif [[ ${upstream_tags[*]} =~ $running_ver ]]
               then
                 debug "Found running version $running_backend_version"; break;
-            page=$[$page+1]
+            page=$($page+1)
             fi
-        done
-          do
-            # Get the available versions from DockerHub and save to array
-            if [[ $(echo "${upstream_tags[@]}" | grep "$breaking_ver" || true) ]]
-              then
-                debug "Found breaking version $breaking_ver"; break;
-            elif [[ $(echo "${upstream_tags[@]}" | grep "$running_ver" || true) ]]
-              then
-                debug "Found running version $running_backend_version"; break;
-            else
-              upstream_tags+=(`wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true`)
-            fi
-            page=$[$page+1]
         done
         
         # Remove the running version from the Upgrade path
-        for i in ${!upstream_tags[@]}
+        for i in "${!upstream_tags[@]}"
           do
-            if [[ ${upstream_tags[i]} = $running_ver ]]
+            if [[ ${upstream_tags[i]} = "$running_ver" ]]
               then
                 debug "correcting upstream_tags to remove running version"
                 unset 'upstream_tags[i]'
@@ -142,7 +129,7 @@ function version_check() {
         upstream_tags=("${new_array[@]}")
         unset new_array
         # This grabs the first element in the version sorted list which should always be the highest version available on DockerHub; this should match stable's version"
-        if [[ -n "${upstream_tags[@]}" ]]; then
+        if [[ -n "${upstream_tags[*]}" ]]; then
           debug "Setting latest upstream version var to array first index"
           latest_ver="${upstream_tags[0]}"
         else
@@ -151,7 +138,7 @@ function version_check() {
           # Set Contiguous updates to false here to ensure that since the app is on latest version, it still attempts to pull patch version updates
           contiguous_update=false
         fi
-        # Sort the upstream tags we've chosen as the upgrade path
+        # Sort the upstream tags weve chosen as the upgrade path
         IFS=$'\n' upgrade_path=($(sort -V <<<"${upstream_tags[*]}"))
         # Reset IFS to default value
         IFS=$' \t\n'
@@ -163,9 +150,9 @@ function version_check() {
         debug "Upgrade Strategy: $UPGRADE_STRATEGY"
         debug "Running Version: $running_ver"
         debug "Breaking Version: $breaking_ver"
-        debug "Upstream Versions: [${upstream_tags[@]}]"
+        debug "Upstream Versions: [${upstream_tags[*]}]"
         debug "Latest Version: $latest_ver"
-        debug "Upgrade path: [${upgrade_path[@]}]"
+        debug "Upgrade path: [${upgrade_path[*]}]"
         debug "Number of upgrades: ${#upgrade_path[@]}"
     fi
   ## IF NOT STABLE
