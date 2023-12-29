@@ -54,7 +54,7 @@ function version_check() {
     #######################
     ### -- Latest Stable Version
     #######################
-    debug "Latest_Stable Version"
+
     # Set vars
     breaking_ver="2.0"
     latest_ver=""
@@ -67,20 +67,20 @@ function version_check() {
         while [ $page -lt 600 ]; do
           latest_ver=($(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true))
           page=$(($page + 1))
-          debug "$latest_ver"
+          debug "Latest_Stable Version: ${latest_ver[0]}"
           if [ -n "$latest_ver" ]; then break; fi
         done
         # Set latest_ver to first index item which should be the "latest"
         latest_ver="${latest_ver[0]}"
-        
+
         ## LOGIC: LATEST_STABLE
         # IF LATEST_STABLE <= 2.0
         if (( $(echo "$latest_ver <= $breaking_ver" | bc -l) ))
           then 
-            debug "$breaking_ver not publically available. Updating normally without warning"
+            debug "Updating normally to $latest_ver without warning"
             contiguous_update=false
           
-          # IF LATEST_STABLE >= 2.0
+          # IF LATEST_STABLE > 2.0
           else
             debug "Stable version is greater than $breaking_ver. Running contiguous update"
             contiguous_update=true
