@@ -103,20 +103,28 @@ function setDefaultSecrets() {
 
 function login_dockerhub() {
   local output
-  info "Logging into DockerHub to pull images"
+  info "Logging into Image Registry"
   if [ -z ${DOCKER_HUB_KEY} ]; then
     die "ERROR: Docker Hub key not found, please set DOCKER_HUB_KEY in the .env and re-run configuration"
   fi
-
   output="`docker login -u ${DOCKER_HUB_USER:-plextracusers} --password-stdin 2>&1 <<< "${DOCKER_HUB_KEY}"`" || die "${output}"
   debug "$output"
-  log "Done."
+  log "${GREEN}DockerHUB${RESET}: SUCCESS"
 
   if [ -n "${IMAGE_REGISTRY:-}" ]; then
-    output="`docker login ${IMAGE_REGISTRY} -u ${IMAGE_REGISTRY_USER:-plextracusers} --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}"`" || die "${output}"
+  debug "Custom Image Registry Found..."
+  debug "Attempting login"
+    if [ -z "${IMAGE_REGISTRY_PASS:-}" ]; then
+      die "ERROR: Image registry password not found, please set IMAGE_REGISTRY_PASS in the .env and re-run configuration"
+    fi
+    if [ -z "${IMAGE_REGISTRY_USER:-}" ]; then
+      die "ERROR: Image registry username not found, please set IMAGE_REGISTRY_USER in the .env and re-run configuration"
+    fi
+    output="$(docker login ${IMAGE_REGISTRY} -u ${IMAGE_REGISTRY_USER} --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}")" || die "${output}"
     debug "$output"
-    log "Done."
+    log "${BLUE}$IMAGE_REGISTRY${RESET}: SUCCESS"
   fi
+  log "Done."
 }
 
 function updateComposeConfig() {
@@ -130,6 +138,7 @@ function updateComposeConfig() {
     debug "Creating initial file"
     echo "$decodedComposeFile" > $targetComposeFile
   fi
+  log "Done."
 
   composeConfigDiff="`composeConfigNeedsUpdated 2>/dev/null || true`"
   if composeConfigNeedsUpdated >/dev/null; then
@@ -142,7 +151,7 @@ function updateComposeConfig() {
       return 1
     fi
   fi
-  info "Done."
+  log "Done."
 }
 
 function validateComposeConfig() {
@@ -161,7 +170,8 @@ function validateComposeConfig() {
 function create_volume_directories() {
   title "Create directories for bind mounts"
   debug "Ensuring directories exist for Docker Volumes..."
-  info "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
-  info "Done"
+  debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
+  info "Directories for bind mounts"
+  log "Done."
 }
 
