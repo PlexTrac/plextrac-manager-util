@@ -66,7 +66,7 @@ function pull_docker_images() {
   fi
   compose_client pull ${ARGS:-}
   image_version_check
-  info "Done."
+  log "Done."
 }
 
 function composeConfigNeedsUpdated() {
@@ -88,5 +88,5 @@ function docker_createInitialComposeOverrideFile() {
     info "Creating initial $targetOverrideFile"
     echo "$DOCKER_COMPOSE_OVERRIDE_ENCODED" | base64 -d > "$targetOverrideFile"
   fi
-  log "Done"
+  log "Done."
 }
