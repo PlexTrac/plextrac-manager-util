@@ -13,6 +13,8 @@ function mod_info() {
   echo >&2 ""
   info "Services:"
   msg "    %s\n" "`releaseDetails`"
+  echo >&2 ""
+  info "Upgrade Strategy: ${UPGRADE_STRATEGY:-stable}"
 
   title "Docker Compose"
 

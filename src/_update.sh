@@ -4,7 +4,7 @@
 
 # subcommand function, this is the entrypoint eg `plextrac update`
 function mod_update() {
-  title "Updating PlexTrac Instance"
+  title "Updating PlexTrac"
   # I'm comparing an int :shrug:
   # shellcheck disable=SC2086
   if [ ${SKIP_SELF_UPGRADE:-0} -eq 0 ]; then
@@ -17,44 +17,81 @@ function mod_update() {
     fi
   else
     info "Skipping self upgrade"
+    error "PlexTrac began/will begin doing contiguous updates to the PlexTrac application starting with the v2.0 release. From that point forward, all releases will need to be updated with minor version increments. Skipping updating the PlexTrac Manager Util can have adverse affects on the application if a minor version update is skipped. Are you sure you want to continue skipping updates to this utility?"
+    get_user_approval
   fi
-
   info "Updating PlexTrac instance to latest release..."
-  mod_configure
-  title "Pulling latest container images"
-  pull_docker_images
-  if [ "$IMAGE_CHANGED" == true ]
+  # Check upstream tags avaialble to download
+  version_check
+  if $contiguous_update
     then
-      title "Executing Rolling Deployment"
-      mod_rollout
+      debug "Proceeding with contiguous update"
+      upgrade_time_estimate
+      for i in ${upgrade_path[@]}
+         do
+            if [ "$i" != "$running_ver" ]
+              then
+                debug "Upgrading to $i"
+                mod_configure
+                UPGRADE_STRATEGY="$i"
+                debug "Upgrade Strategy is $UPGRADE_STRATEGY"
+                title "Pulling latest container images"
+                pull_docker_images
+                if [ "$IMAGE_CHANGED" == true ]
+                  then
+                    title "Executing Rolling Deployment"
+                    mod_rollout
+                fi
+                # Sometimes containers won't start correctly at first, but will upon a retry
+                maxRetries=2
+                for i in $( seq 1 $maxRetries ); do
+                  mod_start || sleep 5 # Wait before going on to health checks, they should handle triggering retries if mod_start errors
+                  unhealthy_services=$(compose_client ps -a --format json | \
+                    jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | \
+                    xargs -r printf "%s;")
+                  if [[ "${unhealthy_services}" == "" ]]; then break; fi
+                  info "Detected unhealthy services: ${unhealthy_services}"
+                  if [[ $i -ge $maxRetries ]]; then
+                    error "One or more containers are in a failed state, please contact support!"
+                    exit 1
+                  fi
+                  info "An error occurred with one or more containers, attempting to start again"
+                  sleep 5
+                done
+            fi
+      done
+      mod_check
+      title "Update complete"
+  else
+      debug "Proceeding with normal update"
+      mod_configure
+      title "Pulling latest container images"
+      pull_docker_images
+      if [ "$IMAGE_CHANGED" == true ]
+        then
+          title "Executing Rolling Deployment"
+          mod_rollout
+      fi
+
+      # Sometimes containers won't start correctly at first, but will upon a retry
+      maxRetries=2
+      for i in $( seq 1 $maxRetries ); do
+        mod_start || sleep 5 # Wait before going on to health checks, they should handle triggering retries if mod_start errors
+        unhealthy_services=$(compose_client ps -a --format json | \
+          jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | \
+          xargs -r printf "%s;")
+        if [[ "${unhealthy_services}" == "" ]]; then break; fi
+        info "Detected unhealthy services: ${unhealthy_services}"
+        if [[ $i -ge $maxRetries ]]; then
+          error "One or more containers are in a failed state, please contact support!"
+          exit 1
+        fi
+        info "An error occurred with one or more containers, attempting to start again"
+        sleep 5
+      done
+      mod_check
+      title "Update complete"
   fi
-
-  # Sometimes containers won't start correctly at first, but will upon a retry
-  maxRetries=2
-  for i in $( seq 1 $maxRetries ); do
-    mod_start || sleep 5 # Wait before going on to health checks, they should handle triggering retries if mod_start errors
-
-    unhealthy_services=$(compose_client ps -a --format json | \
-      jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | \
-      xargs -r printf "%s;")
-
-    if [[ "${unhealthy_services}" == "" ]]; then break; fi
-
-    info "Detected unhealthy services: ${unhealthy_services}"
-
-    if [[ $i -ge $maxRetries ]]; then
-      error "One or more containers are in a failed state, please contact support!"
-      exit 1
-    fi
-
-    info "An error occurred with one or more containers, attempting to start again"
-    sleep 5
-
-  done
-
-  mod_check
-
-  title "Update complete"
 }
 
 function _selfupdate_refreshReleaseInfo() {

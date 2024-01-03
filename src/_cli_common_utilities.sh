@@ -3,6 +3,7 @@ function get_user_approval() {
   # If interactive, prompt for user approval & return 0
   # If non-interactive, log failure and return 1
   # If -y/--assume-yes/ASSUME_YES flags/envvars are set, return 0
+  # If -y/--assume-yes/ASSUME_YES flags/envvars are NOT allowed, skip returning 0
   if [ ${ASSUME_YES:-false} == "true" ]; then return 0; fi
   tty -s || die "Unable to request user approval in non-interactive shell, try passing the -y or --assume-yes CLI flag"
   PS3='Please select an option: '
