@@ -15,12 +15,19 @@ function create_user() {
 
 function configure_user_environment() {
   info "Configuring plextrac user environment..."
-    test -f "${PLEXTRAC_HOME}/.profile" || test -f /etc/skel/.profile && cp /etc/skel/.profile "${PLEXTRAC_HOME}/.profile" || test -f "${PLEXTRAC_HOME}/.bash_profile" || test -f /etc/skel/.bash_profile && cp /etc/skel/.bash_profile "${PLEXTRAC_HOME}/.bash_profile" || debug "/etc/skel/.profile or /etc/skel/.bash_profile do not exist, skipping"
-    #test -f "${PLEXTRAC_HOME}/.bash_profile" || test -f /etc/skel/.bash_profile && cp /etc/skel/.bash_profile "${PLEXTRAC_HOME}/.bash_profile" || debug "/etc/skel/.bash_profile does not exist, skipping"
-    test -f "${PLEXTRAC_HOME}/.bashrc" || cp /etc/skel/.bashrc "${PLEXTRAC_HOME}/.bashrc"
+    PROFILES=("/etc/skel/.profile" "/etc/skel/.bash_profile" "/etc/skel/.bashrc")
+    for profile in "${PROFILES[@]}"; do
+      if [ -f "${profile}" ]; then
+        debug "Copying ${profile} to ${PLEXTRAC_HOME}"
+        cp "${profile}" "${PLEXTRAC_HOME}"
+      else
+        debug "${profile} does not exist, skipping"
+      fi
+    done
     mkdir -p "${PLEXTRAC_HOME}/.local/bin"
     sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' "${PLEXTRAC_HOME}/.bashrc"
-    egrep 'PATH=${HOME}/.local/bin:$PATH' "${PLEXTRAC_HOME}/.bashrc" || echo 'PATH=${HOME}/.local/bin:$PATH' >> "${PLEXTRAC_HOME}/.bashrc"
+    grep -E 'PATH=${HOME}/.local/bin:$PATH' "${PLEXTRAC_HOME}/.bashrc" || echo 'PATH=${HOME}/.local/bin:$PATH' >> "${PLEXTRAC_HOME}/.bashrc"
+    log "Done."
 }
 
 function copy_scripts() {
