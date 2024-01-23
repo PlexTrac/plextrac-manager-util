@@ -260,6 +260,7 @@ services:
     ports:
     - 127.0.0.1:5432:5432/tcp
     restart: always
+
   contextual-scoring-service:
     image: registry.dorf.plextrac.ninja/cicd-app-images/backend:${BACKEND_IMAGE:-$UPGRADE_STRATEGY}
     deploy:
