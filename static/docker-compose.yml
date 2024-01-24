@@ -260,6 +260,37 @@ services:
     ports:
     - 127.0.0.1:5432:5432/tcp
     restart: always
+  
+  contextual-scoring-service:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 1
+    depends_on:
+    - postgres
+    - redis
+    restart: always
+    environment:
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+      PG_HOST: ${PG_HOST:?err}
+      PG_CORE_DB: ${PG_CORE_DB:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_DEBUG_QUERY_LOGGING: "true"
+    healthcheck:
+      test:
+      - "CMD"
+      - "npm"
+      - "run"
+      - "healthcheck:contextual-scoring-service"
+      - "liveness"
+      - "--"
+      - "--no-update-notifier"
+    entrypoint: npm run
+    command: "start:contextual-scoring-service"
 
 volumes:
   dbdata: {}
