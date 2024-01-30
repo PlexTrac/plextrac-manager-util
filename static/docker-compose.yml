@@ -279,7 +279,7 @@ services:
       PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
       PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
       PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
-      PG_DEBUG_QUERY_LOGGING: "true"
+      PG_DEBUG_QUERY_LOGGING: "false"
     healthcheck:
       test:
       - "CMD"
