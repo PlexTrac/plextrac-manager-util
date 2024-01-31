@@ -104,12 +104,12 @@ function version_check() {
         while [ $page -lt 600 ]
           do
             # Get the available versions from DockerHub and save to array
-            if [[ $(echo "${upstream_tags[@]}" | grep "$breaking_ver" || true) ]]
+            if [[ $(echo "${upstream_tags[@]}" | grep "$running_ver" || true) ]]
               then
-                debug "Found breaking version $breaking_ver"; break;
-            elif [[ $(echo "${upstream_tags[@]}" | grep "$running_ver" || true) ]]
+                  debug "Found running version $running_backend_version"; break;
+            elif [[ $(echo "${upstream_tags[@]}" | grep "$breaking_ver" || true) ]]
               then
-                debug "Found running version $running_backend_version"; break;
+                  debug "Found breaking version $breaking_ver"; break;
             else
               upstream_tags+=(`wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true`)
             fi
@@ -119,9 +119,9 @@ function version_check() {
         # Remove the running version from the Upgrade path
         for i in "${!upstream_tags[@]}"
           do
-            if [[ ${upstream_tags[i]} = "$running_ver" ]]
+            if (( $(echo "${upstream_tags[i]} <= $running_ver" | bc -l) ))
               then
-                debug "correcting upstream_tags to remove running version"
+                debug "correcting upstream_tags to remove running version and versions prior"
                 unset 'upstream_tags[i]'
             fi
         done
