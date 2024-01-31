@@ -131,6 +131,28 @@ mod_rollout() {
         docker stop "$OLD_CONTAINER_ID" > /dev/null 2>&1
         docker rm "$OLD_CONTAINER_ID" > /dev/null 2>&1
       done
+      counter=1
+      for NEW_CONTAINER_ID in "${NEW_CONTAINER_IDS[@]}"; do
+        # I want to check if the plextracapi containers are the current NEW_CONTAINER_ID
+        if [[ "$(docker inspect --format='{{json .Name}}' "$NEW_CONTAINER_ID" | grep -o 'plextracapi')" == "plextracapi" ]]; then
+          debug "Renaming container $NEW_CONTAINER_ID to plextrac-plextracapi-$counter"
+          docker rename "$NEW_CONTAINER_ID" "plextrac-plextracapi-$counter" > /dev/null 2>&1
+          (( counter++ ))
+          continue
+        elif [[ "$(docker inspect --format='{{json .Name}}' "$NEW_CONTAINER_ID" | grep -o 'notification-engine')" == "notification-engine" ]]; then
+          debug "Renaming container $NEW_CONTAINER_ID to plextrac-notification-engine-1"
+          docker rename "$NEW_CONTAINER_ID" "plextrac-notification-engine-1" > /dev/null 2>&1
+          continue
+        elif [[ "$(docker inspect --format='{{json .Name}}' "$NEW_CONTAINER_ID" | grep -o 'notification-sender')" == "notification-sender" ]]; then
+          debug "Renaming container $NEW_CONTAINER_ID to plextrac-notification-sender-1"
+          docker rename "$NEW_CONTAINER_ID" "plextrac-notification-sender-1" > /dev/null 2>&1
+          continue
+        elif [[ "$(docker inspect --format='{{json .Name}}' "$NEW_CONTAINER_ID" | grep -o 'datalake-maintainer')" == "datalake-maintainer" ]]; then
+          debug "Renaming container $NEW_CONTAINER_ID to plextrac-datalake-maintainer-1"
+          docker rename "$NEW_CONTAINER_ID" "plextrac-datalake-maintainer-1" > /dev/null 2>&1
+          continue
+        fi
+      done
     done
     info "Done!"
 }
