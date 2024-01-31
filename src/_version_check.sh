@@ -119,9 +119,9 @@ function version_check() {
         # Remove the running version from the Upgrade path
         for i in "${!upstream_tags[@]}"
           do
-            if (( $(echo "${upstream_tags[i]} = $running_ver" | bc -l) ))
+            if (( $(echo "${upstream_tags[i]} <= $running_ver" | bc -l) ))
               then
-                debug "correcting upstream_tags to remove running version"
+                debug "correcting upstream_tags to remove running version and versions prior"
                 unset 'upstream_tags[i]'
             fi
         done
