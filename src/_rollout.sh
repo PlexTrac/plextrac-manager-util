@@ -38,6 +38,7 @@ mod_rollout() {
     "notification-engine"
     "notification-sender"
     "plextracapi"
+    "contextual-scoring-service"
   )
 
   debug "$service_list"
@@ -150,6 +151,10 @@ mod_rollout() {
         elif [[ "$(docker inspect --format='{{json .Name}}' "$NEW_CONTAINER_ID" | grep -o 'datalake-maintainer')" == "datalake-maintainer" ]]; then
           debug "Renaming container $NEW_CONTAINER_ID to plextrac-datalake-maintainer-1"
           docker rename "$NEW_CONTAINER_ID" "plextrac-datalake-maintainer-1" > /dev/null 2>&1
+          continue
+        elif [[ "$(docker inspect --format='{{json .Name}}' "$NEW_CONTAINER_ID" | grep -o 'contextual-scoring-service')" == "contextual-scoring-service" ]]; then
+          debug "Renaming container $NEW_CONTAINER_ID to plextrac-contextual-scoring-service-1"
+          docker rename "$NEW_CONTAINER_ID" "plextrac-contextual-scoring-service-1" > /dev/null 2>&1
           continue
         fi
       done
