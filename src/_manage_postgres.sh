@@ -89,6 +89,7 @@ EOINITDBSCRIPT
   # without adding failure points is just allow other users to read the (not secret)
   # bootstrapping scripts
   debug "`chmod -Rc a+r $targetDir`"
+  log "Done."
 }
 
 function postgres_metrics_validation() {
