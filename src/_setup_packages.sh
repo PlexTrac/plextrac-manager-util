@@ -18,10 +18,15 @@ function system_packages__refresh_package_lists() {
 function system_packages__do_system_upgrade() {
   info "Updating OS packages, this make take some time!"
   nobest="--nobest"
-  if [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep CentOS)" ]; then
+  os_check
+  if echo "$OS_NAME" | grep -q 'CentOS'; then
     nobest=""
-  elif [ "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | grep Hat)" ]; then
-    nobest="--nobest"
+  elif echo "$OS_NAME"  | grep -q 'Hat'; then
+    if echo "$OS_VERSION" | grep -v '7'; then
+      nobest="--nobest"
+    else
+      nobest=""
+    fi
   fi
   debug "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | tr -d '"')"
   system_packages__refresh_package_lists
