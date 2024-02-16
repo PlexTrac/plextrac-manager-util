@@ -81,3 +81,14 @@ function _load_static() {
     export SYSTEM_REQUIREMENTS=`cat "$staticFilesDir/system-requirements.json"`
   fi
 }
+
+function os_check() {
+  OS_NAME=$(grep '^NAME' /etc/os-release | cut -d '=' -f2)
+  OS_VERSION=$(grep '^VERSION_ID' /etc/os-release | cut -d '=' -f2)
+  color_always="--color=always"
+  if echo "$OS_NAME" | grep -q "Red"; then
+    if echo "$OS_VERSION" | grep -q "7"; then
+      color_always=""
+      fi
+  fi
+}

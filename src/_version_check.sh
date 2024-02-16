@@ -103,6 +103,7 @@ function version_check() {
         debug "Looking for Running version $running_ver or Breaking version $breaking_ver"
         while [ $page -lt 600 ]
           do
+            upstream_tags+=(`wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true`)
             # Get the available versions from DockerHub and save to array
             if [[ $(echo "${upstream_tags[@]}" | grep "$running_ver" || true) ]]
               then
@@ -110,12 +111,10 @@ function version_check() {
             elif [[ $(echo "${upstream_tags[@]}" | grep "$breaking_ver" || true) ]]
               then
                   debug "Found breaking version $breaking_ver"; break;
-            else
-              upstream_tags+=(`wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true`)
             fi
             page=$[$page+1]
         done
-        
+
         # Remove the running version from the Upgrade path
         for i in "${!upstream_tags[@]}"
           do
@@ -125,11 +124,16 @@ function version_check() {
                 unset 'upstream_tags[i]'
             fi
         done
+        new_array=()
         for i in "${!upstream_tags[@]}"; do
             new_array+=( "${upstream_tags[i]}" )
         done
-        upstream_tags=("${new_array[@]}")
-        unset new_array
+        if "${#new_array[@]}" > 0; then
+                upstream_tags=("${new_array[@]}")
+                unset new_array
+        else
+                upstream_tags=("")
+        fi
         # This grabs the first element in the version sorted list which should always be the highest version available on DockerHub; this should match stable's version"
         if [[ -n "${upstream_tags[*]}" ]]; then
           debug "Setting latest upstream version var to array first index"
@@ -140,11 +144,14 @@ function version_check() {
           # Set Contiguous updates to false here to ensure that since the app is on latest version, it still attempts to pull patch version updates
           contiguous_update=false
         fi
-        # Sort the upstream tags weve chosen as the upgrade path
-        IFS=$'\n' upgrade_path=($(sort -V <<<"${upstream_tags[*]}"))
-        # Reset IFS to default value
-        IFS=$' \t\n'
-
+        if "${upstream_tags[@]}" != ""; then
+                # Sort the upstream tags weve chosen as the upgrade path
+                IFS=$'\n' upgrade_path=($(sort -V <<<"${upstream_tags[*]}"))
+                # Reset IFS to default value
+                IFS=$' \t\n'
+        else
+                upgrade_path=("")
+        fi
 
         debug "------------"
         debug "Listing version information"
