@@ -128,7 +128,7 @@ function version_check() {
         for i in "${!upstream_tags[@]}"; do
             new_array+=( "${upstream_tags[i]}" )
         done
-        if "${#new_array[@]}" -gt 0; then
+        if [ "${#new_array[@]}" -gt 0 ]; then
                 upstream_tags=("${new_array[@]}")
                 unset new_array
         else
