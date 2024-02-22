@@ -22,6 +22,7 @@ function mod_update() {
   fi
   info "Updating PlexTrac instance to latest release..."
   # Check upstream tags avaialble to download
+  mod_configure
   version_check
   if $contiguous_update
     then
