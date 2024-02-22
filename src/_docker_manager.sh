@@ -76,7 +76,8 @@ function composeConfigNeedsUpdated() {
   if [ $(echo "$decodedComposeFile" | md5sum | awk '{print $1}') == $(md5sum $targetComposeFile | awk '{print $1}') ]; then
     debug "docker-compose.yml content matches"; return 1;
   fi
-  diff -N --unified=2 --color=always --label existing --label "updated" $targetComposeFile <(echo "$decodedComposeFile") || return 0
+  os_check
+  diff -N --unified=2 $color_always --label existing --label "updated" $targetComposeFile <(echo "$decodedComposeFile") || return 0
   return 1
 }
 

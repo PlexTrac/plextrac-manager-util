@@ -152,7 +152,8 @@ function checkExistingConfigForOverrides() {
 
   decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
   #diff -N --unified=2 --color=always --label existing --label "updated" $targetComposeFile <(echo "$decodedComposeFile") || return 0
-  diff --unified --color=always --show-function-line='^\s\{2\}\w\+' \
+  os_check
+  diff --unified "$color_always" --show-function-line='^\s\{2\}\w\+' \
     <($dcCMD config --no-interpolate) \
     <(docker compose -f - <<< "${decodedComposeFile}" -f ${composeOverrideFile} config --no-interpolate) || return 0
   return 1

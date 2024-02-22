@@ -63,7 +63,8 @@ PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
     if [ $(echo "$mergedEnv" | md5sum | awk '{print $1}') = $(md5sum "${PLEXTRAC_HOME}/.env" | awk '{print $1}') ]; then
       log "No change required";
     else
-      envDiff="`diff -Nurb --color=always "${PLEXTRAC_HOME}/.env" <(echo "$mergedEnv") || true`"
+      os_check
+      envDiff="`diff -Nurb "$color_always" "${PLEXTRAC_HOME}/.env" <(echo "$mergedEnv") || true`"
       info "Detected pending changes to ${PLEXTRAC_HOME}/.env:"
       log "${envDiff}"
       if get_user_approval; then
