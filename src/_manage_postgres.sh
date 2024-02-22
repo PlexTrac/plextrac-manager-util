@@ -1,6 +1,6 @@
 ## Functions for managing the Postgres Database
 
-postgresDatabases=('CORE' 'RUNBOOKS')
+postgresDatabases=('CORE' 'RUNBOOKS' 'CKEDITOR')
 postgresUsers=('ADMIN' 'RW' 'RO')
 
 function generate_default_postgres_env() {
@@ -75,7 +75,7 @@ EOBOOTSTRAPTEMPLATE
 #!/bin/bash
 
 PGPASSWORD="$POSTGRES_PASSWORD"
-PGDATABASES=('core' 'runbooks')
+PGDATABASES=('core' 'runbooks' 'ckeditor')
 
 tmpl=`cat /docker-entrypoint-initdb.d/bootstrap-template.sql.txt`
 
