@@ -56,6 +56,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
       PG_HOST: ${PG_HOST:-postgres}
       PG_MIGRATE_PATH: /usr/src/plextrac-api
+      PG_SUPER_USER: ${POSTGRES_USER:?err}
+      PG_SUPER_PASSWORD: ${POSTGRES_PASSWORD:?err}
       PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
       PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
       PG_CORE_DB: ${PG_CORE_DB:?err}
@@ -279,7 +281,7 @@ services:
       interval: 10s
       timeout: 30s
       retries: 5
-  
+
   contextual-scoring-service:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     deploy:
