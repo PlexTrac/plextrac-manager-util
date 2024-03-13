@@ -107,16 +107,10 @@ function setDefaultSecrets() {
 function getCKEditorRTCConfig() {
   # parses output and saves the result of the json meta data
   # the last line, which only contains the JSON data, should be used
+  # this is then encoded with base64 and echoed out as a key-value for the env vars
   CKEDITOR_JSON=$(compose_client exec plextracapi npm run ckeditor:environment:migration --if-present | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
-
-  # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
-  if [ $(echo $CKEDITOR_JSON | jq -e ".[]|any(\".api_secret\")") ]; then
-    CKEDITOR_SERVER_CONFIG=`echo $CKEDITOR_JSON | base64 -w 0`
-    echo -n "CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG}"
-  else
-    echo -n "CKEDITOR_SERVER_CONFIG="
-    debug "ERROR: Unable to generate CKEditor RTC service config, setting to empty string"
-  fi
+  CKEDITOR_SERVER_CONFIG=`echo $CKEDITOR_JSON | base64 -w 0`
+  echo -n "CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG}"
 }
 
 function login_dockerhub() {
