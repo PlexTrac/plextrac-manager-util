@@ -305,6 +305,7 @@ function mod_configure() {
   generate_default_config
   login_dockerhub
   updateComposeConfig
+  updateNginxConfig
   validateComposeConfig
   create_volume_directories
   deploy_volume_contents_postgres
