@@ -177,8 +177,8 @@ function updateNginxConfig() {
   targetNginxServerFile="${PLEXTRAC_HOME}/volumes/nginx_conf/mod_ckeditor_server_block.conf"
   targetNginxLocationFile="${PLEXTRAC_HOME}/volumes/nginx_conf/mod_ckeditor_location_block.conf"
 
-  decodedNginxServerBlock=$(base64 -d <<<$NGINX_CONFIG_LOCATION_ENCODED)
-  decodedNginxLocationBlock=$(base64 -d <<<$NGINX_CONFIG_SERVER_ENCODED)
+  decodedNginxServerBlock=$(base64 -d <<<$NGINX_CONFIG_SERVER_ENCODED)
+  decodedNginxLocationBlock=$(base64 -d <<<$NGINX_CONFIG_LOCATION_ENCODED)
 
 # TODO: these should be combined into a single function or something DRY
 # Check if the nginx server file needs updated
