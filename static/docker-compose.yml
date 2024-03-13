@@ -75,9 +75,12 @@ services:
       PG_CKEDITOR_RW_USER: ${PG_CKEDITOR_RW_USER:?err}
       PG_TENANTS_WRITE_MODE: ${PG_TENANTS_WRITE_MODE:-couchbase_only}
       PG_TENANTS_READ_MODE: ${PG_TENANTS_READ_MODE:-couchbase_only}
-      CKEDITOR_DB_CREATE: ${CKEDITOR_DB_CREATE}
       CKEDITOR_MIGRATE: ${CKEDITOR_MIGRATE}
       CKEDITOR_SERVER_CONFIG: ${CKEDITOR_SERVER_CONFIG}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
 
   plextracdb:
     environment:
@@ -125,6 +128,7 @@ services:
     restart: always
     volumes:
     - letsencrypt:/etc/letsencrypt:rw
+    - nginx_extras:/etc/nginx/conf.d:rw
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -132,6 +136,10 @@ services:
       interval: 5s
       retries: 8
       start_period: 5s
+    networks:
+      default:
+        aliases:
+          - ckeditor
 
   notification-engine:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
@@ -320,6 +328,33 @@ services:
     entrypoint: npm run
     command: "start:contextual-scoring-service"
 
+  ckeditor-backend:
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+    image: registry.dorf.plextrac.ninja/ckeditor-registry-proxy/cs:latest
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: always
+    init: true
+    environment:
+      DATABASE_DRIVER: postgres
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: ${PG_CKEDITOR_ADMIN_USER}
+      DATABASE_PASSWORD: ${PG_CKEDITOR_ADMIN_PASSWORD}
+      DATABASE_DATABASE: ${PG_CKEDITOR_DB}
+      DATABASE_SCHEMA: public
+      REDIS_HOST: redis
+      REDIS_CONNECTION_STRING: redis://redis:6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+      ENVIRONMENTS_MANAGEMENT_SECRET_KEY: ${CKEDITOR_ENVIRONMENT_SECRET_KEY}
+      LICENSE_KEY: ${CKEDITOR_SERVER_LICENSE_KEY}
+
 volumes:
   dbdata: {}
   uploads: {}
@@ -356,6 +391,12 @@ volumes:
       type: "none"
       o: "bind"
       device: "${PLEXTRAC_BACKUP_PATH}/postgres"
+  nginx_extras:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "./volumes/nginx_conf"
 
 networks:
   default:

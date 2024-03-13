@@ -50,6 +50,7 @@ PLEXTRAC_PARSER_URL=https://plextracparser:4443
 UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
 CKEDITOR_ENVIRONMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-`generateSecret`}
+CKEDITOR_MIGRATE=true
 
 `generate_default_couchbase_env | setDefaultSecrets`
 `generate_default_postgres_env | setDefaultSecrets`
@@ -169,6 +170,24 @@ function updateComposeConfig() {
       return 1
     fi
   fi
+  log "Done."
+}
+
+function updateNginxConfig() {
+  title "Updating Nginx Config Files"
+  targetNginxServerFile="${PLEXTRAC_HOME}/volume/nginx_conf/mod_ckeditor_server_block.conf"
+  targetNginxLocationFile="${PLEXTRAC_HOME}/volume/nginx_conf/mod_ckeditor_location_block.conf"
+
+  decodedNginxServerBlock=$(base64 -d <<<$NGINX_CONFIG_LOCATION_ENCODED)
+  decodedNginxLocationBlock=$(base64 -d <<<$NGINX_CONFIG_SERVER_ENCODED)
+
+
+  info "Updating $targetNginxServerFile"
+  echo "$decodedNginxServerBlock" > $targetNginxServerFile
+
+  info "Updating $targetNginxLocationFile"
+  echo "$decodedNginxLocationBlock" > $targetNginxLocationFile
+
   log "Done."
 }
 

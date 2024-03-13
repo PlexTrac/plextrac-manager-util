@@ -233,6 +233,10 @@ function mod_dist() {
       echo "" \
       echo -n "DOCKER_COMPOSE_OVERRIDE_ENCODED="; \
       base64 -w0 '"$(dirname $0)"'/../static/docker-compose.override.yml \
+      echo -n "NGINX_CONFIG_LOCATION_ENCODED="; \
+      base64 -w0 '"$(dirname $0)"'/../static/nginx_conf/mod_ckeditor_location_block.conf \
+      echo -n "NGINX_CONFIG_SERVER_ENCODED="; \
+      base64 -w0 '"$(dirname $0)"'/../static/nginx_conf/mod_ckeditor_server_block.conf \
       echo ""' \
       $0
   fi
