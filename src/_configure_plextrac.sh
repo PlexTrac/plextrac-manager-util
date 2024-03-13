@@ -182,9 +182,11 @@ function updateNginxConfig() {
 
 
   info "Updating $targetNginxServerFile"
+  touch $targetNginxServerFile
   echo "$decodedNginxServerBlock" > $targetNginxServerFile
 
   info "Updating $targetNginxLocationFile"
+  touch $targetNginxLocationFile
   echo "$decodedNginxLocationBlock" > $targetNginxLocationFile
 
   log "Done."
