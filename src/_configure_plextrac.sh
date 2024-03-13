@@ -50,7 +50,6 @@ PLEXTRAC_PARSER_URL=https://plextracparser:4443
 UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
 CKEDITOR_ENVIRONMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-`generateSecret`}
-CKEDITOR_MIGRATE=true
 
 `generate_default_couchbase_env | setDefaultSecrets`
 `generate_default_postgres_env | setDefaultSecrets`
