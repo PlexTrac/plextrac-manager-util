@@ -80,7 +80,7 @@ function _load_static() {
     export DOCKER_COMPOSE_OVERRIDE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.override.yml"`
     export SYSTEM_REQUIREMENTS=`cat "$staticFilesDir/system-requirements.json"`
   fi
-  if ! grep -q -e "^NGINX_CONFIG=.*" $0; then
+  if ! grep -q -e "^NGINX_CONFIG.*ENCODED=.*" $0; then
     local staticNginxFilesDir="$(dirname $0)/../static/nginx_conf"
     export NGINX_CONFIG_LOCATION_ENCODED=`base64 -w0 "$staticNginxFilesDir/mod_ckeditor_location_block.conf"`
     export NGINX_CONFIG_SERVER_ENCODED=`base64 -w0 "$staticNginxFilesDir/mod_ckeditor_server_block.conf"`
