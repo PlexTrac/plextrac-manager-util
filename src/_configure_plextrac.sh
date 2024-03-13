@@ -188,6 +188,7 @@ function updateNginxConfig() {
   else
   os_check
   info "Nginx server config update needed"
+  info "Please run "plextrac configure" as root to update the nginx configuration files"
   requires_user_root
 
   info "Updating $targetNginxServerFile"
