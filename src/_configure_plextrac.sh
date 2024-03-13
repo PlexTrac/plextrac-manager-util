@@ -180,16 +180,36 @@ function updateNginxConfig() {
   decodedNginxServerBlock=$(base64 -d <<<$NGINX_CONFIG_LOCATION_ENCODED)
   decodedNginxLocationBlock=$(base64 -d <<<$NGINX_CONFIG_SERVER_ENCODED)
 
+# TODO: these should be combined into a single function or something DRY
+# Check if the nginx server file needs updated
+  info "Checking for pending changes to mod_ckeditor_server_block.conf"
+  if [ $(echo "$decodedNginxServerBlock" | md5sum | awk '{print $1}') == $(md5sum $targetNginxServerFile | awk '{print $1}') ]; then
+    debug "Nginx server block file content matches"
+  else
+  os_check
+  info "Nginx server config update needed"
+  requires_user_root
 
   info "Updating $targetNginxServerFile"
   touch $targetNginxServerFile
   echo "$decodedNginxServerBlock" > $targetNginxServerFile
+  fi
+
+# Check if the server location file needs updated
+  info "Checking for pending changes to mod_ckeditor_location_block.conf"
+  if [ $(echo "$decodedNginxLocationBlock" | md5sum | awk '{print $1}') == $(md5sum $targetNginxLocationFile | awk '{print $1}') ]; then
+    debug "Nginx location block file content matches"
+  else
+  os_check
+  info "Nginx server config update needed"
+  requires_user_root
 
   info "Updating $targetNginxLocationFile"
   touch $targetNginxLocationFile
   echo "$decodedNginxLocationBlock" > $targetNginxLocationFile
 
   log "Done."
+  fi
 }
 
 function validateComposeConfig() {
