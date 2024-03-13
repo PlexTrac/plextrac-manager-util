@@ -174,8 +174,8 @@ function updateComposeConfig() {
 
 function updateNginxConfig() {
   title "Updating Nginx Config Files"
-  targetNginxServerFile="${PLEXTRAC_HOME}/volume/nginx_conf/mod_ckeditor_server_block.conf"
-  targetNginxLocationFile="${PLEXTRAC_HOME}/volume/nginx_conf/mod_ckeditor_location_block.conf"
+  targetNginxServerFile="${PLEXTRAC_HOME}/volumes/nginx_conf/mod_ckeditor_server_block.conf"
+  targetNginxLocationFile="${PLEXTRAC_HOME}/volumes/nginx_conf/mod_ckeditor_location_block.conf"
 
   decodedNginxServerBlock=$(base64 -d <<<$NGINX_CONFIG_LOCATION_ENCODED)
   decodedNginxLocationBlock=$(base64 -d <<<$NGINX_CONFIG_SERVER_ENCODED)
