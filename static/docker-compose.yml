@@ -333,7 +333,7 @@ services:
       replicas: 3
       update_config:
         parallelism: 1
-    image: registry.dorf.plextrac.ninja/ckeditor-registry-proxy/cs:latest
+    image: docker.cke-cs.com/cs:4.17.1
     depends_on:
       redis:
         condition: service_started
