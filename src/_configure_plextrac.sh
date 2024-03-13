@@ -114,7 +114,7 @@ function getCKEditorRTCConfig() {
     CKEDITOR_SERVER_CONFIG=`echo $CKEDITOR_JSON | base64 -w 0`
     echo -n "CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG}"
   else
-    debug "ERROR: Unable to generate CKEditor RTC service config, got result ${CKEDITOR_JSON} instead"
+    debug "ERROR: Response did not contain JSON with expected key"
   fi
 }
 
