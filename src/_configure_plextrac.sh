@@ -188,7 +188,7 @@ function updateNginxConfig() {
   os_check
   info "Nginx server config update needed"
   info "Please run "plextrac configure" as root to update the nginx configuration files"
-  requires_user_root
+  # requires_user_root
 
   info "Updating $targetNginxServerFile"
   touch $targetNginxServerFile
@@ -203,7 +203,7 @@ function updateNginxConfig() {
   os_check
   info "Nginx server config update needed"
   info "Please run "plextrac configure" as root to update the nginx configuration files"
-  requires_user_root
+  # requires_user_root
 
   info "Updating $targetNginxLocationFile"
   touch $targetNginxLocationFile
