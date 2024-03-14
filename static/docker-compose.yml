@@ -396,7 +396,7 @@ volumes:
     driver_opts:
       type: "none"
       o: "bind"
-      device: "./volumes/nginx_conf"
+      device: "${PLEXTRAC_HOME:-.}/volumes/nginx_conf"
 
 networks:
   default:
