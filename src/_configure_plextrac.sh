@@ -192,7 +192,8 @@ function updateNginxConfig() {
 
   info "Updating $targetNginxServerFile"
   #touch $targetNginxServerFile
-  echo "$decodedNginxServerBlock" > $targetNginxServerFile || log "ERROR: unable to update the nginx config file"
+  echo "$decodedNginxServerBlock" > $targetNginxServerFile || error "Unable to update the nginx config file"
+  compose_client restart plextracnginx  || log "Unable to restart the nginx container"
 
   fi
 
@@ -208,7 +209,8 @@ function updateNginxConfig() {
 
   info "Updating $targetNginxLocationFile"
   #touch $targetNginxLocationFile
-  echo "$decodedNginxLocationBlock" > $targetNginxLocationFile || log "ERROR: unable to update the nginx config file"
+  echo "$decodedNginxLocationBlock" > $targetNginxLocationFile || error "Unable to update the nginx config file"
+  compose_client restart plextracnginx  || log "Unable to restart the nginx container"
 
   log "Done."
   fi
