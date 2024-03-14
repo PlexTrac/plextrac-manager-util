@@ -22,11 +22,11 @@ function mod_update() {
   fi
   info "Updating PlexTrac instance to latest release..."
   # Check upstream tags avaialble to download
-  mod_configure
   version_check
   if $contiguous_update
     then
       debug "Proceeding with contiguous update"
+      mod_configure
       upgrade_time_estimate
       for i in ${upgrade_path[@]}
          do
@@ -155,7 +155,7 @@ function selfupdate_doUpgrade() {
   tempDir=`mktemp -d -t plextrac-$releaseVersion-XXX`
   debug "Tempdir: $tempDir"
   target="${PLEXTRAC_HOME}/.local/bin/plextrac"
-  
+
   debug "`wget $releaseApiUrl -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
   debug "`wget -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
   debug "`wget -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAssetSHA256SUM) 2>&1 || error "Checksum download failed"`"
@@ -172,7 +172,7 @@ function selfupdate_doUpgrade() {
   debug `chmod -v a+x $target`
   info "Upgrade complete"
 
-  debug "Initially called '$ProgName' w/ args '$_INITIAL_CMD_ARGS'" 
+  debug "Initially called '$ProgName' w/ args '$_INITIAL_CMD_ARGS'"
   debug "Script Backup: `sha256sum ${target}.bak`"
   debug "Script Update: `sha256sum $target`"
 

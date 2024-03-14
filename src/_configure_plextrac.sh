@@ -191,8 +191,9 @@ function updateNginxConfig() {
   # requires_user_root
 
   info "Updating $targetNginxServerFile"
-  touch $targetNginxServerFile
-  echo "$decodedNginxServerBlock" > $targetNginxServerFile
+  #touch $targetNginxServerFile
+  echo "$decodedNginxServerBlock" > $targetNginxServerFile || log "ERROR: unable to update the nginx config file"
+
   fi
 
 # Check if the server location file needs updated
@@ -206,8 +207,8 @@ function updateNginxConfig() {
   # requires_user_root
 
   info "Updating $targetNginxLocationFile"
-  touch $targetNginxLocationFile
-  echo "$decodedNginxLocationBlock" > $targetNginxLocationFile
+  #touch $targetNginxLocationFile
+  echo "$decodedNginxLocationBlock" > $targetNginxLocationFile || log "ERROR: unable to update the nginx config file"
 
   log "Done."
   fi
