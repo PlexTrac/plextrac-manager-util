@@ -232,7 +232,7 @@ function validateComposeConfig() {
 function create_volume_directories() {
   title "Create directories for bind mounts"
   debug "Ensuring directories exist for Docker Volumes..."
-  debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
+  debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | sed '/nginx_conf/d' | xargs -r mkdir -vp`"
   info "Directories for bind mounts"
   log "Done."
 }
