@@ -49,9 +49,11 @@ RUNAS_APPUSER=True
 PLEXTRAC_PARSER_URL=https://plextracparser:4443
 UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
+CKEDITOR_ENVIRONMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-`generateSecret`}
 
 `generate_default_couchbase_env | setDefaultSecrets`
 `generate_default_postgres_env | setDefaultSecrets`
+`getCKEditorRTCConfig`
 "
 
   # Merge the generated env with the local vars
@@ -100,6 +102,20 @@ function setDefaultSecrets() {
     #echo "$var=${var:-$val}"
   done < "${1:-/dev/stdin}"
   export IFS=$OLDIFS
+}
+
+function getCKEditorRTCConfig() {
+  # parses output and saves the result of the json meta data
+  # the last line, which only contains the JSON data, should be used
+  CKEDITOR_JSON=$(compose_client exec plextracapi npm run ckeditor:environment:migration --if-present | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
+
+  # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
+  if [ $(echo $CKEDITOR_JSON | jq -e ".[]|any(\".api_secret\")") ]; then
+    CKEDITOR_SERVER_CONFIG=`echo $CKEDITOR_JSON | base64 -w 0`
+    echo -n "CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG}"
+  else
+    debug "ERROR: Response did not contain JSON with expected key"
+  fi
 }
 
 function login_dockerhub() {
@@ -153,6 +169,50 @@ function updateComposeConfig() {
     fi
   fi
   log "Done."
+}
+
+function updateNginxConfig() {
+  title "Updating Nginx Config Files"
+  targetNginxServerFile="${PLEXTRAC_HOME}/volumes/nginx_conf/mod_ckeditor_server_block.conf"
+  targetNginxLocationFile="${PLEXTRAC_HOME}/volumes/nginx_conf/mod_ckeditor_location_block.conf"
+
+  decodedNginxServerBlock=$(base64 -d <<<$NGINX_CONFIG_SERVER_ENCODED)
+  decodedNginxLocationBlock=$(base64 -d <<<$NGINX_CONFIG_LOCATION_ENCODED)
+
+# TODO: these should be combined into a single function or something DRY
+# Check if the nginx server file needs updated
+  info "Checking for pending changes to mod_ckeditor_server_block.conf"
+  if [ $(echo "$decodedNginxServerBlock" | md5sum | awk '{print $1}') == $(md5sum $targetNginxServerFile | awk '{print $1}') ]; then
+    debug "Nginx server block file content matches"
+  elif test -f $targetNginxServerFile; then
+    os_check
+    info "Nginx server config update needed"
+    info "Please run "plextrac configure" as root to update the nginx configuration files"
+    info "Updating $targetNginxServerFile"
+    echo "$decodedNginxServerBlock" > $targetNginxServerFile || error "Unable to update the nginx config file"
+    compose_client restart plextracnginx  || log "Unable to restart the nginx container"
+  else
+    info "Nginx server config file does not yet exist, skipping"
+  fi
+
+# Check if the server location file needs updated
+  info "Checking for pending changes to mod_ckeditor_location_block.conf"
+  if [ $(echo "$decodedNginxLocationBlock" | md5sum | awk '{print $1}') == $(md5sum $targetNginxLocationFile | awk '{print $1}') ]; then
+    debug "Nginx location block file content matches"
+  elif test -f $targetNginxLocationFile; then
+    os_check
+    info "Nginx server config update needed"
+    info "Please run "plextrac configure" as root to update the nginx configuration files"
+    # requires_user_root
+
+    info "Updating $targetNginxLocationFile"
+    #touch $targetNginxLocationFile
+    echo "$decodedNginxLocationBlock" > $targetNginxLocationFile || error "Unable to update the nginx config file"
+    compose_client restart plextracnginx  || log "Unable to restart the nginx container"
+  else
+    info "Nginx server config file does not yet exist, skipping"
+    log "Done."
+  fi
 }
 
 function validateComposeConfig() {

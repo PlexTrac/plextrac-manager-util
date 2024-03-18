@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.5.5
+VERSION=0.5.6
 
 trap 'cleanup $?' SIGINT ERR EXIT
 
@@ -233,6 +233,12 @@ function mod_dist() {
       echo "" \
       echo -n "DOCKER_COMPOSE_OVERRIDE_ENCODED="; \
       base64 -w0 '"$(dirname $0)"'/../static/docker-compose.override.yml \
+      echo "" \
+      echo -n "NGINX_CONFIG_LOCATION_ENCODED="; \
+      base64 -w0 '"$(dirname $0)"'/../static/nginx_conf/mod_ckeditor_location_block.conf \
+      echo "" \
+      echo -n "NGINX_CONFIG_SERVER_ENCODED="; \
+      base64 -w0 '"$(dirname $0)"'/../static/nginx_conf/mod_ckeditor_server_block.conf \
       echo ""' \
       $0
   fi
@@ -256,7 +262,6 @@ function mod_initialize() {
 
 function mod_install() {
   title "Installing PlexTrac Instance"
-  requires_user_plextrac
   mod_configure
   info "Starting Databases before other services"
   compose_client up -d "$couchbaseComposeService" "$postgresComposeService"
@@ -295,6 +300,8 @@ function mod_install() {
 
 function mod_configure() {
   title "Setting up base PlexTrac configuration..."
+  # if updates to the nginx config are needed, root level is required
+  updateNginxConfig
   requires_user_plextrac
   generate_default_config
   login_dockerhub
