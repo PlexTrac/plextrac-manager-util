@@ -184,35 +184,34 @@ function updateNginxConfig() {
   info "Checking for pending changes to mod_ckeditor_server_block.conf"
   if [ $(echo "$decodedNginxServerBlock" | md5sum | awk '{print $1}') == $(md5sum $targetNginxServerFile | awk '{print $1}') ]; then
     debug "Nginx server block file content matches"
+  elif test -f $targetNginxServerFile; then
+    os_check
+    info "Nginx server config update needed"
+    info "Please run "plextrac configure" as root to update the nginx configuration files"
+    info "Updating $targetNginxServerFile"
+    echo "$decodedNginxServerBlock" > $targetNginxServerFile || error "Unable to update the nginx config file"
+    compose_client restart plextracnginx  || log "Unable to restart the nginx container"
   else
-  os_check
-  info "Nginx server config update needed"
-  info "Please run "plextrac configure" as root to update the nginx configuration files"
-  # requires_user_root
-
-  info "Updating $targetNginxServerFile"
-  #touch $targetNginxServerFile
-  echo "$decodedNginxServerBlock" > $targetNginxServerFile || error "Unable to update the nginx config file"
-  compose_client restart plextracnginx  || log "Unable to restart the nginx container"
-
+    info "Nginx server config file does not yet exist, skipping"
   fi
 
 # Check if the server location file needs updated
   info "Checking for pending changes to mod_ckeditor_location_block.conf"
   if [ $(echo "$decodedNginxLocationBlock" | md5sum | awk '{print $1}') == $(md5sum $targetNginxLocationFile | awk '{print $1}') ]; then
     debug "Nginx location block file content matches"
+  elif test -f $targetNginxLocationFile; then
+    os_check
+    info "Nginx server config update needed"
+    info "Please run "plextrac configure" as root to update the nginx configuration files"
+    # requires_user_root
+
+    info "Updating $targetNginxLocationFile"
+    #touch $targetNginxLocationFile
+    echo "$decodedNginxLocationBlock" > $targetNginxLocationFile || error "Unable to update the nginx config file"
+    compose_client restart plextracnginx  || log "Unable to restart the nginx container"
   else
-  os_check
-  info "Nginx server config update needed"
-  info "Please run "plextrac configure" as root to update the nginx configuration files"
-  # requires_user_root
-
-  info "Updating $targetNginxLocationFile"
-  #touch $targetNginxLocationFile
-  echo "$decodedNginxLocationBlock" > $targetNginxLocationFile || error "Unable to update the nginx config file"
-  compose_client restart plextracnginx  || log "Unable to restart the nginx container"
-
-  log "Done."
+    info "Nginx server config file does not yet exist, skipping"
+    log "Done."
   fi
 }
 
