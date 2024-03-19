@@ -290,10 +290,6 @@ services:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     deploy:
       replicas: 1
-      restart_policy:
-        condition: always
-        delay: 5s
-        window: 120s
     depends_on:
     - postgres
     - redis
