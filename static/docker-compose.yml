@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   plextracapi:
     deploy:
@@ -56,6 +54,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
       PG_HOST: ${PG_HOST:-postgres}
       PG_MIGRATE_PATH: /usr/src/plextrac-api
+      PG_SUPER_USER: ${POSTGRES_USER:?err}
+      PG_SUPER_PASSWORD: ${POSTGRES_PASSWORD:?err}
       PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
       PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
       PG_CORE_DB: ${PG_CORE_DB:?err}
@@ -73,6 +73,10 @@ services:
       PG_CKEDITOR_RW_USER: ${PG_CKEDITOR_RW_USER:?err}
       PG_TENANTS_WRITE_MODE: ${PG_TENANTS_WRITE_MODE:-couchbase_only}
       PG_TENANTS_READ_MODE: ${PG_TENANTS_READ_MODE:-couchbase_only}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
 
   plextracdb:
     environment:
@@ -284,11 +288,6 @@ services:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     deploy:
       replicas: 1
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 5
-        window: 120s
     depends_on:
     - postgres
     - redis
