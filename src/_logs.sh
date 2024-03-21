@@ -7,5 +7,9 @@ function mod_logs() {
 }
 
 function tail_logs() {
-    compose_client logs -f --tail=50 ${LOG_SERVICE-''}
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    container_client logs -f --tail=200 ${LOG_SERVICE-''}
+  else
+    compose_client logs -f --tail=200 ${LOG_SERVICE-''}
+  fi
 }

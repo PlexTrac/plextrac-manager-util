@@ -19,12 +19,20 @@ function mod_info() {
   title "Docker Compose"
 
   info "Active Container Images"
-  images=`compose_client images`
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    images=$(container_client images)
+  else
+    images=$(compose_client images)
+  fi
   msg "    %s\n" "$images"
   echo >&2 ""
 
   info "Active Services"
-  active=`compose_client ps`
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    active=$(container_client ps)
+  else
+    active=$(compose_client ps)
+  fi
   msg "    %s\n" "$active"
   echo >&2 ""
 
@@ -33,8 +41,8 @@ function mod_info() {
 
   title "Host Details"
   info "Disk Statistics"
-  msg `check_disk_capacity`
-  msg `info_backupDiskUsage`
+  msg "$(check_disk_capacity)"
+  msg "$(info_backupDiskUsage)"
 
 }
 
@@ -53,7 +61,12 @@ function info_TLSCertificateDetails() {
 
 function releaseDetails() {
   summary=("Name Image Version")
-  for service in `compose_client ps --services | xargs -n1 echo`; do
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local cmd='podman ps --format "{{.Names}}"'
+  else
+    local cmd='compose_client ps --services'
+  fi
+  for service in `$cmd | xargs -n1 echo`; do
     image=`_getServiceContainerImageRepo $service || echo "unknown"`
     version=`_getServiceContainerVersion $service || echo "unknown"`
     summary+=("$service $image $version")
@@ -66,14 +79,18 @@ function releaseDetails() {
 
 function _getImageForService() {
   service=$1
-  imageId=`compose_client images -q $service 2>/dev/null`
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    imageId=$(container_client container inspect $service --format '{{.Image}}' 2>/dev/null)
+  else
+    imageId=$(compose_client images -q $service 2>/dev/null)
+  fi
   if [ "$imageId" == "" ]; then echo "unknown"; else echo "$imageId"; fi
 }
 
 function _getServiceContainerImageRepo() {
   service=$1
   imageId=`_getImageForService $service`
-  imageRepo=`docker image inspect $imageId --format='{{ index .RepoTags 0 }}' 2>/dev/null | awk -F':' '{print $1}' 2>/dev/null || echo ''`
+  imageRepo=$(docker image inspect $imageId --format='{{ index .RepoTags 0 }}' 2>/dev/null | awk -F ':' '{print $1}' 2>/dev/null || echo '')
   echo $imageRepo
 }
 
@@ -85,15 +102,26 @@ function _getServiceContainerVersion() {
     version="7.2.0"
   fi
   if [ "$version" == "" ]; then
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      local cmd='docker exec'
+    else
+      local cmd='compose_client exec -T'
+    fi
     case $service in
       "$coreBackendComposeService")
-        version=`compose_client exec -T $coreBackendComposeService cat package.json | jq -r '.version'`
+        version=`$cmd $coreBackendComposeService cat package.json | jq -r '.version'`
         ;;
       "$couchbaseComposeService")
-        version=`compose_client exec -T $couchbaseComposeService couchbase-cli --version`
+        version=`$cmd $couchbaseComposeService couchbase-cli --version`
+        ;;
+      "$postgresComposeService")
+        version=$(docker image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}')
+        ;;
+      "redis")
+        version=$(docker image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}')
         ;;
       *)
-        version="tag:`compose_client images $service | awk 'NR != 1 {print $3}'`"
+        version=$(docker images $imageId | awk 'NR != 1 {print $3}')
         ;;
     esac
   fi

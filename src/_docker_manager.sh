@@ -7,9 +7,26 @@ postgresComposeService="postgres"
 function compose_client() {
   flags=($@)
   compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
-  debug "docker compose flags: ${flags[@]}"
-  debug "docker compose configs: ${compose_files}"
-  docker compose $(echo $compose_files) ${flags[@]}
+  if [ "$CONTAINER_RUNTIME" == "podman-compose" ] || [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    debug "podman-compose flags: ${flags[@]}"
+    debug "podman-compose configs: ${compose_files}"
+    podman-compose $(echo $compose_files) ${flags[@]}
+  elif [ "$CONTAINER_RUNTIME" == "docker" ]; then
+    debug "docker compose flags: ${flags[@]}"
+    debug "docker compose configs: ${compose_files}"
+    docker compose $(echo $compose_files) ${flags[@]}
+  fi
+}
+
+function container_client() {
+  flags=($@)
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    debug "podman flags: ${flags[@]}"
+    podman ${flags[@]}
+  elif [ "$CONTAINER_RUNTIME" == "docker" ]; then
+    debug "docker flags: ${flags[@]}"
+    docker ${flags[@]}
+  fi
 }
 
 function image_version_check() {

@@ -49,6 +49,7 @@ RUNAS_APPUSER=True
 PLEXTRAC_PARSER_URL=https://plextracparser:4443
 UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
+CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-"docker"}
 
 `generate_default_couchbase_env | setDefaultSecrets`
 `generate_default_postgres_env | setDefaultSecrets`
@@ -104,11 +105,12 @@ function setDefaultSecrets() {
 
 function login_dockerhub() {
   local output
+  local default_registry="docker.io"
   info "Logging into Image Registry"
   if [ -z ${DOCKER_HUB_KEY} ]; then
     die "ERROR: Docker Hub key not found, please set DOCKER_HUB_KEY in the .env and re-run configuration"
   fi
-  output="`docker login -u ${DOCKER_HUB_USER:-plextracusers} --password-stdin 2>&1 <<< "${DOCKER_HUB_KEY}"`" || die "${output}"
+  output="`container_client login "$default_registry" -u ${DOCKER_HUB_USER:-plextracusers} --password-stdin 2>&1 <<< "${DOCKER_HUB_KEY}"`" || die "${output}"
   debug "$output"
   log "${GREEN}DockerHUB${RESET}: SUCCESS"
 
@@ -121,7 +123,7 @@ function login_dockerhub() {
     if [ -z "${IMAGE_REGISTRY_USER:-}" ]; then
       die "ERROR: Image registry username not found, please set IMAGE_REGISTRY_USER in the .env and re-run configuration"
     fi
-    output="$(docker login ${IMAGE_REGISTRY} -u ${IMAGE_REGISTRY_USER} --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}")" || die "${output}"
+    output="$(container_client login ${IMAGE_REGISTRY} -u ${IMAGE_REGISTRY_USER} --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}")" || die "${output}"
     debug "$output"
     log "${BLUE}$IMAGE_REGISTRY${RESET}: SUCCESS"
   fi
@@ -157,7 +159,11 @@ function updateComposeConfig() {
 
 function validateComposeConfig() {
   info "Validating Docker Compose Config"
-  composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
+  if [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
+    composeConfigCheck=$(compose_client config 2>&1) || configValidationFailed=1
+  elif [ "$CONTAINER_RUNTIME" == "docker" ]; then
+    composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
+  fi
   if [ ${configValidationFailed:-0} -ne 0 ]; then
     error "Invalid Docker Compose Configuration"
     log "Please check for valid syntax in override files"
@@ -170,9 +176,15 @@ function validateComposeConfig() {
 
 function create_volume_directories() {
   title "Create directories for bind mounts"
-  debug "Ensuring directories exist for Docker Volumes..."
-  debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
-  info "Directories for bind mounts"
+  debug "Ensuring directories exist for Volumes..."
+  if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+    debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
+  else
+    stat "${PLEXTRAC_BACKUP_PATH}/couchbase" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/couchbase"
+    stat "${PLEXTRAC_BACKUP_PATH}/postgres" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/postgres"
+    stat "${PLEXTRAC_BACKUP_PATH}/uploads" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/uploads"
+  fi
+  info "Validating directories for bind mounts"
   log "Done."
 }
 

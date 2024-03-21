@@ -21,10 +21,14 @@ ENDPOSTGRES
 }
 
 function deploy_volume_contents_postgres() {
-  info "Adding postgres initdb scripts to Docker volume"
-  targetDir=`compose_client config --format=json | jq -r \
-    '.volumes[] | select(.name | test("postgres-initdb")) | 
-      .driver_opts.device'`
+  debug "Adding postgres initdb scripts to volume mount"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    targetDir="${PLEXTRAC_HOME}/.local/share/containers/storage/volumes/postgres-initdb/_data"
+  else
+    targetDir=`compose_client config --format=json | jq -r \
+      '.volumes[] | select(.name | test("postgres-initdb")) | 
+        .driver_opts.device'`
+  fi
   debug "Adding scripts to $targetDir"
   cat > "$targetDir/bootstrap-template.sql.txt" <<- "EOBOOTSTRAPTEMPLATE"
 -- Add Service Roles
@@ -95,7 +99,12 @@ EOINITDBSCRIPT
 function postgres_metrics_validation() {
   if [ "${PG_METRICS_USER:-}" != "" ]; then
     info "Checking user $PG_METRICS_USER can access postgres metrics"
-    debug "`compose_client exec -T -u 1337 -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+    if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+      local container_runtime="compose_client exec -T"
+    else
+      local container_runtime="container_client exec"
+    fi
+    debug "`$container_runtime -u 1337 -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
         psql -a -v -U internalonly -d core 2>&1 <<- EOF 
 CREATE OR REPLACE FUNCTION __tmp_create_user() returns void as \\$\\$
 BEGIN
