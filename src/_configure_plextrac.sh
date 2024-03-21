@@ -141,7 +141,7 @@ function updateComposeConfig() {
   fi
 
   if grep '# version: '\''3.8'\''' docker-compose.override.yml; then
-    echo "Version already configured"
+    debug "Version already configured"
   else
     sed -i 's/version: '\''3.8'\''/# version: '\''3.8'\''/g' ./docker-compose.override.yml
     echo "Version removed from compose file"
