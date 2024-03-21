@@ -1,4 +1,4 @@
-version: '3.8'
+# version: '3.8'
 
 # Example configuration for adding a custom logo and/or using custom certificates
 # services:
