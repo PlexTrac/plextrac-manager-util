@@ -139,6 +139,13 @@ function updateComposeConfig() {
     debug "Creating initial file"
     echo "$decodedComposeFile" > $targetComposeFile
   fi
+
+  if grep '# version: '\''3.8'\''' docker-compose.override.yml; then
+    debug "Version already configured"
+  else
+    sed -i 's/version: '\''3.8'\''/# version: '\''3.8'\''/g' ./docker-compose.override.yml
+    echo "Version removed from compose file"
+  fi
   log "Done."
 
   composeConfigDiff="`composeConfigNeedsUpdated 2>/dev/null || true`"
