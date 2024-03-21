@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 VERSION=0.6.0
 
+
 trap 'cleanup $?' SIGINT ERR EXIT
 
 function backtrace() {
