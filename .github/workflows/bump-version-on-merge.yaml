@@ -1,0 +1,90 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: Version Bump
+
+on:
+  pull_request:
+    branches:
+      - "main"
+    types:
+      - "closed"
+
+jobs:
+  version-bump:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    timeout-minutes: 2
+    outputs:
+      bumped: ${{ steps.workflow-output.outputs.bumped }}
+      current_version: ${{ steps.workflow-output.outputs.current_version }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # Checkout the head ref, which should be the main branch
+          ref: ${{ github.base_ref }}
+      - uses: actions/setup-python@v4
+      - run: pip install bump-my-version
+      - run: |
+          git config --global user.name "${{ github.repository }} CI/CD"
+          git config --global user.email "${{ github.repository_owner }}-cicd@users.noreply.github.com"
+
+      - id: bump-patch
+        if: contains(github.event.pull_request.labels.*.name, 'bump:patch')
+        run: |
+          bump-my-version bump patch
+          echo "bumped=true" >> $GITHUB_ENV
+          git push && git push --tags
+
+      - id: bump-minor
+        if: contains(github.event.pull_request.labels.*.name, 'bump:minor')
+        run: |
+          bump-my-version bump minor
+          echo "bumped=true" >> $GITHUB_ENV
+          git push && git push --tags
+
+      - id: bump-major
+        if: contains(github.event.pull_request.labels.*.name, 'bump:major')
+        run: |
+          bump-my-version bump major
+          echo "bumped=true" >> $GITHUB_ENV
+          git push && git push --tags
+
+      - id: workflow-output
+        run: |
+          echo "current_version=`bump-my-version show current_version`" >> $GITHUB_OUTPUT
+          echo "bumped=${{ env.bumped }}" >> $GITHUB_OUTPUT
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: version-bump
+    if: needs.version-bump.outputs.bumped == 'true'
+    permissions:
+      contents: write
+    steps:
+      - name: "Create release"
+        uses: "actions/github-script@v6"
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          script: |
+            try {
+              const response = await github.rest.repos.createRelease({
+                draft: false,
+                generate_release_notes: true,
+                name: 'v${{ needs.version-bump.outputs.current_version }}',
+                owner: context.repo.owner,
+                prerelease: false,
+                repo: context.repo.repo,
+                tag_name: 'v${{ needs.version-bump.outputs.current_version }}',
+              });
+
+              core.exportVariable('RELEASE_ID', response.data.id);
+              core.exportVariable('RELEASE_UPLOAD_URL', response.data.upload_url);
+            } catch (error) {
+              core.setFailed(error.message);
+            }
+
