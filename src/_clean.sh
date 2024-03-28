@@ -42,13 +42,19 @@ function clean_rotateCompressedArchives() {
 
 function clean_compressCouchbaseBackups() {
   info "$couchbaseComposeService: Archiving Couchbase Backups"
+  local cmd="compose_client run --rm -T"
+  local image="plextracdb"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local cmd="container_client run --rm"
+    local image="$(docker image inspect $(docker container inspect plextracdb --format '{{.Image}}') --format '{{ index .RepoTags 0}}')"
+  fi
   # Run from within a container due to permissions issues (Couchbase runs as root)
-  debug "`compose_client run --rm -T --entrypoint= --workdir /backups plextracdb \
+  debug "`$cmd --entrypoint= --workdir /backups $image \
     find . -daystart -maxdepth 1 -mtime +1 -type d \
     -exec tar --remove-files -czvf /backups/{}.tar.gz {} \;
     2>&1`"
   debug "Fixing permissions on backups"
-  debug "`compose_client run --rm -T --entrypoint= --workdir /backups plextracdb \
+  debug "`$cmd --entrypoint= --workdir /backups $image \
     find . -maxdepth 1 -type f -name '*.tar.gz' \
     -exec chown 1337:1337 {} \;
     2>&1`"
@@ -64,7 +70,11 @@ function clean_pruneDockerResources() {
 
 function clean_sweepUploadsCache() {
   info "core-backend: Cleaning uploads/exports caches"
+  local cmd="compose_client exec -T"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    cmd="container_client exec"
+  fi
   # Leaving the cleanup fairly light, this should help a ton without getting aggressive
-  debug "`compose_client exec -T -w /usr/src/plextrac-api/uploads plextracapi \
+  debug "`$cmd -w /usr/src/plextrac-api/uploads plextracapi \
     find . -maxdepth 1 -type f -regex '^.*\.\(json\|xml\|ptrac\|csv\|nessus\)$' -delete`"
 }
