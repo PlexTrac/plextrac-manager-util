@@ -38,8 +38,16 @@ function image_version_check() {
       current_services=""
       current_image_digests=""
       # Get list of expected services from the `docker compose config`
-      expected_services=$(compose_client config --format json | jq -r .services[].image | sort -u)
-      debug "Expected Services `echo "$expected_services" | wc -l`"
+      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+        expected_services="docker.io/plextrac/plextracdb:7.2.0
+docker.io/postgres:14-alpine
+docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}
+docker.io/redis:6.2-alpine
+docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
+      else
+        expected_services=$(compose_client config --format json | jq -r .services[].image | sort -u)
+      fi
+      debug "Expected Services "`echo $expected_services | wc -l`""
       debug "$expected_services"
       current_services=$(for i in `docker image ls -q`; do docker image inspect "$i" --format json | jq -r '(.[].RepoTags[])'; done | sort -u)
       current_image_digests=$(for i in `grep -F -x -f <(echo "$expected_services") <(echo "$current_services")`; do docker image inspect $i --format json | jq -r '.[].Id'; done | sort -u)
@@ -58,7 +66,11 @@ function image_version_check() {
     else
       if [ $IMAGE_CHANGED == false ]
         then
-          local new_services=$(for i in `compose_client images -q`; do docker image inspect $i --format json | jq -r '(.[].RepoTags[])'; done | sort -u)
+          if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+            local new_services=$(for i in ${expected_services[2]}; do podman image inspect $i --format json | jq -r '(.[].RepoTags[])'; done | sort -u)
+          else
+            local new_services=$(for i in `compose_client images -q`; do docker image inspect $i --format json | jq -r '(.[].RepoTags[])'; done | sort -u)
+          fi
           local new_image_digests=$(for i in `grep -F -x -f <(echo "$expected_services") <(echo "$new_services")`; do docker image inspect $i --format json | jq -r '.[].Id'; done | sort)
           debug "New Images Matching `echo "$new_image_digests" | wc -l`"
           debug "$new_image_digests"

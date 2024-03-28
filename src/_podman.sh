@@ -7,14 +7,21 @@ function podman_setup() {
     debug "Creating network plextrac"
     container_client network create plextrac 1>/dev/null
   fi
-  if container_client volume exists postgres-initdb; then
-    debug "Volume postgres-initdb already exists"
-  else
-    debug "Creating volume postgres-initdb"
-    container_client volume create postgres-initdb 1>/dev/null
-    deploy_volume_contents_postgres
-  fi
   create_volume_directories
+  declare -A pt_volumes
+  pt_volumes["postgres-initdb"]="${PLEXTRAC_HOME:-.}/volumes/postgres-initdb"
+  pt_volumes["redis"]="${PLEXTRAC_HOME:-.}/volumes/redis"
+  pt_volumes["datalake-maintainer-keys"]="${PLEXTRAC_HOME:-.}/volumes/datalake-maintainer-keys"
+  pt_volumes["couchbase-backups"]="${PLEXTRAC_BACKUP_PATH}/couchbase"
+  pt_volumes["postgres-backups"]="${PLEXTRAC_BACKUP_PATH}/postgres"
+  for volume in "${!pt_volumes[@]}"; do
+    if container_client volume exists "$volume"; then
+      debug "-- Volume $volume already exists"
+    else
+      debug "-- Creating volume $volume"
+      container_client volume create "$volume" --driver=local --opt device="${pt_volumes[$volume]}" --opt type=none --opt o="bind" 1>/dev/null
+    fi
+  done
 
   #####
   # Placeholder for right now. These ENVs may need to be set in the .env file if we are using podman.
@@ -26,38 +33,11 @@ function podman_setup() {
 }
 
 function plextrac_install_podman() {
-  declare -A serviceValues
-
-  export POSTGRES_HOST_AUTH_METHOD=scram-sha-256
-  export POSTGRES_INITDB_ARGS="--auth-local=scram-sha-256 --auth-host=scram-sha-256"
-  export PG_MIGRATE_PATH=/usr/src/plextrac-api
-  export PGDATA=/var/lib/postgresql/data/pgdata
-
-  databaseNames=("plextracdb" "postgres")
-  serviceNames=("plextracdb" "postgres" "redis" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
-  serviceValues[network]="--network=plextrac"
-  serviceValues[env-file]="--env-file /opt/plextrac/.env"
-  serviceValues[cb-volumes]="-v dbdata:/opt/couchbase/var:rw -v couchbase-backups:/backups:rw"
-  serviceValues[cb-ports]="-p 127.0.0.1:8091-8094:8091-8094"
-  serviceValues[cb-healthcheck]=""
-  serviceValues[cb-image]="docker.io/plextrac/plextracdb:7.2.0"
-  serviceValues[pg-volumes]="-v postgres-initdb:/docker-entrypoint-initdb.d -v postgres-data:/var/lib/postgresql/data -v postgres-backups:/backups"
-  serviceValues[pg-ports]="-p 127.0.0.1::5432"
-  serviceValues[pg-healthcheck]=""
-  serviceValues[pg-image]="docker.io/postgres:14-alpine"
-  serviceValues[pg-env-vars]="-e 'POSTGRES_HOST_AUTH_METHOD' -e 'POSTGRES_INITDB_ARGS' -e 'PG_MIGRATE_PATH' -e 'PGDATA'"
-  serviceValues[api-volumes]="-v uploads:/usr/src/plextrac-api/uploads:rw -v datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp -v localesOverride:/usr/src/plextrac-api/localesOverride:rw"
-  serviceValues[api-healthcheck]=""
+  var=$(declare -p "$1")
+  eval "declare -A serviceValues="${var#*=}
+  serviceValues[redis-entrypoint]=$(printf '%s' "--entrypoint=" "[" "\"redis-server\"" "," "\"--requirepass\"" "," "\"${REDIS_PASSWORD}\"" "]")
+  serviceValues[cb-healthcheck]='--health-cmd=["wget","--user='$CB_ADMIN_USER'","--password='$CB_ADMIN_PASS'","-qO-","http://plextracdb:8091/pools/default/buckets/reportMe"]'
   serviceValues[api-image]="docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
-  serviceValues[redis-volumes]="-v redis:/etc/redis:rw"
-  serviceValues[redis-entrypoint]=$(printf '%s%s%s%s%s%s%s%s' "--entrypoint=" "[" "\"redis-server\"" "," "\"--requirepass\"" "," "\"${REDIS_PASSWORD}\"" "]")
-  serviceValues[redis-image]="docker.io/redis:6.2-alpine"
-  serviceValues[notification-engine-entrypoint]='--entrypoint ["npm","run","start:notification-engine"]'
-  serviceValues[notification-sender-entrypoint]='--entrypoint ["npm","run","start:notification-sender"]'
-  serviceValues[contextual-scoring-service-entrypoint]='--entrypoint ["npm","run","start:contextual-scoring-service"]'
-  serviceValues[migrations-volumes]="-v uploads:/usr/src/plextrac-api/uploads:rw"
-  serviceValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw"
-  serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
   serviceValues[plextracnginx-image]="docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
 
   title "Installing PlexTrac Instance"
@@ -145,38 +125,11 @@ function plextrac_install_podman() {
 }
 
 function plextrac_start_podman() {
-  declare -A serviceValues
-
-  export POSTGRES_HOST_AUTH_METHOD=scram-sha-256
-  export POSTGRES_INITDB_ARGS="--auth-local=scram-sha-256 --auth-host=scram-sha-256"
-  export PG_MIGRATE_PATH=/usr/src/plextrac-api
-  export PGDATA=/var/lib/postgresql/data/pgdata
-
-  databaseNames=("plextracdb" "postgres")
-  serviceNames=("plextracdb" "postgres" "redis" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
-  serviceValues[network]="--network=plextrac"
-  serviceValues[env-file]="--env-file /opt/plextrac/.env"
-  serviceValues[cb-volumes]="-v dbdata:/opt/couchbase/var:rw -v couchbase-backups:/backups:rw"
-  serviceValues[cb-ports]="-p 127.0.0.1:8091-8094:8091-8094"
-  serviceValues[cb-healthcheck]=""
-  serviceValues[cb-image]="docker.io/plextrac/plextracdb:7.2.0"
-  serviceValues[pg-volumes]="-v postgres-initdb:/docker-entrypoint-initdb.d -v postgres-data:/var/lib/postgresql/data -v postgres-backups:/backups"
-  serviceValues[pg-ports]="-p 127.0.0.1::5432"
-  serviceValues[pg-healthcheck]=""
-  serviceValues[pg-image]="docker.io/postgres:14-alpine"
-  serviceValues[pg-env-vars]="-e 'POSTGRES_HOST_AUTH_METHOD' -e 'POSTGRES_INITDB_ARGS' -e 'PG_MIGRATE_PATH' -e 'PGDATA'"
-  serviceValues[api-volumes]="-v uploads:/usr/src/plextrac-api/uploads:rw -v datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp -v localesOverride:/usr/src/plextrac-api/localesOverride:rw"
-  serviceValues[api-healthcheck]=""
-  serviceValues[api-image]="docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
-  serviceValues[redis-volumes]="-v redis:/etc/redis:rw"
+  var=$(declare -p "$1")
+  eval "declare -A serviceValues="${var#*=}
   serviceValues[redis-entrypoint]=$(printf '%s' "--entrypoint=" "[" "\"redis-server\"" "," "\"--requirepass\"" "," "\"${REDIS_PASSWORD}\"" "]")
-  serviceValues[redis-image]="docker.io/redis:6.2-alpine"
-  serviceValues[notification-engine-entrypoint]='--entrypoint ["npm","run","start:notification-engine"]'
-  serviceValues[notification-sender-entrypoint]='--entrypoint ["npm","run","start:notification-sender"]'
-  serviceValues[contextual-scoring-service-entrypoint]='--entrypoint ["npm","run","start:contextual-scoring-service"]'
-  serviceValues[migrations-volumes]="-v uploads:/usr/src/plextrac-api/uploads:rw"
-  serviceValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw"
-  serviceValues[plextracnginx-ports]="-p 0.0.0.0:80:80 -p 0.0.0.0:443:443"
+  serviceValues[cb-healthcheck]='--health-cmd=["wget","--user='$CB_ADMIN_USER'","--password='$CB_ADMIN_PASS'","-qO-","http://plextracdb:8091/pools/default/buckets/reportMe"]'
+  serviceValues[api-image]="docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
   serviceValues[plextracnginx-image]="docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
   
   title "Starting PlexTrac..."
@@ -221,10 +174,13 @@ function plextrac_start_podman() {
         local entrypoint="${serviceValues[redis-entrypoint]}"
       elif [ "$service" == "notification-engine" ]; then
         local entrypoint="${serviceValues[notification-engine-entrypoint]}"
+        local healthcheck="${serviceValues[notification-engine-healthcheck]}"
       elif [ "$service" == "notification-sender" ]; then
         local entrypoint="${serviceValues[notification-sender-entrypoint]}"
+        local healthcheck="${serviceValues[notification-sender-healthcheck]}"
       elif [ "$service" == "contextual-scoring-service" ]; then
         local entrypoint="${serviceValues[contextual-scoring-service-entrypoint]}"
+        local healthcheck="${serviceValues[contextual-scoring-service-healthcheck]}"
         local deploy="" # update this
       elif [ "$service" == "migrations" ]; then
         local volumes="${serviceValues[migrations-volumes]}"
@@ -232,6 +188,7 @@ function plextrac_start_podman() {
         local volumes="${serviceValues[plextracnginx-volumes]}"
         local ports="${serviceValues[plextracnginx-ports]}"
         local image="${serviceValues[plextracnginx-image]}"
+        local healthcheck="${serviceValues[plextracnginx-healthcheck]}"
       fi
       debug "Creating $service"
       # This specific if loop is because Bash escaping and the specific need for the podman flag --entrypoint were being a massive pain in figuring out. After hours of effort, simply making an if statement here and calling podman directly fixes the escaping issues
@@ -245,7 +202,7 @@ function plextrac_start_podman() {
     fi
   done
   ## TODO: Write bit to edit the resolver as needed / TEST THIS PLEASE
-  waitTimeout=${1:-90}
+  waitTimeout=${2:-90}
   info "Waiting up to ${waitTimeout}s for application startup"
   local progressBar
   # todo: extract this to function waitForCondition
@@ -271,4 +228,36 @@ function plextrac_start_podman() {
 
     msg " Done"
   )
+}
+
+function podman_pull_images() {
+
+  declare -A service_images
+  service_images[cb-image]="docker.io/plextrac/plextracdb:7.2.0"
+  service_images[pg-image]="docker.io/postgres:14-alpine"
+  service_images[api-image]="docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+  service_images[redis-image]="docker.io/redis:6.2-alpine"
+  service_images[plextracnginx-image]="docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
+
+  info "Pulling updated container images"
+  IMAGE_PRECHECK=true
+  image_version_check
+  for image in "${service_images[@]}"; do
+    debug "Pulling $image"
+    podman pull $image 1>/dev/null
+  done
+  image_version_check
+  log "Done."
+}
+
+function podman_remove() {
+  for service in "${serviceNames[@]}"; do
+    if [ "$service" != "plextracdb" ] && [ "$service" != "postgres" ]; then
+      if podman container exists "$service"; then
+        podman stop "$service" 1>/dev/null
+        podman rm -f "$service" 1>/dev/null
+        podman image prune -f 1>/dev/null
+      fi
+    fi
+  done
 }

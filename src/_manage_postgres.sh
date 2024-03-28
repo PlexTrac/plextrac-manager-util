@@ -23,7 +23,7 @@ ENDPOSTGRES
 function deploy_volume_contents_postgres() {
   debug "Adding postgres initdb scripts to volume mount"
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-    targetDir="${PLEXTRAC_HOME}/.local/share/containers/storage/volumes/postgres-initdb/_data"
+    targetDir="${PLEXTRAC_HOME}/volumes/postgres-initdb"
   else
     targetDir=`compose_client config --format=json | jq -r \
       '.volumes[] | select(.name | test("postgres-initdb")) | 

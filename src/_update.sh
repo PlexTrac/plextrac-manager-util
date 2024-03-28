@@ -36,20 +36,31 @@ function mod_update() {
                 mod_configure
                 UPGRADE_STRATEGY="$i"
                 debug "Upgrade Strategy is $UPGRADE_STRATEGY"
-                title "Pulling latest container images"
-                pull_docker_images
-                if [ "$IMAGE_CHANGED" == true ]
-                  then
-                    title "Executing Rolling Deployment"
-                    mod_rollout
+                if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+                  debug "Unable to do rolling deployment with podman. Skipping..."
+                else
+                  title "Pulling latest container images"
+                  pull_docker_images
+                  if [ "$IMAGE_CHANGED" == true ]
+                    then
+                      title "Executing Rolling Deployment"
+                      mod_rollout
+                  fi
                 fi
                 # Sometimes containers won't start correctly at first, but will upon a retry
                 maxRetries=2
                 for i in $( seq 1 $maxRetries ); do
+                  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+                    title "Pulling latest container images"
+                    podman_remove
+                    podman_pull_images
+                  fi
                   mod_start || sleep 5 # Wait before going on to health checks, they should handle triggering retries if mod_start errors
-                  unhealthy_services=$(compose_client ps -a --format json | \
-                    jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | \
-                    xargs -r printf "%s;")
+                  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+                    unhealthy_services=$(for service in $(podman ps -a --format json | jq -r .[].Names | grep '"' | cut -d '"' -f2); do podman inspect $service --format json | jq -r '.[] | select(.State.Health.Status == "unhealthy" or (.State.Status != "running" and .State.ExitCode != 0) or .State.Status == "created") | .Name' | xargs -r printf "%s;"; done)
+                  else
+                    unhealthy_services=$(compose_client ps -a --format json | jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" not (has("migrations")) | .Service' | xargs -r printf "%s;")
+                  fi
                   if [[ "${unhealthy_services}" == "" ]]; then break; fi
                   info "Detected unhealthy services: ${unhealthy_services}"
                   if [[ $i -ge $maxRetries ]]; then
@@ -66,21 +77,34 @@ function mod_update() {
   else
       debug "Proceeding with normal update"
       mod_configure
-      title "Pulling latest container images"
-      pull_docker_images
-      if [ "$IMAGE_CHANGED" == true ]
-        then
-          title "Executing Rolling Deployment"
-          mod_rollout
+      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+        debug "Unable to do rolling deployment with podman. Skipping..."
+      else
+        title "Pulling latest container images"
+        pull_docker_images
+        if [ "$IMAGE_CHANGED" == true ]
+          then
+            title "Executing Rolling Deployment"
+            mod_rollout
+        fi
       fi
 
       # Sometimes containers won't start correctly at first, but will upon a retry
       maxRetries=2
       for i in $( seq 1 $maxRetries ); do
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          title "Pulling latest container images"
+          podman_remove
+          podman_pull_images
+        fi
         mod_start || sleep 5 # Wait before going on to health checks, they should handle triggering retries if mod_start errors
-        unhealthy_services=$(compose_client ps -a --format json | \
-          jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | \
-          xargs -r printf "%s;")
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          unhealthy_services=$(for service in $(podman ps -a --format json | jq -r .[].Names | grep '"' | cut -d '"' -f2); do podman inspect $service --format json | jq -r '.[] | select(.State.Health.Status == "unhealthy" or (.State.Status != "running" and .State.ExitCode != 0) or .State.Status == "created") | .Name' | xargs -r printf "%s;"; done)
+        else
+          unhealthy_services=$(compose_client ps -a --format json | \
+            jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | \
+            xargs -r printf "%s;")
+        fi
         if [[ "${unhealthy_services}" == "" ]]; then break; fi
         info "Detected unhealthy services: ${unhealthy_services}"
         if [[ $i -ge $maxRetries ]]; then

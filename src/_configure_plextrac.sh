@@ -187,9 +187,13 @@ function create_volume_directories() {
   if [ "$CONTAINER_RUNTIME" != "podman" ]; then
     debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
   else
-    stat "${PLEXTRAC_BACKUP_PATH}/couchbase" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/couchbase"
+    stat "${PLEXTRAC_BACKUP_PATH}/couchbase" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/couchase"
     stat "${PLEXTRAC_BACKUP_PATH}/postgres" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/postgres"
     stat "${PLEXTRAC_BACKUP_PATH}/uploads" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/uploads"
+    stat "${PLEXTRAC_HOME}/volumes" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes"
+    stat "${PLEXTRAC_HOME}/volumes/postgres-initdb" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/postgres-initdb"
+    stat "${PLEXTRAC_HOME}/volumes/redis" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/redis"
+    stat "${PLEXTRAC_HOME}/volumes/datalake-maintainer-keys/couchbase" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/datalake-maintainer-keys"
   fi
   info "Validating directories for bind mounts"
   log "Done."
