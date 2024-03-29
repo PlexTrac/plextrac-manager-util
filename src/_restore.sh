@@ -24,12 +24,10 @@ function restore_doUploadsRestore() {
 
   if get_user_approval; then
     log "Restoring from $latestBackup"
-    local cmd='compose_client -T'
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      local cmd='podman'
       cat $latestBackup | podman cp - plextracapi:/usr/src/plextrac-api
     else
-      debug "`cat $latestBackup | $cmd run --workdir /usr/src/plextrac-api --rm --entrypoint='' \
+      debug "`cat $latestBackup | compose_client run -T --workdir /usr/src/plextrac-api --rm --entrypoint='' \
       $coreBackendComposeService tar -xzf -`"
     fi
     log "Done"
