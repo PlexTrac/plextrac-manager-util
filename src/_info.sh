@@ -115,10 +115,18 @@ function _getServiceContainerVersion() {
         version=`$cmd $couchbaseComposeService couchbase-cli --version`
         ;;
       "$postgresComposeService")
-        version=$(docker image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}')
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          version=$(docker image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}' 2>/dev/null || echo '')
+        else
+          version=$(docker image inspect postgres:14-alpine --format '{{range $index, $value := .Config.Env}}{{$value}}{{"\n"}}{{end}}' | grep PG_VERSION | cut -d '=' -f2 || echo '')
+        fi
         ;;
       "redis")
-        version=$(docker image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}')
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          version=$(docker image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}')
+        else
+          version=$(docker image inspect $imageId --format '{{range $index, $value := .Config.Env}}{{$value}}{{"\n"}}{{end}}' | grep REDIS_VERSION | cut -d '=' -f2 || echo '')
+        fi
         ;;
       *)
         version=$(docker images $imageId | awk 'NR != 1 {print $3}')
