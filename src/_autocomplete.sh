@@ -1,8 +1,9 @@
 function mod_autocomplete() {
   info "Configuring plextrac CLI autocomplete..."
-  if [ ! -f "${PLEXTRAC_HOME}/.bash_completion.d" ]; then
+  shelltype=$(echo $SHELL | rev | cut -d '/' -f1 | rev)
+  if [ ! -f "${PLEXTRAC_HOME}/.cli_completion.d" ]; then
     debug "Creating autocomplete directory"
-    mkdir -p "${PLEXTRAC_HOME}/.bash_completion.d"
+    mkdir -p "${PLEXTRAC_HOME}/.cli_completion.d"
   fi
   if [ -f "${PLEXTRAC_HOME}/.local/bin/plextrac" ]; then
     command_list="$(grep -E "function mod" ${PLEXTRAC_HOME}/.local/bin/plextrac | cut -d ' ' -f2 | cut -d '_' -f2 | cut -d '(' -f1 | grep -v etl)"
@@ -14,20 +15,20 @@ function mod_autocomplete() {
 }
 complete -F _plextrac plextrac"
 
-    bashrc_content='
-if [ -d ~/.bash_completion.d ]; then
-  for ac in ~/.bash_completion.d/*; do
+    shellrc_content='
+if [ -d ~/.cli_completion.d ]; then
+  for ac in ~/.cli_completion.d/*; do
     if [ -f "$ac" ]; then
       . "$ac"
     fi
   done
 fi
 unset ac'
-    debug "`echo \"${plextrac_compgen}\" > ${PLEXTRAC_HOME}/.bash_completion.d/plextrac`"
-    if grep -q ".bash_completion.d" "${PLEXTRAC_HOME}/.bashrc"; then
-      debug "bash_completion.d already sourced in ${PLEXTRAC_HOME}/.bashrc"
+    debug "`echo \"${plextrac_compgen}\" > ${PLEXTRAC_HOME}/.cli_completion.d/plextrac`"
+    if grep -q ".cli_completion.d" "${PLEXTRAC_HOME}/.${shelltype}rc"; then
+      debug "bash_completion.d already sourced in ${PLEXTRAC_HOME}/.${shelltype}rc"
     else
-      debug "`echo "${bashrc_content}" >> "${PLEXTRAC_HOME}/.bashrc"`"
+      debug "`echo "${shellrc_content}" >> "${PLEXTRAC_HOME}/.${shelltype}rc"`"
     fi
   else
     error "plextrac CLI not found in ${PLEXTRAC_HOME}/.local/bin/plextrac"
