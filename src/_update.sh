@@ -59,7 +59,7 @@ function mod_update() {
                   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
                     unhealthy_services=$(for service in $(podman ps -a --format json | jq -r .[].Names | grep '"' | cut -d '"' -f2); do podman inspect $service --format json | jq -r '.[] | select(.State.Health.Status == "unhealthy" or (.State.Status != "running" and .State.ExitCode != 0) or .State.Status == "created") | .Name' | xargs -r printf "%s;"; done)
                   else
-                    unhealthy_services=$(compose_client ps -a --format json | jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" not (has("migrations")) | .Service' | xargs -r printf "%s;")
+                    unhealthy_services=$(compose_client ps -a --format json | jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | xargs -r printf "%s;")
                   fi
                   if [[ "${unhealthy_services}" == "" ]]; then break; fi
                   info "Detected unhealthy services: ${unhealthy_services}"
