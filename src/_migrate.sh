@@ -13,7 +13,8 @@
 # Usage:
 #   plextrac migrate [-y] [--plextrac-home ...]
 
-function mod_migrate() {
+function deprecated_migrate() {
+  die "This module is deprecated and is no longer functional"
   title "Migrating Existing Instance"
   docker_createInitialComposeOverrideFile
 
