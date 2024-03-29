@@ -7,34 +7,41 @@ VERSION=0.6.0
 ## Podman Global Declaration Variable
 declare -A svcValues
 
-export POSTGRES_HOST_AUTH_METHOD=scram-sha-256
-export POSTGRES_INITDB_ARGS="--auth-local=scram-sha-256 --auth-host=scram-sha-256"
-export PG_MIGRATE_PATH=/usr/src/plextrac-api
-export PGDATA=/var/lib/postgresql/data/pgdata
+export POSTGRES_INITDB_ARGS='--auth-local=scram-sha-256 --auth-host=scram-sha-256'
 
 databaseNames=("plextracdb" "postgres")
 serviceNames=("plextracdb" "postgres" "redis" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
+#Defaults
 svcValues[network]="--network=plextrac"
 svcValues[env-file]="--env-file /opt/plextrac/.env"
+#Couchbase
 svcValues[cb-volumes]="-v dbdata:/opt/couchbase/var:Z,U -v couchbase-backups:/backups:Z,U"
 svcValues[cb-ports]="-p 127.0.0.1:8091-8094:8091-8094"
 svcValues[cb-image]="docker.io/plextrac/plextracdb:7.2.0"
-svcValues[pg-volumes]="-v postgres-initdb:/docker-entrypoint-initdb.d:Z,U -v postgres-data:/var/lib/postgresql/data -v postgres-backups:/backups:Z,U"
+#Postgres
+svcValues[pg-volumes]="-v postgres-initdb:/docker-entrypoint-initdb.d -v postgres-data:/var/lib/postgresql/data -v postgres-backups:/backups:Z"
 svcValues[pg-ports]="-p 127.0.0.1::5432"
-svcValues[pg-healthcheck]='--health-cmd=["pg_isready","-U","postgres"]'
+svcValues[pg-healthcheck]='--health-cmd=["pg_isready","-U","internalonly"]'
 svcValues[pg-image]="docker.io/postgres:14-alpine"
-svcValues[pg-env-vars]="-e 'POSTGRES_HOST_AUTH_METHOD' -e 'POSTGRES_INITDB_ARGS' -e 'PG_MIGRATE_PATH' -e 'PGDATA'"
-svcValues[api-volumes]="-v uploads:/usr/src/plextrac-api/uploads:Z,U -v datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp -v localesOverride:/usr/src/plextrac-api/localesOverride:rw"
+svcValues[pg-env-vars]="-e 'POSTGRES_HOST_AUTH_METHOD=scram-sha-256' -e 'PG_MIGRATE_PATH=/usr/src/plextrac-api' -e 'PGDATA=/var/lib/postgresql/data/pgdata'"
+#API
+svcValues[api-volumes]="-v uploads:/usr/src/plextrac-api/uploads:Z,U -v localesOverride:/usr/src/plextrac-api/localesOverride:rw"
 svcValues[api-healthcheck]='--health-cmd=["wget","-q","-O-","http://127.0.0.1:4350/api/v2/health/live"]'
+#Redis
 svcValues[redis-volumes]="-v redis:/etc/redis:rw"
 svcValues[redis-image]="docker.io/redis:6.2-alpine"
+svcValues[redis-healthcheck]='--health-cmd=["redis-cli","--raw","incr","ping"]'
+#Notification engine/sender
 svcValues[notification-engine-entrypoint]='--entrypoint ["npm","run","start:notification-engine"]'
 svcValues[notification-engine-healthcheck]='--health-cmd=["npm","run","healthcheck:notification-engine","readiness","10","--","--no-update-notifier"]'
 svcValues[notification-sender-entrypoint]='--entrypoint ["npm","run","start:notification-sender"]'
 svcValues[notification-sender-healthcheck]='--health-cmd=["npm","run","healthcheck:notification-sender","readiness","10","--","--no-update-notifier"]'
+#Contextual scoring service
 svcValues[contextual-scoring-service-entrypoint]='--entrypoint ["npm","run","start:contextual-scoring-service"]'
 svcValues[contextual-scoring-service-healthcheck]='--health-cmd=["npm","run","healthcheck:contextual-scoring-service","liveness","10","--","--no-update-notifier"]'
-svcValues[migrations-volumes]="-v uploads:/usr/src/plextrac-api/uploads:rw"
+#Migrations
+svcValues[migrations-volumes]="--volumes-from=plextracapi"
+#Nginx
 svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw"
 svcValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
 svcValues[plextracnginx-healthcheck]='--health-cmd=["echo","GET","/","|","openssl","s_client","-quiet","-connect","127.0.0.1:443"]'
@@ -361,7 +368,9 @@ function mod_configure() {
     deploy_volume_contents_postgres
   elif [ "$CONTAINER_RUNTIME" == "podman" ]; then
     podman_setup
+    deploy_volume_contents_postgres
   fi
+  mod_autocomplete
 }
 
 function mod_start() {

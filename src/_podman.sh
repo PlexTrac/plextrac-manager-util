@@ -11,7 +11,6 @@ function podman_setup() {
   declare -A pt_volumes
   pt_volumes["postgres-initdb"]="${PLEXTRAC_HOME:-.}/volumes/postgres-initdb"
   pt_volumes["redis"]="${PLEXTRAC_HOME:-.}/volumes/redis"
-  pt_volumes["datalake-maintainer-keys"]="${PLEXTRAC_HOME:-.}/volumes/datalake-maintainer-keys"
   pt_volumes["couchbase-backups"]="${PLEXTRAC_BACKUP_PATH}/couchbase"
   pt_volumes["postgres-backups"]="${PLEXTRAC_BACKUP_PATH}/postgres"
   for volume in "${!pt_volumes[@]}"; do
@@ -26,10 +25,10 @@ function podman_setup() {
   #####
   # Placeholder for right now. These ENVs may need to be set in the .env file if we are using podman.
   #####
-  #POSTGRES_HOST_AUTH_METHOD=scram-sha-256
-  #POSTGRES_INITDB_ARGS="--auth-local=scram-sha-256 --auth-host=scram-sha-256"
-  #PG_MIGRATE_PATH=/usr/src/plextrac-api
-  #PGDATA: /var/lib/postgresql/data/pgdata
+  # POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+  # POSTGRES_INITDB_ARGS="--auth-local=scram-sha-256 --auth-host=scram-sha-256"
+  # PG_MIGRATE_PATH=/usr/src/plextrac-api
+  # PGDATA=/var/lib/postgresql/data/pgdata
 }
 
 function plextrac_install_podman() {
@@ -47,18 +46,18 @@ function plextrac_install_podman() {
   # Check if DB running first, then start it.
   debug "Handling Databases..."
   for database in "${databaseNames[@]}"; do
-    debug "Checking $database"
+    info "Checking $database"
     if container_client container exists "$database"; then
       debug "$database already exists"
       # if database exists but isn't running
       if [ "$(container_client container inspect --format '{{.State.Status}}' "$database")" != "running" ]; then
-        debug "Starting $database"
+        info "Starting $database"
         container_client start "$database" 1>/dev/null
       else
-        debug "$database is already running"
+        info "$database is already running"
       fi
     else
-      debug "Container doesn't exist. Creating $database"
+      info "Container doesn't exist. Creating $database"
       if [ "$database" == "plextracdb" ]; then
         local volumes=${serviceValues[cb-volumes]}
         local ports="${serviceValues[cb-ports]}"
@@ -147,14 +146,14 @@ function plextrac_start_podman() {
     local env_vars=""
     if container_client container exists "$service"; then
       if [ "$(container_client container inspect --format '{{.State.Status}}' "$service")" != "running" ]; then
-        debug "Starting $service"
+        info "Starting $service"
         container_client start "$service" 1>/dev/null
       else
-        debug "$service is already running"
+        info "$service is already running"
       fi
     else
       if [ "$service" == "plextracdb" ]; then
-        local volumes=${serviceValues[cb-volumes]}
+        local volumes="${serviceValues[cb-volumes]}"
         local ports="${serviceValues[cb-ports]}"
         local healthcheck="${serviceValues[cb-healthcheck]}"
         local image="${serviceValues[cb-image]}"
@@ -172,6 +171,7 @@ function plextrac_start_podman() {
         local volumes="${serviceValues[redis-volumes]}"
         local image="${serviceValues[redis-image]}"
         local entrypoint="${serviceValues[redis-entrypoint]}"
+        local healthcheck="${serviceValues[redis-healthcheck]}"
       elif [ "$service" == "notification-engine" ]; then
         local entrypoint="${serviceValues[notification-engine-entrypoint]}"
         local healthcheck="${serviceValues[notification-engine-healthcheck]}"
@@ -190,7 +190,7 @@ function plextrac_start_podman() {
         local image="${serviceValues[plextracnginx-image]}"
         local healthcheck="${serviceValues[plextracnginx-healthcheck]}"
       fi
-      debug "Creating $service"
+      info "Creating $service"
       # This specific if loop is because Bash escaping and the specific need for the podman flag --entrypoint were being a massive pain in figuring out. After hours of effort, simply making an if statement here and calling podman directly fixes the escaping issues
       if [ "$service" == "migrations" ]; then
         podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:migrate && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no $healthcheck \

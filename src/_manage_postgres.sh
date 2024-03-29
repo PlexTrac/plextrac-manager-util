@@ -100,11 +100,11 @@ function postgres_metrics_validation() {
   if [ "${PG_METRICS_USER:-}" != "" ]; then
     info "Checking user $PG_METRICS_USER can access postgres metrics"
     if [ "$CONTAINER_RUNTIME" != "podman" ]; then
-      local container_runtime="compose_client exec -T"
+      local container_runtime="compose_client exec -T -u 1337"
     else
       local container_runtime="container_client exec"
     fi
-    debug "`$container_runtime -u 1337 -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+    debug "`$container_runtime -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
         psql -a -v -U internalonly -d core 2>&1 <<- EOF 
 CREATE OR REPLACE FUNCTION __tmp_create_user() returns void as \\$\\$
 BEGIN
