@@ -43,11 +43,37 @@ The following system packages are used by and install by this application:
 | docker-compose-plugin | ~v2.24 |
 | podman | >=v4.6 (RHEL 9 only) |
 
-### Podman support
+## Podman support
 
-We've expanded the capabilities to support podman in specific  circumstances.
+We've expanded the capabilities to support podman in specific circumstances.
 
 *OS:* RHEL 9+
 *Podman Compose:* No (currently)
 
-*Note: the module for podman was written with RHEL 9 specifically in mind. It is not officially supported at this time to use the container runtime set to Podman on Debian, Ubuntu, or CentOS.
+> Note: the module for podman was written with RHEL 9 specifically in mind. It is not officially supported at this time to use the container runtime set to Podman on Debian, Ubuntu, or CentOS.
+
+---
+
+### Podman Troubleshooting
+
+Depending on your configuration, you may need to solve the following issues:
+
+#### *I'm unable to bind to port 443 with unprivileged user*
+
+- Add value to /etc/sysctl.conf and reload daemon
+> `net.ipv4.ip_unprivileged_port_start=443`
+> `sysctl --system`
+
+#### *I'm using a SSH solution that doesn't directly create a user.slice with a login*
+
+- Enable service persistance after logout
+> `loginctl enable-linger plextrac`
+
+#### *I can't execute out of `/tmp` folder*
+- Download PlexTrac Manager Utility with wget using this command:
+> `wget -O ~/plextrac -q https://github.com/PlexTrac/plextrac-manager-util/releases/latest/download/plextrac && sudo chmod a+x ~/plextrac && sudo bash ~/plextrac initialize -v -c podman`
+
+#### My containers don't start after rebooting the host VM
+
+- For setting up container persistence: https://www.redhat.com/sysadmin/container-systemd-persist-reboot
+- The recommended method to start the PlexTrac containers is `plextrac start` after a reboot of the host OS
