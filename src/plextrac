@@ -43,7 +43,6 @@ svcValues[contextual-scoring-service-healthcheck]='--health-cmd=["npm","run","he
 svcValues[migrations-volumes]="--volumes-from=plextracapi"
 #Nginx
 svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw"
-svcValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
 svcValues[plextracnginx-healthcheck]='--health-cmd=["echo","GET","/","|","openssl","s_client","-quiet","-connect","127.0.0.1:443"]'
 
 trap 'cleanup $?' SIGINT ERR EXIT

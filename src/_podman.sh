@@ -38,7 +38,11 @@ function plextrac_install_podman() {
   serviceValues[cb-healthcheck]='--health-cmd=["wget","--user='$CB_ADMIN_USER'","--password='$CB_ADMIN_PASS'","-qO-","http://plextracdb:8091/pools/default/buckets/reportMe"]'
   serviceValues[api-image]="docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
   serviceValues[plextracnginx-image]="docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
-
+  if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
+    serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
+  else
+    serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
+  fi
   title "Installing PlexTrac Instance"
   requires_user_plextrac
   mod_configure
@@ -130,6 +134,11 @@ function plextrac_start_podman() {
   serviceValues[cb-healthcheck]='--health-cmd=["wget","--user='$CB_ADMIN_USER'","--password='$CB_ADMIN_PASS'","-qO-","http://plextracdb:8091/pools/default/buckets/reportMe"]'
   serviceValues[api-image]="docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
   serviceValues[plextracnginx-image]="docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
+  if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
+    serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
+  else
+    serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
+  fi
   
   title "Starting PlexTrac..."
   requires_user_plextrac
@@ -193,8 +202,9 @@ function plextrac_start_podman() {
       info "Creating $service"
       # This specific if loop is because Bash escaping and the specific need for the podman flag --entrypoint were being a massive pain in figuring out. After hours of effort, simply making an if statement here and calling podman directly fixes the escaping issues
       if [ "$service" == "migrations" ]; then
+        debug "Running migrations"
         podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:migrate && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no $healthcheck \
-        $volumes --name=${service} $deploy ${serviceValues[network]} $ports -d $image 1>/dev/null
+        $volumes:z --name=${service} $deploy ${serviceValues[network]} $ports -d $image 1>/dev/null
         continue
       fi
       container_client run ${serviceValues[env-file]} $env_vars $entrypoint $restart_policy $healthcheck \

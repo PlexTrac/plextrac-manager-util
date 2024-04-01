@@ -1,11 +1,13 @@
 # Build functionality for certificate renewal / injection into NGINX
 
 function mod_reload-cert() {
-  declare -A nginxValues
-  nginxValues[env-file]="--env-file /opt/plextrac/.env"
-  nginxValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw"
-  nginxValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
-  nginxValues[plextracnginx-image]="docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
+  var=$(declare -p "$1")
+  eval "declare -A serviceValues="${var#*=}
+  if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
+    serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
+  else
+    serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
+  fi
 
   title "PlexTrac SSL Certificate Renewal"
   # Check if using LETS_ENCRYPT
@@ -20,8 +22,8 @@ function mod_reload-cert() {
       info "Recreating plextrac-plextracnginx-1"
       if [ "$CONTAINER_RUNTIME" == "podman" ]; then
         podman rm -f plextracnginx; podman volume rm letsencrypt
-        podman run ${nginxValues[env-file]} --restart=always \
-        ${nginxValues[plextracnginx-volumes]} --name=plextracnginx --network=plextrac ${nginxValues[plextracnginx-ports]} -d ${nginxValues[plextracnginx-image]} 1>/dev/null
+        podman run ${serviceValues[env-file]} --restart=always \
+        ${serviceValues[plextracnginx-volumes]} --name=plextracnginx --network=plextrac ${serviceValues[plextracnginx-ports]} -d ${serviceValues[plextracnginx-image]} 1>/dev/null
       else
         compose_client up -d --force-recreate plextracnginx
       fi
@@ -37,8 +39,8 @@ function mod_reload-cert() {
       info "Reloading certificates..."
       if [ "$CONTAINER_RUNTIME" == "podman" ]; then
         podman rm -f plextracnginx; podman volume rm letsencrypt
-        podman run ${nginxValues[env-file]} --restart=always \
-        ${nginxValues[plextracnginx-volumes]} --name=plextracnginx --network=plextrac ${nginxValues[plextracnginx-ports]} -d ${nginxValues[plextracnginx-image]} 1>/dev/null
+        podman run ${serviceValues[env-file]} --restart=always \
+        ${serviceValues[plextracnginx-volumes]} --name=plextracnginx --network=plextrac ${serviceValues[plextracnginx-ports]} -d ${serviceValues[plextracnginx-image]} 1>/dev/null
       else
         compose_client up -d --force-recreate plextracnginx
       fi
