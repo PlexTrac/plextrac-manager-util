@@ -61,17 +61,18 @@ Depending on your configuration, you may need to solve the following issues:
 #### *I'm unable to bind to port 443 with unprivileged user*
 
 - Add value to /etc/sysctl.conf and reload daemon
-> `net.ipv4.ip_unprivileged_port_start=443`
-> `sysctl --system`
+    > `net.ipv4.ip_unprivileged_port_start=443`
+    > `sysctl --system`
 
 #### *I'm using a SSH solution that doesn't directly create a user.slice with a login*
 
 - Enable service persistance after logout
-> `loginctl enable-linger plextrac`
+    > `loginctl enable-linger plextrac`
 
 #### *I can't execute out of `/tmp` folder*
+
 - Download PlexTrac Manager Utility with wget using this command:
-> `wget -O ~/plextrac -q https://github.com/PlexTrac/plextrac-manager-util/releases/latest/download/plextrac && sudo chmod a+x ~/plextrac && sudo bash ~/plextrac initialize -v -c podman`
+    > `wget -O ~/plextrac -q https://github.com/PlexTrac/plextrac-manager-util/releases/latest/download/plextrac && sudo chmod a+x ~/plextrac && sudo bash ~/plextrac initialize -v -c podman`
 
 #### My containers don't start after rebooting the host VM
 
