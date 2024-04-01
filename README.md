@@ -41,6 +41,7 @@ The following system packages are used by and install by this application:
 | docker-ce-cli | >=v26.0.0 |
 | containerd.io | >=1.6.28 |
 | docker-compose-plugin | ~v2.24 |
+| podman | >=v4.6 (RHEL 9 only) |
 
 ### Podman support
 
