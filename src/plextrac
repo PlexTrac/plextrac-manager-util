@@ -262,6 +262,7 @@ function mod_initialize() {
 
 function mod_install() {
   title "Installing PlexTrac Instance"
+  requires_user_plextrac
   mod_configure
   info "Starting Databases before other services"
   compose_client up -d "$couchbaseComposeService" "$postgresComposeService"
@@ -300,7 +301,6 @@ function mod_install() {
 
 function mod_configure() {
   title "Setting up base PlexTrac configuration..."
-  # if updates to the nginx config are needed, root level is required
   updateNginxConfig
   requires_user_plextrac
   generate_default_config

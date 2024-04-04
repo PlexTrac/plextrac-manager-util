@@ -187,7 +187,6 @@ function updateNginxConfig() {
   elif test -f $targetNginxServerFile; then
     os_check
     info "Nginx server config update needed"
-    info "Please run "plextrac configure" as root to update the nginx configuration files"
     info "Updating $targetNginxServerFile"
     echo "$decodedNginxServerBlock" > $targetNginxServerFile || error "Unable to update the nginx config file"
     compose_client restart plextracnginx  || log "Unable to restart the nginx container"
@@ -202,11 +201,7 @@ function updateNginxConfig() {
   elif test -f $targetNginxLocationFile; then
     os_check
     info "Nginx server config update needed"
-    info "Please run "plextrac configure" as root to update the nginx configuration files"
-    # requires_user_root
-
     info "Updating $targetNginxLocationFile"
-    #touch $targetNginxLocationFile
     echo "$decodedNginxLocationBlock" > $targetNginxLocationFile || error "Unable to update the nginx config file"
     compose_client restart plextracnginx  || log "Unable to restart the nginx container"
   else
