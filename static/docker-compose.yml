@@ -74,7 +74,7 @@ services:
       PG_TENANTS_WRITE_MODE: ${PG_TENANTS_WRITE_MODE:-couchbase_only}
       PG_TENANTS_READ_MODE: ${PG_TENANTS_READ_MODE:-couchbase_only}
       CKEDITOR_MIGRATE: ${CKEDITOR_MIGRATE}
-      CKEDITOR_SERVER_CONFIG: ${CKEDITOR_SERVER_CONFIG}
+      CKEDITOR_SERVER_CONFIG: ${CKEDITOR_SERVER_CONFIG:-}
       PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
       PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
       PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
@@ -347,6 +347,17 @@ services:
       REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
       ENVIRONMENTS_MANAGEMENT_SECRET_KEY: ${CKEDITOR_ENVIRONMENT_SECRET_KEY}
       LICENSE_KEY: ${CKEDITOR_SERVER_LICENSE_KEY}
+      
+  ckeditor-migration:
+    image: registry.dorf.plextrac.ninja/cicd-app-images/backend:${BACKEND_IMAGE:-$UPGRADE_STRATEGY}
+    deploy:
+      replicas: 0
+    depends_on:
+      - ckeditor-backend
+    entrypoint: npm run
+    command: "ckeditor:environment:migration"
+    env_file:
+    - .env
 
 volumes:
   dbdata: {}

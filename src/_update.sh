@@ -22,10 +22,12 @@ function mod_update() {
   fi
   info "Updating PlexTrac instance to latest release..."
   # Check upstream tags avaialble to download
+  mod_configure
   version_check
   if $contiguous_update
     then
       debug "Proceeding with contiguous update"
+      getCKEditorRTCConfig
       mod_configure
       upgrade_time_estimate
       for i in ${upgrade_path[@]}
@@ -33,7 +35,6 @@ function mod_update() {
             if [ "$i" != "$running_ver" ]
               then
                 debug "Upgrading to $i"
-                mod_configure
                 UPGRADE_STRATEGY="$i"
                 debug "Upgrade Strategy is $UPGRADE_STRATEGY"
                 title "Pulling latest container images"
@@ -65,6 +66,7 @@ function mod_update() {
       title "Update complete"
   else
       debug "Proceeding with normal update"
+      getCKEditorRTCConfig
       mod_configure
       title "Pulling latest container images"
       pull_docker_images

@@ -50,10 +50,10 @@ PLEXTRAC_PARSER_URL=https://plextracparser:4443
 UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
 CKEDITOR_ENVIRONMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-`generateSecret`}
+CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}
 
 `generate_default_couchbase_env | setDefaultSecrets`
 `generate_default_postgres_env | setDefaultSecrets`
-`getCKEditorRTCConfig`
 "
 
   # Merge the generated env with the local vars
@@ -102,20 +102,6 @@ function setDefaultSecrets() {
     #echo "$var=${var:-$val}"
   done < "${1:-/dev/stdin}"
   export IFS=$OLDIFS
-}
-
-function getCKEditorRTCConfig() {
-  # parses output and saves the result of the json meta data
-  # the last line, which only contains the JSON data, should be used
-  CKEDITOR_JSON=$(compose_client exec plextracapi npm run ckeditor:environment:migration --if-present | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
-
-  # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
-  if [ $(echo $CKEDITOR_JSON | jq -e ".[]|any(\".api_secret\")") ]; then
-    CKEDITOR_SERVER_CONFIG=`echo $CKEDITOR_JSON | base64 -w 0`
-    echo -n "CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG}"
-  else
-    debug "ERROR: Response did not contain JSON with expected key"
-  fi
 }
 
 function login_dockerhub() {
@@ -178,6 +164,44 @@ function updateComposeConfig() {
   log "Done."
 }
 
+function validateComposeConfig() {
+  info "Validating Docker Compose Config"
+  composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
+  if [ ${configValidationFailed:-0} -ne 0 ]; then
+    error "Invalid Docker Compose Configuration"
+    log "Please check for valid syntax in override files"
+    debug "$composeConfigCheck"
+    return 1
+  else
+    log "Docker Compose Syntax Valid"
+  fi
+}
+
+function create_volume_directories() {
+  title "Create directories for bind mounts"
+  debug "Ensuring directories exist for Docker Volumes..."
+  debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
+  info "Directories for bind mounts"
+  log "Done."
+}
+
+function getCKEditorRTCConfig() {
+  # parses output and saves the result of the json meta data
+  # the last line, which only contains the JSON data, should be used
+  CKEDITOR_JSON=$(compose_client run --name ckeditor-migration --no-deps  ckeditor-migration | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
+  docker rm -f ckeditor-migration &>/dev/null
+
+  # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
+  if [ $(echo $CKEDITOR_JSON | jq -e ".[]|any(\".api_secret\")") ]; then
+    BASE64_CKEDITOR=$(echo "$CKEDITOR_JSON" | base64 -w 0)
+    CKEDITOR_SERVER_CONFIG="$BASE64_CKEDITOR"
+    debug "Setting CKEDITOR_SERVER_CONFIG"
+    sed -i "s/CKEDITOR_SERVER_CONFIG=.*/CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG}/" ${PLEXTRAC_HOME}/.env
+  else
+    debug "ERROR: Response did not contain JSON with expected key"
+  fi
+}
+
 function updateNginxConfig() {
   title "Updating Nginx Config Files"
   targetNginxServerFile="${PLEXTRAC_HOME}/volumes/nginx_conf/mod_ckeditor_server_block.conf"
@@ -216,25 +240,3 @@ function updateNginxConfig() {
     log "Done."
   fi
 }
-
-function validateComposeConfig() {
-  info "Validating Docker Compose Config"
-  composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
-  if [ ${configValidationFailed:-0} -ne 0 ]; then
-    error "Invalid Docker Compose Configuration"
-    log "Please check for valid syntax in override files"
-    debug "$composeConfigCheck"
-    return 1
-  else
-    log "Docker Compose Syntax Valid"
-  fi
-}
-
-function create_volume_directories() {
-  title "Create directories for bind mounts"
-  debug "Ensuring directories exist for Docker Volumes..."
-  debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
-  info "Directories for bind mounts"
-  log "Done."
-}
-
