@@ -27,14 +27,14 @@ function mod_update() {
   if $contiguous_update
     then
       debug "Proceeding with contiguous update"
-      getCKEditorRTCConfig
-      mod_configure
       upgrade_time_estimate
       for i in ${upgrade_path[@]}
          do
             if [ "$i" != "$running_ver" ]
               then
                 debug "Upgrading to $i"
+                getCKEditorRTCConfig
+                mod_configure
                 UPGRADE_STRATEGY="$i"
                 debug "Upgrade Strategy is $UPGRADE_STRATEGY"
                 title "Pulling latest container images"
