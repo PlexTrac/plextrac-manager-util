@@ -1,7 +1,9 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.5.6
+
+VERSION=0.5.10
+
 
 trap 'cleanup $?' SIGINT ERR EXIT
 

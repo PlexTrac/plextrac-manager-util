@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   plextracapi:
     deploy:
@@ -297,11 +295,6 @@ services:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     deploy:
       replicas: 1
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 5
-        window: 120s
     depends_on:
     - postgres
     - redis
