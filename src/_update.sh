@@ -181,13 +181,3 @@ function selfupdate_doUpgrade() {
   eval "SKIP_SELF_UPGRADE=1 $ProgName $_INITIAL_CMD_ARGS"
   exit $?
 }
-
-function mod_update-util() {
-  info "Checking for updates to the PlexTrac Management Utility"
-    if selfupdate_checkForNewRelease; then
-      event__log_activity "update:upgrade-utility" "${releaseInfo}"
-      selfupdate_doUpgrade
-      die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
-      exit 1 # just in case, previous line should already exit
-    fi
-}
