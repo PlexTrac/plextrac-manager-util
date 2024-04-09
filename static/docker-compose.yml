@@ -349,7 +349,7 @@ services:
       LICENSE_KEY: ${CKEDITOR_SERVER_LICENSE_KEY}
       
   ckeditor-migration:
-    image: registry.dorf.plextrac.ninja/cicd-app-images/backend:${BACKEND_IMAGE:-$UPGRADE_STRATEGY}
+    image: "plextrac/plextracapi:${BACKEND_IMAGE:-$UPGRADE_STRATEGY}"
     deploy:
       replicas: 0
     depends_on:
