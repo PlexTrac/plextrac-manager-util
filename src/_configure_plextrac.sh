@@ -220,7 +220,7 @@ function updateNginxConfig() {
     info "Nginx server config update needed"
     info "Updating $targetNginxServerFile"
     echo "$decodedNginxServerBlock" > $targetNginxServerFile || error "Unable to update the nginx config file"
-    compose_client restart plextracnginx  || log "Unable to restart the nginx container"
+    NGINX_CHANGES=true
   else
     info "Nginx server config file does not yet exist, skipping"
   fi
@@ -234,9 +234,16 @@ function updateNginxConfig() {
     info "Nginx server config update needed"
     info "Updating $targetNginxLocationFile"
     echo "$decodedNginxLocationBlock" > $targetNginxLocationFile || error "Unable to update the nginx config file"
-    compose_client restart plextracnginx  || log "Unable to restart the nginx container"
+    NGINX_CHANGES=true
   else
     info "Nginx server config file does not yet exist, skipping"
-    log "Done."
   fi
+  if [ "$NGINX_CHANGES" = true ]; then
+    event__log_activity "config:update-nginx" "Nginx config files updated"
+    debug "Restarting NGINX to load new config"
+    compose_client restart plextracnginx  || log "Unable to restart the nginx container"
+  else
+    debug "No NGINX conf changes detected"
+  fi
+  log "Done."
 }
