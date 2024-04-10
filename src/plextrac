@@ -303,8 +303,8 @@ function mod_install() {
 
 function mod_configure() {
   title "Setting up base PlexTrac configuration..."
-  updateNginxConfig
   requires_user_plextrac
+  updateNginxConfig
   generate_default_config
   login_dockerhub
   updateComposeConfig
