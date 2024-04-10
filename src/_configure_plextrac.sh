@@ -115,13 +115,21 @@ function login_dockerhub() {
   log "${GREEN}DockerHUB${RESET}: SUCCESS"
 
   if [ -n "${IMAGE_REGISTRY:-}" ]; then
-  debug "Custom Image Registry Found..."
-  debug "Attempting login"
-    if [ -z "${IMAGE_REGISTRY_PASS:-}" ]; then
-      die "ERROR: Image registry password not found, please set IMAGE_REGISTRY_PASS in the .env and re-run configuration"
-    fi
+    debug "Custom Image Registry Found..."
+    debug "Attempting login"
     if [ -z "${IMAGE_REGISTRY_USER:-}" ]; then
-      die "ERROR: Image registry username not found, please set IMAGE_REGISTRY_USER in the .env and re-run configuration"
+      debug "$IMAGE_REGISTRY username not found, continuing..."
+      local image_user=""
+    else 
+      local image_user="-u ${IMAGE_REGISTRY_USER:-}"
+    fi
+
+    if [ -z "${IMAGE_REGISTRY_PASS:-}" ]; then
+      debug "$IMAGE_REGISTRY password not found, continuing..."
+      local image_pass=""
+      docker login ${IMAGE_REGISTRY} $image_user || die "Failed to login to ${IMAGE_REGISTRY}"
+    else
+      docker login ${IMAGE_REGISTRY} $image_user --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}" || die "Failed to login to ${IMAGE_REGISTRY}"
     fi
     output="$(container_client login ${IMAGE_REGISTRY} -u ${IMAGE_REGISTRY_USER} --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}")" || die "${output}"
     debug "$output"
