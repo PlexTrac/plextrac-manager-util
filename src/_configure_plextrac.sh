@@ -208,7 +208,7 @@ function getCKEditorRTCConfig() {
 
 function updateNginxConfig() {
   if [ "${CKEDITOR_MIGRATE:-false}" = true ]; then
- 
+
     title "Updating Nginx Config Files"
     targetNginxServerFile="${PLEXTRAC_HOME}/volumes/nginx_conf/mod_ckeditor_server_block.conf"
     targetNginxLocationFile="${PLEXTRAC_HOME}/volumes/nginx_conf/mod_ckeditor_location_block.conf"
@@ -218,6 +218,8 @@ function updateNginxConfig() {
 
   # TODO: these should be combined into a single function or something DRY
   # Check if the nginx server file needs updated
+  # Default NGINX_CHANGES=false
+    NGINX_CHANGES=false
     info "Checking for pending changes to mod_ckeditor_server_block.conf"
     if [ $(echo "$decodedNginxServerBlock" | md5sum | awk '{print $1}') == $(md5sum $targetNginxServerFile | awk '{print $1}') ]; then
       debug "Nginx server block file content matches"
