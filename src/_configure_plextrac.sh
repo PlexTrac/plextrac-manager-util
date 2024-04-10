@@ -127,12 +127,10 @@ function login_dockerhub() {
     if [ -z "${IMAGE_REGISTRY_PASS:-}" ]; then
       debug "$IMAGE_REGISTRY password not found, continuing..."
       local image_pass=""
-      docker login ${IMAGE_REGISTRY} $image_user || die "Failed to login to ${IMAGE_REGISTRY}"
+      container_client login ${IMAGE_REGISTRY} $image_user || die "Failed to login to ${IMAGE_REGISTRY}"
     else
-      docker login ${IMAGE_REGISTRY} $image_user --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}" || die "Failed to login to ${IMAGE_REGISTRY}"
+      container_client login ${IMAGE_REGISTRY} $image_user --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}" || die "Failed to login to ${IMAGE_REGISTRY}"
     fi
-    output="$(container_client login ${IMAGE_REGISTRY} -u ${IMAGE_REGISTRY_USER} --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}")" || die "${output}"
-    debug "$output"
     log "${BLUE}$IMAGE_REGISTRY${RESET}: SUCCESS"
   fi
   log "Done."
