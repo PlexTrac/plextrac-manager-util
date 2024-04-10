@@ -38,11 +38,7 @@ function mod_update() {
                 debug "Upgrade Strategy is $UPGRADE_STRATEGY"
                 title "Pulling latest container images"
                 pull_docker_images
-                if [ "$IMAGE_CHANGED" == true ]
-                  then
-                    title "Executing Rolling Deployment"
-                    mod_rollout
-                fi
+                mod_start
                 # Sometimes containers won't start correctly at first, but will upon a retry
                 maxRetries=2
                 for i in $( seq 1 $maxRetries ); do
@@ -68,11 +64,7 @@ function mod_update() {
       mod_configure
       title "Pulling latest container images"
       pull_docker_images
-      if [ "$IMAGE_CHANGED" == true ]
-        then
-          title "Executing Rolling Deployment"
-          mod_rollout
-      fi
+      mod_start
 
       # Sometimes containers won't start correctly at first, but will upon a retry
       maxRetries=2
