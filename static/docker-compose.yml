@@ -359,6 +359,9 @@ services:
     command: "ckeditor:environment:migration"
     env_file:
     - .env
+    logging:
+      driver: none
+    
 
 volumes:
   dbdata: {}
