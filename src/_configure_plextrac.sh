@@ -200,6 +200,8 @@ function create_volume_directories() {
     stat "${PLEXTRAC_HOME}/volumes" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes"
     stat "${PLEXTRAC_HOME}/volumes/postgres-initdb" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/postgres-initdb"
     stat "${PLEXTRAC_HOME}/volumes/redis" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/redis"
+    stat "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs"
+    stat "${PLEXTRAC_HOME}/volumes/nginx_logos" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_logos"
   fi
 }
 

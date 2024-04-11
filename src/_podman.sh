@@ -13,6 +13,8 @@ function podman_setup() {
   pt_volumes["redis"]="${PLEXTRAC_HOME:-.}/volumes/redis"
   pt_volumes["couchbase-backups"]="${PLEXTRAC_BACKUP_PATH}/couchbase"
   pt_volumes["postgres-backups"]="${PLEXTRAC_BACKUP_PATH}/postgres"
+  pt_volumes["nginx_ssl_certs"]="${PLEXTRAC_HOME:-.}/volumes/nginx_ssl_certs"
+  pt_volumes["nginx_logos"]="${PLEXTRAC_HOME:-.}/volumes/nginx_logos"
   for volume in "${!pt_volumes[@]}"; do
     if container_client volume exists "$volume"; then
       debug "-- Volume $volume already exists"
