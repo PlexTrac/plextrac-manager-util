@@ -216,7 +216,6 @@ function plextrac_start_podman() {
         $volumes --name=${service} $deploy ${serviceValues[network]} $ports -d $image 1>/dev/null
     fi
   done
-  ## TODO: Write bit to edit the resolver as needed / TEST THIS PLEASE
   waitTimeout=${2:-90}
   info "Waiting up to ${waitTimeout}s for application startup"
   local progressBar
