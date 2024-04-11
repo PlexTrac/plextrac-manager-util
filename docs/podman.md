@@ -44,7 +44,6 @@ Depending on your configuration, you may need to solve the following issues:
 - For setting up container persistence: https://www.redhat.com/sysadmin/container-systemd-persist-reboot
 - The recommended method to start the PlexTrac containers is `plextrac start` after a reboot of the host OS
 
-
 #### RHEL 8 Support
 
 The following will need to be done before running any PlexTrac specific commands:
@@ -58,11 +57,18 @@ The following will need to be done before running any PlexTrac specific commands
     systemd.unified_cgroup_hierarchy=1
 
     # From CLI, run:
-    grub-mkconfig -o /boot/grub/grub.cfg
+    grub2-mkconfig -o /boot/grub2/grub.cfg
     yum install netavark
     # If not already enabled, run
     yum module enable container-tools
 
+    # Install Podman
+    yum install -y podman podman-plugins
+
+    # Add value to /etc/sysctl.conf and reload daemon
+    net.ipv4.ip_unprivileged_port_start=443
+    sysctl --system
+    
     # Enabling netavark over CNI
     # As Root:
     cp /usr/share/containers/containers.conf /etc/containers/
@@ -79,8 +85,8 @@ The following will need to be done before running any PlexTrac specific commands
     [Service]
     Delegate=cpu cpuset io memory pids
     EOF
-    sudo systemctl daemon-reload
 
+    sudo systemctl daemon-reload
     reboot
     ```
 

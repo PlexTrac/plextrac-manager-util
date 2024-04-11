@@ -90,20 +90,28 @@ function _getImageForService() {
 function _getServiceContainerImageRepo() {
   service=$1
   imageId=`_getImageForService $service`
-  imageRepo=$(docker image inspect $imageId --format='{{ index .RepoTags 0 }}' 2>/dev/null | awk -F ':' '{print $1}' 2>/dev/null || echo '')
+  local runtime=docker
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local runtime=podman
+  fi
+  imageRepo=$($runtime image inspect $imageId --format='{{ index .RepoTags 0 }}' 2>/dev/null | awk -F ':' '{print $1}' 2>/dev/null || echo '')
   echo $imageRepo
 }
 
 function _getServiceContainerVersion() {
   service=$1
   imageId=`_getImageForService $service`
-  version=`docker image inspect $imageId --format='{{ index .Config.Labels "org.opencontainers.image.version" }}' 2>/dev/null || echo ''`
+  local runtime=docker
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local runtime=podman
+  fi
+  version=`$runtime image inspect $imageId --format='{{ index .Config.Labels "org.opencontainers.image.version" }}' 2>/dev/null || echo ''`
   if [ "$version" == "20.04" ]; then
     version="7.2.0"
   fi
   if [ "$version" == "" ]; then
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      local cmd='docker exec'
+      local cmd='podman exec'
     else
       local cmd='compose_client exec -T'
     fi
@@ -116,20 +124,24 @@ function _getServiceContainerVersion() {
         ;;
       "$postgresComposeService")
         if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-          version=$(docker image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}' 2>/dev/null || echo '')
+          version=$(podman image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}' 2>/dev/null || echo '')
         else
           version=$(docker image inspect postgres:14-alpine --format '{{range $index, $value := .Config.Env}}{{$value}}{{"\n"}}{{end}}' | grep PG_VERSION | cut -d '=' -f2 || echo '')
         fi
         ;;
       "redis")
         if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-          version=$(docker image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}')
+          version=$(podman image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}')
         else
           version=$(docker image inspect $imageId --format '{{range $index, $value := .Config.Env}}{{$value}}{{"\n"}}{{end}}' | grep REDIS_VERSION | cut -d '=' -f2 || echo '')
         fi
         ;;
       *)
-        version=$(docker images $imageId | awk 'NR != 1 {print $3}')
+        local runtime=docker
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          local runtime=podman
+        fi
+        version=$($runtime images $imageId | awk 'NR != 1 {print $3}')
         ;;
     esac
   fi

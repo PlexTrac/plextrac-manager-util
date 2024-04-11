@@ -253,13 +253,10 @@ function podman_pull_images() {
   service_images[plextracnginx-image]="docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
 
   info "Pulling updated container images"
-  IMAGE_PRECHECK=true
-  image_version_check
   for image in "${service_images[@]}"; do
     debug "Pulling $image"
     podman pull $image 1>/dev/null
   done
-  image_version_check
   log "Done."
 }
 
