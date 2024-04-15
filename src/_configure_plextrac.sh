@@ -51,6 +51,8 @@ UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
 CKEDITOR_ENVIRONMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-`generateSecret`}
 CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}
+CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-"docker"}
+
 
 `generate_default_couchbase_env | setDefaultSecrets`
 `generate_default_postgres_env | setDefaultSecrets`
@@ -106,25 +108,32 @@ function setDefaultSecrets() {
 
 function login_dockerhub() {
   local output
+  local default_registry="docker.io"
   info "Logging into Image Registry"
   if [ -z ${DOCKER_HUB_KEY} ]; then
     die "ERROR: Docker Hub key not found, please set DOCKER_HUB_KEY in the .env and re-run configuration"
   fi
-  output="`docker login -u ${DOCKER_HUB_USER:-plextracusers} --password-stdin 2>&1 <<< "${DOCKER_HUB_KEY}"`" || die "${output}"
+  output="`container_client login "$default_registry" -u ${DOCKER_HUB_USER:-plextracusers} --password-stdin 2>&1 <<< "${DOCKER_HUB_KEY}"`" || die "${output}"
   debug "$output"
   log "${GREEN}DockerHUB${RESET}: SUCCESS"
 
   if [ -n "${IMAGE_REGISTRY:-}" ]; then
-  debug "Custom Image Registry Found..."
-  debug "Attempting login"
-    if [ -z "${IMAGE_REGISTRY_PASS:-}" ]; then
-      die "ERROR: Image registry password not found, please set IMAGE_REGISTRY_PASS in the .env and re-run configuration"
-    fi
+    debug "Custom Image Registry Found..."
+    debug "Attempting login"
     if [ -z "${IMAGE_REGISTRY_USER:-}" ]; then
-      die "ERROR: Image registry username not found, please set IMAGE_REGISTRY_USER in the .env and re-run configuration"
+      debug "$IMAGE_REGISTRY username not found, continuing..."
+      local image_user=""
+    else 
+      local image_user="-u ${IMAGE_REGISTRY_USER:-}"
     fi
-    output="$(docker login ${IMAGE_REGISTRY} -u ${IMAGE_REGISTRY_USER} --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}")" || die "${output}"
-    debug "$output"
+
+    if [ -z "${IMAGE_REGISTRY_PASS:-}" ]; then
+      debug "$IMAGE_REGISTRY password not found, continuing..."
+      local image_pass=""
+      container_client login ${IMAGE_REGISTRY} $image_user || die "Failed to login to ${IMAGE_REGISTRY}"
+    else
+      container_client login ${IMAGE_REGISTRY} $image_user --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}" || die "Failed to login to ${IMAGE_REGISTRY}"
+    fi
     log "${BLUE}$IMAGE_REGISTRY${RESET}: SUCCESS"
   fi
   log "Done."
@@ -166,7 +175,11 @@ function updateComposeConfig() {
 
 function validateComposeConfig() {
   info "Validating Docker Compose Config"
-  composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
+  if [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
+    composeConfigCheck=$(compose_client config 2>&1) || configValidationFailed=1
+  elif [ "$CONTAINER_RUNTIME" == "docker" ]; then
+    composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
+  fi
   if [ ${configValidationFailed:-0} -ne 0 ]; then
     error "Invalid Docker Compose Configuration"
     log "Please check for valid syntax in override files"
@@ -179,10 +192,20 @@ function validateComposeConfig() {
 
 function create_volume_directories() {
   title "Create directories for bind mounts"
-  debug "Ensuring directories exist for Docker Volumes..."
-  debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
-  info "Directories for bind mounts"
-  log "Done."
+  info "Validating directories for bind mounts"
+  debug "Ensuring directories exist for Volumes..."
+  if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+    debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
+  else
+    stat "${PLEXTRAC_BACKUP_PATH}/couchbase" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/couchbase"
+    stat "${PLEXTRAC_BACKUP_PATH}/postgres" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/postgres"
+    stat "${PLEXTRAC_BACKUP_PATH}/uploads" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/uploads"
+    stat "${PLEXTRAC_HOME}/volumes" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes"
+    stat "${PLEXTRAC_HOME}/volumes/postgres-initdb" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/postgres-initdb"
+    stat "${PLEXTRAC_HOME}/volumes/redis" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/redis"
+    stat "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs"
+    stat "${PLEXTRAC_HOME}/volumes/nginx_logos" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_logos"
+  fi
 }
 
 function getCKEditorRTCConfig() {
