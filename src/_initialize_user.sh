@@ -4,11 +4,18 @@ function create_user() {
   if ! id -u "plextrac" >/dev/null 2>&1
   then
     info "Adding plextrac user..."
-    useradd --uid 1337 \
-            --groups docker \
-            --shell /bin/bash \
-            --create-home --home "${PLEXTRAC_HOME}" \
-            plextrac
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      useradd --uid 1337 \
+              --shell /bin/bash \
+              --create-home --home "${PLEXTRAC_HOME}" \
+              plextrac
+    else
+      useradd --uid 1337 \
+              --groups docker \
+              --shell /bin/bash \
+              --create-home --home "${PLEXTRAC_HOME}" \
+              plextrac
+    fi
     log "Done."
   fi
 }
@@ -32,7 +39,7 @@ function configure_user_environment() {
 
 function copy_scripts() {
   info "Copying plextrac CLI to user PATH..."
-  tmp=`mktemp -p /tmp plextrac-XXX`
+  tmp=`mktemp -p ~/ plextrac-XXX`
   debug "tmp script location: $tmp"
   debug "`$0 dist 2>/dev/null > $tmp && cp -uv $tmp "${PLEXTRAC_HOME}/.local/bin/plextrac"`"
   chmod +x "${PLEXTRAC_HOME}/.local/bin/plextrac"
@@ -43,4 +50,4 @@ function fix_file_ownership() {
   info "Fixing file ownership in ${PLEXTRAC_HOME} for plextrac"
   chown -R plextrac:plextrac "${PLEXTRAC_HOME}"
   log "Done."
-}
+} 

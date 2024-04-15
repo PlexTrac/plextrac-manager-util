@@ -240,6 +240,15 @@ services:
     volumes:
     - redis:/etc/redis:rw
     restart: always
+    healthcheck:
+      test:
+      - "CMD"
+      - "redis-cli"
+      - "--raw"
+      - "incr"
+      - "ping"
+      interval: 10s
+      timeout: 30s
 
   postgres:
     image: postgres:14-alpine
@@ -279,7 +288,7 @@ services:
     - 127.0.0.1:5432:5432/tcp
     restart: always
     healthcheck: # Define healthcheck to be able to use the `service_healthy` condition.
-      test: pg_isready -U postgres
+      test: pg_isready -U ${POSTGRES_USER:-internalonly}
       interval: 10s
       timeout: 30s
       retries: 5
