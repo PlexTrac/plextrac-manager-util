@@ -123,7 +123,7 @@ function login_dockerhub() {
     if [ -z "${IMAGE_REGISTRY_USER:-}" ]; then
       debug "$IMAGE_REGISTRY username not found, continuing..."
       local image_user=""
-    else 
+    else
       local image_user="-u ${IMAGE_REGISTRY_USER:-}"
     fi
 
@@ -212,11 +212,16 @@ function getCKEditorRTCConfig() {
   if [ "${CKEDITOR_MIGRATE:-false}" = true ]; then
     # parses output and saves the result of the json meta data
     # the last line, which only contains the JSON data, should be used
-    CKEDITOR_JSON=$(compose_client run --name ckeditor-migration --no-deps  ckeditor-migration | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
+    CKEDITOR_MIGRATE_OUTPUT=$(compose_client run --name ckeditor-migration --no-deps  ckeditor-migration || debug "ERROR: Unable to run ckeditor:environment:migration")
     docker rm -f ckeditor-migration &>/dev/null
 
+    ## Split the output so we can send logs out, but keep the key separate
+    CKEDITOR_JSON=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep '^{')
+    CKEDITOR_LOGS_OUTPUT=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep -v '^{')
+    logger -t ckeditor-migration "Rolllup of logs from ckeditor-migration NPM module $CKEDITOR_LOGS_OUTPUT"
+
     # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
-    if [ $(echo $CKEDITOR_JSON | jq -e ".[]|any(\".api_secret\")") ]; then
+    if [ "$(echo "$CKEDITOR_JSON" | jq -e ".[] | any(\".api_secret\")")" ]; then
       BASE64_CKEDITOR=$(echo "$CKEDITOR_JSON" | base64 -w 0)
       CKEDITOR_SERVER_CONFIG="$BASE64_CKEDITOR"
       debug "Setting CKEDITOR_SERVER_CONFIG"
