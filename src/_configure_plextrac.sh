@@ -205,15 +205,22 @@ function create_volume_directories() {
     stat "${PLEXTRAC_HOME}/volumes/redis" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/redis"
     stat "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs"
     stat "${PLEXTRAC_HOME}/volumes/nginx_logos" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_logos"
+    stat "${PLEXTRAC_HOME}/volumes/nginx_conf" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_conf"
   fi
 }
 
 function getCKEditorRTCConfig() {
   if [ "${CKEDITOR_MIGRATE:-false}" = true ]; then
-    # parses output and saves the result of the json meta data
-    # the last line, which only contains the JSON data, should be used
-    CKEDITOR_JSON=$(compose_client run --name ckeditor-migration --no-deps  ckeditor-migration | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
-    docker rm -f ckeditor-migration &>/dev/null
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      debug "---"
+      debug "Running CKEditor migration"
+      CKEDITOR_JSON=$(podman run --rm -it --name ckeditor-migration --network=plextrac --env-file ${PLEXTRAC_HOME}/.env plextrac/plextracapi:${UPGRADE_STRATEGY:-stable} npm run ckeditor:environment:migration --if-present | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
+      podman rm -f ckeditor-migration &>/dev/null
+    else
+      CKEDITOR_JSON=$(compose_client run --name ckeditor-migration --no-deps  ckeditor-migration | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
+      docker rm -f ckeditor-migration &>/dev/null
+    fi
+    
 
     # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
     if [ $(echo $CKEDITOR_JSON | jq -e ".[]|any(\".api_secret\")") ]; then
@@ -272,7 +279,11 @@ function updateNginxConfig() {
     if [ "$NGINX_CHANGES" = true ]; then
       event__log_activity "config:update-nginx" "Nginx config files updated"
       debug "Restarting NGINX to load new config"
-      compose_client restart plextracnginx  || log "Unable to restart the nginx container"
+      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+        podman restart plextracnginx  || log "Unable to restart the nginx container"
+      else
+        compose_client restart plextracnginx  || log "Unable to restart the nginx container"
+      fi
     else
       debug "No NGINX conf changes detected"
     fi
