@@ -214,7 +214,7 @@ function getCKEditorRTCConfig() {
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       debug "---"
       debug "Running CKEditor migration"
-      CKEDITOR_JSON=$(podman run --rm -it --name ckeditor-migration --network=plextrac --env-file ${PLEXTRAC_HOME}/.env plextrac/plextracapi:${UPGRADE_STRATEGY:-stable} npm run ckeditor:environment:migration --if-present | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
+      CKEDITOR_MIGRATE_OUTPUT=$(podman run --rm -it --name ckeditor-migration --network=plextrac --env-file ${PLEXTRAC_HOME}/.env plextrac/plextracapi:${UPGRADE_STRATEGY:-stable} npm run ckeditor:environment:migration --if-present | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
       podman rm -f ckeditor-migration &>/dev/null
     else
       # parses output and saves the result of the json meta data
