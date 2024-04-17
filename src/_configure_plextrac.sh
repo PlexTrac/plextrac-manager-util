@@ -211,9 +211,9 @@ function create_volume_directories() {
 
 function getCKEditorRTCConfig() {
   if [ "${CKEDITOR_MIGRATE:-false}" = true ]; then
+    debug "---"
+    debug "Running CKEditor migration"
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      debug "---"
-      debug "Running CKEditor migration"
       CKEDITOR_MIGRATE_OUTPUT=$(podman run --rm -it --name ckeditor-migration --network=plextrac --env-file ${PLEXTRAC_HOME}/.env plextrac/plextracapi:${UPGRADE_STRATEGY:-stable} npm run ckeditor:environment:migration --if-present | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
       podman rm -f ckeditor-migration &>/dev/null
     else
@@ -226,7 +226,8 @@ function getCKEditorRTCConfig() {
     ## Split the output so we can send logs out, but keep the key separate
     CKEDITOR_JSON=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep '^{')
     CKEDITOR_LOGS_OUTPUT=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep -v '^{')
-    logger -t ckeditor-migration "Rolllup of logs from ckeditor-migration NPM module $CKEDITOR_LOGS_OUTPUT"
+    logger -t ckeditor-migration "Rollup of logs from ckeditor-migration NPM module $CKEDITOR_LOGS_OUTPUT"
+
 
     # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
     if [ "$(echo "$CKEDITOR_JSON" | jq -e ".[] | any(\".api_secret\")")" ]; then
@@ -234,6 +235,9 @@ function getCKEditorRTCConfig() {
       CKEDITOR_SERVER_CONFIG="$BASE64_CKEDITOR"
       debug "Setting CKEDITOR_SERVER_CONFIG"
       sed -i "s/CKEDITOR_SERVER_CONFIG=.*/CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG}/" ${PLEXTRAC_HOME}/.env
+      CKEDITOR_JSON=""
+      CKEDITOR_MIGRATE_OUTPUT=""
+      BASE64_CKEDITOR=""
     else
       debug "ERROR: Response did not contain JSON with expected key"
     fi
