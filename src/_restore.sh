@@ -55,7 +55,7 @@ function restore_doCouchbaseRestore() {
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       podman exec --workdir /backups $couchbaseComposeService tar -xzvf /backups/$backupFile
     else
-      debug "`compose_client exec -T --user 1337 --workdir /backups $couchbaseComposeService \
+      debug "`compose_client exec -T --user $(id -u plextrac) --workdir /backups $couchbaseComposeService \
         tar -xzvf /backups/$backupFile 2>&1`"
     fi
 
@@ -75,7 +75,7 @@ function restore_doCouchbaseRestore() {
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       podman exec --workdir /backups $couchbaseComposeService rm -rf /backups/$dirName
     else
-      debug "`compose_client exec -T --user 1337 --workdir /backups $couchbaseComposeService \
+      debug "`compose_client exec -T --user $(id -u plextrac) --workdir /backups $couchbaseComposeService \
         rm -rf /backups/$dirName 2>&1`"
     fi
     log "Done"
@@ -95,7 +95,7 @@ function restore_doPostgresRestore() {
     databaseBackups=$(basename -s .psql `tar -tf $latestBackup | awk '/.psql/{print $1}'`)
     log "Restoring from $backupFile"
     log "Databases to restore:\n$databaseBackups"
-    local cmd='compose_client exec -T --user 1337'
+    local cmd="compose_client exec -T --user $(id -u plextrac)"
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       local cmd='podman exec'
     fi
