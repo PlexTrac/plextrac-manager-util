@@ -47,15 +47,17 @@ function mod_etl_fix() {
       info "Checking volume permissions"
       if [ "$owner" != "plextrac" ]
         then
+          local user_id=$(id -u plextrac)
           info "Volume permissions are wrong; initiating fix"
-          compose_client exec -u 0 plextracapi chown -R 1337:1337 uploads/etl-logs
+          compose_client exec -u 0 plextracapi chown -R $user_id:$user_id uploads/etl-logs
       else
         info "Volume permissions are correct"
       fi
     else
       info "Fixing ETL Folder creation"
       compose_client exec plextracapi mkdir uploads/etl-logs
-      compose_client exec plextracapi chown -R 1337:1337 uploads/etl-logs
+      local user_id=$(id -u plextrac)
+      compose_client exec plextracapi chown -R $user_id:$user_id uploads/etl-logs
     fi
   fi
 }

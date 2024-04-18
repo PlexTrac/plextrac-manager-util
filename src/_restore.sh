@@ -37,9 +37,10 @@ function restore_doUploadsRestore() {
 function restore_doCouchbaseRestore() {
   title "Restoring Couchbase from backup"
   debug "Fixing permissions"
+  local user_id=$(id -u plextrac)
   if [ "$CONTAINER_RUNTIME" == "docker" ]; then
     debug "`compose_client exec -T $couchbaseComposeService \
-      chown -R 1337:1337 /backups 2>&1`"
+      chown -R $user_id:$user_id /backups 2>&1`"
   fi
   latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`"
   backupFile=`basename $latestBackup`
