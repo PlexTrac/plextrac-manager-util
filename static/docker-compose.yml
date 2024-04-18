@@ -140,6 +140,7 @@ services:
     - plextracdb
     - redis
     restart: always
+    init: True
     environment:
       CB_API_PASS: "${CB_API_PASS:?err}"
       CB_API_USER: "${CB_API_USER:?err}"
@@ -173,6 +174,7 @@ services:
     - plextracdb
     - redis
     restart: always
+    init: True
     environment:
       CB_API_PASS: "${CB_API_PASS:?err}"
       CB_API_USER: "${CB_API_USER:?err}"
