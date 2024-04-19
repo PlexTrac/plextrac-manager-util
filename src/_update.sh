@@ -210,6 +210,7 @@ function selfupdate_doUpgrade() {
   exit $?
 }
 
+
 function mod_util-update() {
   info "Checking for updates to the PlexTrac Management Utility"
   SKIP_APP_UPDATE=true
