@@ -199,7 +199,21 @@ function selfupdate_doUpgrade() {
   debug "Initially called '$ProgName' w/ args '$_INITIAL_CMD_ARGS'" 
   debug "Script Backup: `sha256sum ${target}.bak`"
   debug "Script Update: `sha256sum $target`"
-
+  if [ "$SKIP_APP_UPDATE" == "true" ]; then
+    exit 0
+  fi
   eval "SKIP_SELF_UPGRADE=1 $ProgName $_INITIAL_CMD_ARGS"
   exit $?
+}
+
+
+function mod_util-update() {
+  info "Checking for updates to the PlexTrac Management Utility"
+  SKIP_APP_UPDATE=true
+  if selfupdate_checkForNewRelease; then
+    event__log_activity "update:upgrade-utility" "${releaseInfo}"
+    selfupdate_doUpgrade
+    die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
+    exit 1 # just in case, previous line should already exit
+  fi
 }
