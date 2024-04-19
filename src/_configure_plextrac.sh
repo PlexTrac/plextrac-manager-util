@@ -50,6 +50,7 @@ PLEXTRAC_PARSER_URL=https://plextracparser:4443
 UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
 CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-"docker"}
+LOCK_UPDATES=${LOCK_UPDATES:-"false"}
 
 `generate_default_couchbase_env | setDefaultSecrets`
 `generate_default_postgres_env | setDefaultSecrets`

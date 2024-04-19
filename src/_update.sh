@@ -4,6 +4,9 @@
 
 # subcommand function, this is the entrypoint eg `plextrac update`
 function mod_update() {
+  if [ "$LOCK_UPDATES" == "true" ]; then
+    die "Updates are locked due to a failed data migration. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
+  fi
   title "Updating PlexTrac"
   # I'm comparing an int :shrug:
   # shellcheck disable=SC2086
@@ -200,6 +203,15 @@ function selfupdate_doUpgrade() {
   debug "Script Backup: `sha256sum ${target}.bak`"
   debug "Script Update: `sha256sum $target`"
 
+  if [ "$SKIP_APP_UPDATE" == "true" ]; then
+    info "Skipping application update"
+    return 0
+  fi
   eval "SKIP_SELF_UPGRADE=1 $ProgName $_INITIAL_CMD_ARGS"
   exit $?
+}
+
+function mod_util-update() {
+  SKIP_APP_UPDATE=true
+  selfupdate_doUpgrade
 }

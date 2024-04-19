@@ -375,6 +375,9 @@ function mod_configure() {
 }
 
 function mod_start() {
+  if [ "$LOCK_UPDATES" == "true" ]; then
+    die "Updates are locked due to a failed data migration. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
+  fi
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
     plextrac_start_podman "svcValues"
   else
