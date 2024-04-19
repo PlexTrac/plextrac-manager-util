@@ -354,6 +354,9 @@ function mod_install() {
     fi
     pull_docker_images
     mod_start "${INSTALL_WAIT_TIMEOUT:-600}" # allow up to 10 or specified minutes for startup on install, due to migrations
+    # Configure the CKEditor RTC service as part of the install, which also requires a recreate of the backend
+    getCKEditorRTCConfig
+    compose_client up -d "$coreBackendComposeService"
     mod_info
     info "Post installation note:"
     log "If you wish to have access to historical logs, you can configure docker to send logs to journald."
