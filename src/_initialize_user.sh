@@ -2,7 +2,7 @@ function create_user() {
   if ! id -u "plextrac" >/dev/null 2>&1
   then
     info "Adding plextrac user..."
-    local user_id=""
+    local user_id="-u 1337"
     if [ "${PLEXTRAC_USER_ID:-}" ]; then
       local user_id="-u ${PLEXTRAC_USER_ID}"
     fi
