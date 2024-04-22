@@ -11,6 +11,8 @@ We've expanded the capabilities to support podman in specific circumstances.
 
 > Note: the module for podman was written with RHEL 9 specifically in mind. It is not officially supported at this time to use the container runtime set to Podman on Debian, Ubuntu, or CentOS.
 
+> Note: All testing has been done on BASE images without hardening with a security profile or SELinux or anything -- its just a stock operating system
+
 ---
 
 ### Podman Troubleshooting
