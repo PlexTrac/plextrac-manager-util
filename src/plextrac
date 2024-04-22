@@ -10,7 +10,7 @@ declare -A svcValues
 export POSTGRES_INITDB_ARGS='--auth-local=scram-sha-256 --auth-host=scram-sha-256'
 
 databaseNames=("plextracdb" "postgres")
-serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
+serviceNames=("plextracdb" "postgres" "redis" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
 #Defaults
 svcValues[network]="--network=plextrac"
 svcValues[env-file]="--env-file /opt/plextrac/.env"
