@@ -41,6 +41,7 @@ Depending on your configuration, you may need to solve the following issues:
 
 #### My containers don't start after rebooting the host VM
 
+- You'll need to run `systemctl daemon-reload` after every reboot [source](https://bugzilla.redhat.com/show_bug.cgi?id=1897579)
 - For setting up container persistence: https://www.redhat.com/sysadmin/container-systemd-persist-reboot
 - The recommended method to start the PlexTrac containers is `plextrac start` after a reboot of the host OS
 
@@ -86,8 +87,8 @@ The following will need to be done before running any PlexTrac specific commands
     Delegate=cpu cpuset io memory pids
     EOF
 
-    sudo systemctl daemon-reload
     reboot
+    sudo systemctl daemon-reload
     ```
 
 ### Sources
