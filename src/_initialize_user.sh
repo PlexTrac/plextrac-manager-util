@@ -16,6 +16,11 @@ function create_user() {
               --create-home --home "${PLEXTRAC_HOME}" \
               plextrac
     fi
+    if ! id -g "plextrac" >/dev/null 2>&1
+    then
+      groupadd -g $(id -u plextrac) plextrac
+    fi
+    usermod -g plextrac plextrac
     log "Done."
   fi
 }
