@@ -314,6 +314,9 @@ function mod_initialize() {
 }
 
 function mod_install() {
+  if [ "${LOCK_UPDATES:-false}" == "true" ]; then
+    die "All Updates are locked due to a failed data migration. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
+  fi
   if [ "$CONTAINER_RUNTIME" != "podman" ]; then
     title "Installing PlexTrac Instance"
     requires_user_plextrac
@@ -375,7 +378,7 @@ function mod_configure() {
 }
 
 function mod_start() {
-  if [ "$LOCK_UPDATES" == "true" ]; then
+  if [ "${LOCK_UPDATES:-false}" == "true" ]; then
     die "Updates are locked due to a failed data migration. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
   fi
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then

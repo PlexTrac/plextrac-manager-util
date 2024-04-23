@@ -4,7 +4,7 @@
 
 # subcommand function, this is the entrypoint eg `plextrac update`
 function mod_update() {
-  if [ "$LOCK_UPDATES" == "true" ]; then
+  if [ "${LOCK_UPDATES:-false}" == "true" ]; then
     die "Updates are locked due to a failed data migration. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
   fi
   title "Updating PlexTrac"
