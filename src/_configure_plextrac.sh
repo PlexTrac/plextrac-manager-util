@@ -224,8 +224,8 @@ function getCKEditorRTCConfig() {
     fi
 
     ## Split the output so we can send logs out, but keep the key separate
-    CKEDITOR_JSON=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep '^{')
-    CKEDITOR_LOGS_OUTPUT=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep -v '^{')
+    CKEDITOR_JSON=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep '^{' || debug "INFO: no JSON found in response")
+    CKEDITOR_LOGS_OUTPUT=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep -v '^{' || debug "ERROR: Invalid response from ckeditor-migration")
     logger -t ckeditor-migration "Rollup of logs from ckeditor-migration NPM module $CKEDITOR_LOGS_OUTPUT"
 
 
