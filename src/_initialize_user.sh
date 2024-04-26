@@ -1,21 +1,26 @@
 function create_user() {
-  # create "plextrac" user with UID/GID 1337 to match the UID/GID of the container user
-  # this is required for anything in the uploads directory to
   if ! id -u "plextrac" >/dev/null 2>&1
   then
     info "Adding plextrac user..."
+    local user_id="-u 1337"
+    if [ "${PLEXTRAC_USER_ID:-}" ]; then
+      local user_id="-u ${PLEXTRAC_USER_ID}"
+    fi
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      useradd --uid 1337 \
-              --shell /bin/bash \
+      useradd --shell /bin/bash $user_id \
               --create-home --home "${PLEXTRAC_HOME}" \
               plextrac
     else
-      useradd --uid 1337 \
-              --groups docker \
+      useradd $user_id --groups docker \
               --shell /bin/bash \
               --create-home --home "${PLEXTRAC_HOME}" \
               plextrac
     fi
+    if ! id -g "plextrac" >/dev/null 2>&1
+    then
+      groupadd -g $(id -u plextrac) plextrac
+    fi
+    usermod -g plextrac plextrac
     log "Done."
   fi
 }
