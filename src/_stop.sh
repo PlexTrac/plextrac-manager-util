@@ -6,7 +6,7 @@
 function mod_stop() {
   title "Attempting to gracefully stop PlexTrac..."
   debug "Stopping API Services..."
-  for service in $(docker ps --format '{{.Names}}' | grep -E 'plextracapi|plextracnginx|notification-engine|notification-sender|contextual-scoring-service'); do
+  for service in $(container_client ps --format '{{.Names}}' | grep -Eo 'plextracapi|plextracnginx|notification-engine|notification-sender|contextual-scoring-service'); do
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       container_client stop $service
     else
@@ -16,7 +16,7 @@ function mod_stop() {
   sleep 2
   debug "Done."
   debug "Stopping Couchbase, Postres, and Redis"
-  for service in $(docker ps --format '{{.Names}}' | grep -E 'couchbase|postgres|redis'); do
+  for service in $(docker ps --format '{{.Names}}' | grep -Eo 'couchbase|postgres|redis'); do
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       container_client stop $service
     else
@@ -26,7 +26,7 @@ function mod_stop() {
   sleep 2
   debug "Ensuring all services are stopped"
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-    docker stop -a
+    container_client stop -a
   else
     compose_client stop
   fi
