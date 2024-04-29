@@ -17,7 +17,7 @@ svcValues[network]="--network=plextrac"
 svcValues[cb-volumes]="-v dbdata:/opt/couchbase/var:Z,U -v couchbase-backups:/backups:Z,U"
 svcValues[cb-ports]="-p 127.0.0.1:8091-8094:8091-8094"
 #Postgres
-svcValues[pg-volumes]="-v postgres-initdb:/docker-entrypoint-initdb.d -v postgres-data:/var/lib/postgresql/data -v postgres-backups:/backups:Z"
+svcValues[pg-volumes]="-v postgres-initdb:/docker-entrypoint-initdb.d:Z -v postgres-data:/var/lib/postgresql/data -v postgres-backups:/backups:Z"
 svcValues[pg-ports]="-p 127.0.0.1::5432"
 svcValues[pg-healthcheck]='--health-cmd=["pg_isready","-U","internalonly"]'
 svcValues[pg-env-vars]="-e 'POSTGRES_HOST_AUTH_METHOD=scram-sha-256' -e 'PG_MIGRATE_PATH=/usr/src/plextrac-api' -e 'PGDATA=/var/lib/postgresql/data/pgdata'"
