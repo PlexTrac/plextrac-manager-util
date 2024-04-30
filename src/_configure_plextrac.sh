@@ -226,8 +226,10 @@ function getCKEditorRTCConfig() {
     ## Split the output so we can send logs out, but keep the key separate
     CKEDITOR_JSON=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep '^{' || debug "INFO: no JSON found in response")
     CKEDITOR_LOGS_OUTPUT=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep -v '^{' || debug "ERROR: Invalid response from ckeditor-migration")
-    logger -t ckeditor-migration "Rollup of logs from ckeditor-migration NPM module $CKEDITOR_LOGS_OUTPUT"
-
+    # for each line in the variable $CKEDITOR_LOGS_OUTPUT send to logs with logger
+    while read -r line; do
+      logger -t ckeditor-migration $line
+    done <<< "$CKEDITOR_LOGS_OUTPUT"
 
     # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
     if [ "$(echo "$CKEDITOR_JSON" | jq -e ".[] | any(\".api_secret\")")" ]; then
