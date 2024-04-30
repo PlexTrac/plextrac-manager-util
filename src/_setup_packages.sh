@@ -183,7 +183,6 @@ function install_podman() {
         exit 1
         ;;
     esac
-    touch /etc/containers/nodocker
     log "Done."
   else
     info "podman already installed, version: $(podman --version | grep -o -E '.\..\..')"
