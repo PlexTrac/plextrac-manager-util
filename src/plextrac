@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.6.2
+VERSION=0.6.3
 
 
 ## Podman Global Declaration Variable
@@ -13,23 +13,19 @@ databaseNames=("plextracdb" "postgres")
 serviceNames=("plextracdb" "postgres" "redis" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
 #Defaults
 svcValues[network]="--network=plextrac"
-svcValues[env-file]="--env-file /opt/plextrac/.env"
 #Couchbase
 svcValues[cb-volumes]="-v dbdata:/opt/couchbase/var:Z,U -v couchbase-backups:/backups:Z,U"
 svcValues[cb-ports]="-p 127.0.0.1:8091-8094:8091-8094"
-svcValues[cb-image]="docker.io/plextrac/plextracdb:7.2.0"
 #Postgres
-svcValues[pg-volumes]="-v postgres-initdb:/docker-entrypoint-initdb.d -v postgres-data:/var/lib/postgresql/data -v postgres-backups:/backups:Z"
+svcValues[pg-volumes]="-v postgres-initdb:/docker-entrypoint-initdb.d:Z -v postgres-data:/var/lib/postgresql/data -v postgres-backups:/backups:Z"
 svcValues[pg-ports]="-p 127.0.0.1::5432"
 svcValues[pg-healthcheck]='--health-cmd=["pg_isready","-U","internalonly"]'
-svcValues[pg-image]="docker.io/postgres:14-alpine"
 svcValues[pg-env-vars]="-e 'POSTGRES_HOST_AUTH_METHOD=scram-sha-256' -e 'PG_MIGRATE_PATH=/usr/src/plextrac-api' -e 'PGDATA=/var/lib/postgresql/data/pgdata'"
 #API
 svcValues[api-volumes]="-v uploads:/usr/src/plextrac-api/uploads:Z,U -v localesOverride:/usr/src/plextrac-api/localesOverride:rw"
 svcValues[api-healthcheck]='--health-cmd=["wget","-q","-O-","http://127.0.0.1:4350/api/v2/health/live"]'
 #Redis
 svcValues[redis-volumes]="-v redis:/etc/redis:rw"
-svcValues[redis-image]="docker.io/redis:6.2-alpine"
 svcValues[redis-healthcheck]='--health-cmd=["redis-cli","--raw","incr","ping"]'
 #Notification engine/sender
 svcValues[notification-engine-entrypoint]='--entrypoint ["npm","run","start:notification-engine"]'
@@ -44,6 +40,7 @@ svcValues[migrations-volumes]="--volumes-from=plextracapi"
 #Nginx
 svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw -v nginx_ssl_certs:/etc/ssl/:Z,U -v nginx_logos:/usr/share/nginx/html/dist/img/:Z,U"
 svcValues[plextracnginx-healthcheck]='--health-cmd=["echo","GET","/","|","openssl","s_client","-quiet","-connect","127.0.0.1:443"]'
+
 
 trap 'cleanup $?' SIGINT ERR EXIT
 
