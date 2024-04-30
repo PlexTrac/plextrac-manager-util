@@ -37,10 +37,21 @@ function podman_setup() {
 function plextrac_install_podman() {
   var=$(declare -p "$1")
   eval "declare -A serviceValues="${var#*=}
+  CB_IMAGE="${CB_IMAGE:-docker.io/plextrac/plextracdb:7.2.0}"
+  PG_IMAGE="${PG_IMAGE:-docker.io/postgres:14-alpine}"
+  REDIS_IMAGE="${REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
+  API_IMAGE="${API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  NGINX_IMAGE="${NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
+
+  serviceValues[cb-image]="${CB_IMAGE}"
+  serviceValues[pg-image]="${PG_IMAGE}"
+  serviceValues[redis-image]="${REDIS_IMAGE}"
+  serviceValues[api-image]="${API_IMAGE}"
+  serviceValues[plextracnginx-image]="${NGINX_IMAGE}"
+
+  serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
   serviceValues[redis-entrypoint]=$(printf '%s' "--entrypoint=" "[" "\"redis-server\"" "," "\"--requirepass\"" "," "\"${REDIS_PASSWORD}\"" "]")
   serviceValues[cb-healthcheck]='--health-cmd=["wget","--user='$CB_ADMIN_USER'","--password='$CB_ADMIN_PASS'","-qO-","http://plextracdb:8091/pools/default/buckets/reportMe"]'
-  serviceValues[api-image]="docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
-  serviceValues[plextracnginx-image]="docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
   if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
   else
@@ -138,8 +149,18 @@ function plextrac_start_podman() {
   eval "declare -A serviceValues="${var#*=}
   serviceValues[redis-entrypoint]=$(printf '%s' "--entrypoint=" "[" "\"redis-server\"" "," "\"--requirepass\"" "," "\"${REDIS_PASSWORD}\"" "]")
   serviceValues[cb-healthcheck]='--health-cmd=["wget","--user='$CB_ADMIN_USER'","--password='$CB_ADMIN_PASS'","-qO-","http://plextracdb:8091/pools/default/buckets/reportMe"]'
-  serviceValues[api-image]="docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
-  serviceValues[plextracnginx-image]="docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
+  CB_IMAGE="${CB_IMAGE:-docker.io/plextrac/plextracdb:7.2.0}"
+  PG_IMAGE="${PG_IMAGE:-docker.io/postgres:14-alpine}"
+  REDIS_IMAGE="${REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
+  API_IMAGE="${API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  NGINX_IMAGE="${NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
+
+  serviceValues[cb-image]="${CB_IMAGE}"
+  serviceValues[pg-image]="${PG_IMAGE}"
+  serviceValues[redis-image]="${REDIS_IMAGE}"
+  serviceValues[api-image]="${API_IMAGE}"
+  serviceValues[plextracnginx-image]="${NGINX_IMAGE}"
+  serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
   if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
   else

@@ -201,7 +201,7 @@ function selfupdate_doUpgrade() {
   debug "Initially called '$ProgName' w/ args '$_INITIAL_CMD_ARGS'"
   debug "Script Backup: `sha256sum ${target}.bak`"
   debug "Script Update: `sha256sum $target`"
-  if [ "$SKIP_APP_UPDATE" == "true" ]; then
+  if [ "${SKIP_APP_UPDATE:-false}" == "true" ]; then
     exit 0
   fi
   eval "SKIP_SELF_UPGRADE=1 $ProgName $_INITIAL_CMD_ARGS"
