@@ -378,7 +378,7 @@ function mod_configure() {
   title "Setting up base PlexTrac configuration..."
   requires_user_plextrac
   check_container_runtime
-  updateNginxConfig
+  #updateNginxConfig
   generate_default_config
   login_dockerhub
   if [ "$CONTAINER_RUNTIME" == "docker" ] || [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then

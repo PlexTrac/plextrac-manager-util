@@ -120,13 +120,13 @@ services:
       LETS_ENCRYPT_EMAIL: "${LETS_ENCRYPT_EMAIL:-}"
       OVERRIDE_SENTRY_FRONTEND_ENABLED: "${OVERRIDE_SENTRY_FRONTEND_ENABLED-}"
       USE_CUSTOM_CERT: "${USE_CUSTOM_CERT-}"
+      CKEDITOR_MIGRATE: "${CKEDITOR_MIGRATE:-}"
     ports:
     - 0.0.0.0:80:80/tcp
     - 0.0.0.0:443:443/tcp
     restart: always
     volumes:
     - letsencrypt:/etc/letsencrypt:rw
-    - nginx_extras:/etc/nginx/conf.d:rw
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -332,7 +332,7 @@ services:
       - "--no-update-notifier"
     entrypoint: npm run
     command: "start:contextual-scoring-service"
-    
+
 volumes:
   dbdata: {}
   uploads: {}
@@ -369,12 +369,6 @@ volumes:
       type: "none"
       o: "bind"
       device: "${PLEXTRAC_BACKUP_PATH}/postgres"
-  nginx_extras:
-    driver: local
-    driver_opts:
-      type: "none"
-      o: "bind"
-      device: "${PLEXTRAC_HOME:-.}/volumes/nginx_conf"
 
 networks:
   default:
