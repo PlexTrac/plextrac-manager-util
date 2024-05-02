@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.6.5-cke-beta
+VERSION=0.6.5
 
 ## Podman Global Declaration Variable
 declare -A svcValues
@@ -37,7 +37,7 @@ svcValues[contextual-scoring-service-healthcheck]='--health-cmd=["npm","run","he
 #Migrations
 svcValues[migrations-volumes]="--volumes-from=plextracapi"
 #Nginx
-svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw -v nginx_ssl_certs:/etc/ssl/:Z,U -v nginx_logos:/usr/share/nginx/html/dist/img/:Z,U -v nginx_conf:/etc/nginx/conf.d:Z,U"
+svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw -v nginx_ssl_certs:/etc/ssl/:Z,U -v nginx_logos:/usr/share/nginx/html/dist/img/:Z,U"
 svcValues[plextracnginx-healthcheck]='--health-cmd=["echo","GET","/","|","openssl","s_client","-quiet","-connect","127.0.0.1:443"]'
 svcValues[plextracnginx-alias]="--network-alias=ckeditor"
 svcValues[ckeditor-backend-image]="docker.cke.cke-cs.com/cs:4.17.1"
@@ -287,12 +287,6 @@ function mod_dist() {
       echo "" \
       echo -n "DOCKER_COMPOSE_OVERRIDE_ENCODED="; \
       base64 -w0 '"$(dirname $0)"'/../static/docker-compose.override.yml \
-      echo "" \
-      echo -n "NGINX_CONFIG_LOCATION_ENCODED="; \
-      base64 -w0 '"$(dirname $0)"'/../static/nginx_conf/mod_ckeditor_location_block.conf \
-      echo "" \
-      echo -n "NGINX_CONFIG_SERVER_ENCODED="; \
-      base64 -w0 '"$(dirname $0)"'/../static/nginx_conf/mod_ckeditor_server_block.conf \
       echo ""' \
       $0
   fi
@@ -378,7 +372,6 @@ function mod_configure() {
   title "Setting up base PlexTrac configuration..."
   requires_user_plextrac
   check_container_runtime
-  #updateNginxConfig
   generate_default_config
   login_dockerhub
   if [ "$CONTAINER_RUNTIME" == "docker" ] || [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then

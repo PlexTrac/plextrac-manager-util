@@ -15,7 +15,6 @@ function podman_setup() {
   pt_volumes["postgres-backups"]="${PLEXTRAC_BACKUP_PATH}/postgres"
   pt_volumes["nginx_ssl_certs"]="${PLEXTRAC_HOME:-.}/volumes/nginx_ssl_certs"
   pt_volumes["nginx_logos"]="${PLEXTRAC_HOME:-.}/volumes/nginx_logos"
-  pt_volumes["nginx_conf"]="${PLEXTRAC_HOME:-.}/volumes/nginx_conf"
   for volume in "${!pt_volumes[@]}"; do
     if container_client volume exists "$volume"; then
       debug "-- Volume $volume already exists"
@@ -135,7 +134,7 @@ function plextrac_install_podman() {
       debug "No uploads to restore"
     fi
   fi
-  
+
   mod_start "${INSTALL_WAIT_TIMEOUT:-600}" # allow up to 10 or specified minutes for startup on install, due to migrations
   mod_info
   info "Post installation note:"
@@ -167,15 +166,15 @@ function plextrac_start_podman() {
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
   fi
   serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err}"
-  serviceValues[ckeditor-backend-env_vars]="-e DATABASE_Driver=postgres -e DATABASE_HOST=postgres -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e REDIS_HOST=redis -e REDIS_CONNECTION_STRING=redis://redis:6379 -e DATABASE_POOL_CONNECTION_LIMIT=10 -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false}"  
+  serviceValues[ckeditor-backend-env_vars]="-e DATABASE_Driver=postgres -e DATABASE_HOST=postgres -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e REDIS_HOST=redis -e REDIS_CONNECTION_STRING=redis://redis:6379 -e DATABASE_POOL_CONNECTION_LIMIT=10 -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false}"
   if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
     serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
   fi
   serviceValues[notification-env_vars]="-e API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE: ${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
-  
+
   title "Starting PlexTrac..."
   requires_user_plextrac
-  
+
   for service in "${serviceNames[@]}"; do
   debug "Checking $service"
     local volumes=""

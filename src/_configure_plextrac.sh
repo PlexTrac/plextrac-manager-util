@@ -205,7 +205,6 @@ function create_volume_directories() {
     stat "${PLEXTRAC_HOME}/volumes/redis" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/redis"
     stat "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs"
     stat "${PLEXTRAC_HOME}/volumes/nginx_logos" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_logos"
-    stat "${PLEXTRAC_HOME}/volumes/nginx_conf" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_conf"
   fi
 }
 
@@ -245,62 +244,5 @@ function getCKEditorRTCConfig() {
     fi
   else
     debug "CKEditor service not found; migration has not been run"
-  fi
-}
-
-function updateNginxConfig() {
-  if [ "${CKEDITOR_MIGRATE:-false}" = true ]; then
-
-    title "Updating Nginx Config Files"
-    targetNginxServerFile="${PLEXTRAC_HOME}/volumes/nginx_conf/mod_ckeditor_server_block.conf"
-    targetNginxLocationFile="${PLEXTRAC_HOME}/volumes/nginx_conf/mod_ckeditor_location_block.conf"
-
-    decodedNginxServerBlock=$(base64 -d <<<$NGINX_CONFIG_SERVER_ENCODED)
-    decodedNginxLocationBlock=$(base64 -d <<<$NGINX_CONFIG_LOCATION_ENCODED)
-
-  # TODO: these should be combined into a single function or something DRY
-  # Check if the nginx server file needs updated
-  # Default NGINX_CHANGES=false
-    NGINX_CHANGES=false
-    info "Checking for pending changes to mod_ckeditor_server_block.conf"
-    if [ $(echo "$decodedNginxServerBlock" | md5sum | awk '{print $1}') == $(md5sum $targetNginxServerFile | awk '{print $1}') ]; then
-      debug "Nginx server block file content matches"
-    elif test -f $targetNginxServerFile; then
-      os_check
-      info "Nginx server config update needed"
-      info "Updating $targetNginxServerFile"
-      echo "$decodedNginxServerBlock" > $targetNginxServerFile || error "Unable to update the nginx config file"
-      NGINX_CHANGES=true
-    else
-      info "Nginx server config file does not yet exist, skipping"
-    fi
-
-  # Check if the server location file needs updated
-    info "Checking for pending changes to mod_ckeditor_location_block.conf"
-    if [ $(echo "$decodedNginxLocationBlock" | md5sum | awk '{print $1}') == $(md5sum $targetNginxLocationFile | awk '{print $1}') ]; then
-      debug "Nginx location block file content matches"
-    elif test -f $targetNginxLocationFile; then
-      os_check
-      info "Nginx server config update needed"
-      info "Updating $targetNginxLocationFile"
-      echo "$decodedNginxLocationBlock" > $targetNginxLocationFile || error "Unable to update the nginx config file"
-      NGINX_CHANGES=true
-    else
-      info "Nginx server config file does not yet exist, skipping"
-    fi
-    if [ "$NGINX_CHANGES" = true ]; then
-      event__log_activity "config:update-nginx" "Nginx config files updated"
-      debug "Restarting NGINX to load new config"
-      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-        podman restart plextracnginx  || log "Unable to restart the nginx container"
-      else
-        compose_client restart plextracnginx  || log "Unable to restart the nginx container"
-      fi
-    else
-      debug "No NGINX conf changes detected"
-    fi
-    log "Done."
-  else
-    debug "CKEditor service not found; nginx changes not needed"
   fi
 }

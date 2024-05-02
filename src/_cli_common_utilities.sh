@@ -80,11 +80,6 @@ function _load_static() {
     export DOCKER_COMPOSE_OVERRIDE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.override.yml"`
     export SYSTEM_REQUIREMENTS=`cat "$staticFilesDir/system-requirements.json"`
   fi
-  if ! grep -q -e "^NGINX_CONFIG.*ENCODED=.*" $0; then
-    local staticNginxFilesDir="$(dirname $0)/../static/nginx_conf"
-    export NGINX_CONFIG_LOCATION_ENCODED=`base64 -w0 "$staticNginxFilesDir/mod_ckeditor_location_block.conf"`
-    export NGINX_CONFIG_SERVER_ENCODED=`base64 -w0 "$staticNginxFilesDir/mod_ckeditor_server_block.conf"`
-  fi
 }
 
 function os_check() {
@@ -100,7 +95,7 @@ function os_check() {
 
 function check_container_runtime() {
   if [ "$CONTAINER_RUNTIME" == "docker" ]; then debug "Using Docker and Docker Compose as the container runtime";
-  elif [ "$CONTAINER_RUNTIME" == "podman" ]; then debug "Using Podman as the container runtime"; 
+  elif [ "$CONTAINER_RUNTIME" == "podman" ]; then debug "Using Podman as the container runtime";
   elif [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then die "Using Podman-Compose is still currently unsupported";
   else error "Unknown container runtime: $CONTAINER_RUNTIME"; die "Valid container runtimes are: docker, podman, podman-compose";
   fi
