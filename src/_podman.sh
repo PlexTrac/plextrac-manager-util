@@ -268,11 +268,17 @@ function plextrac_start_podman() {
 function podman_pull_images() {
 
   declare -A service_images
-  service_images[cb-image]="docker.io/plextrac/plextracdb:7.2.0"
-  service_images[pg-image]="docker.io/postgres:14-alpine"
-  service_images[api-image]="docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
-  service_images[redis-image]="docker.io/redis:6.2-alpine"
-  service_images[plextracnginx-image]="docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
+  PODMAN_CB_IMAGE="${PODMAN_CB_IMAGE:-docker.io/plextrac/plextracdb:7.2.0}"
+  PODMAN_PG_IMAGE="${PODMAN_PG_IMAGE:-docker.io/postgres:14-alpine}"
+  PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
+  PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
+
+  serviceValues[cb-image]="${PODMAN_CB_IMAGE}"
+  serviceValues[pg-image]="${PODMAN_PG_IMAGE}"
+  serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
+  serviceValues[api-image]="${PODMAN_API_IMAGE}"
+  serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
 
   info "Pulling updated container images"
   for image in "${service_images[@]}"; do

@@ -39,6 +39,9 @@ function mod_update() {
                 mod_configure
                 UPGRADE_STRATEGY="$i"
                 debug "Upgrade Strategy is $UPGRADE_STRATEGY"
+                # ETL Check before an update
+                ETL_OUTPUT=false
+                mod_check_etl_status "${ETL_OUTPUT-}"
                 if [ "$CONTAINER_RUNTIME" == "podman" ]; then
                   title "Pulling latest container images"
                   podman_remove
@@ -47,9 +50,7 @@ function mod_update() {
                   title "Pulling latest container images"
                   pull_docker_images
                 fi
-                # ETL Check before an update
-                ETL_OUTPUT=false
-                mod_check_etl_status "${ETL_OUTPUT-}"
+
                 # Sometimes containers won't start correctly at first, but will upon a retry
                 maxRetries=2
                 for i in $( seq 1 $maxRetries ); do
@@ -77,6 +78,9 @@ function mod_update() {
   else
       debug "Proceeding with normal update"
       mod_configure
+      # ETL Check before an update
+      ETL_OUTPUT=false
+      mod_check_etl_status "${ETL_OUTPUT-}"
       if [ "$CONTAINER_RUNTIME" == "podman" ]; then
         title "Pulling latest container images"
         podman_remove
@@ -85,9 +89,6 @@ function mod_update() {
         title "Pulling latest container images"
         pull_docker_images
       fi
-      # ETL Check before an update
-      ETL_OUTPUT=false
-      mod_check_etl_status "${ETL_OUTPUT-}"
 
       # Sometimes containers won't start correctly at first, but will upon a retry
       maxRetries=2
