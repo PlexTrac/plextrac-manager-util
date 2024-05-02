@@ -30,6 +30,7 @@ function container_client() {
 }
 
 function image_version_check() {
+  die "Depricated: image_version_check"
   if [ $IMAGE_PRECHECK == true ]
     then
       IMAGE_CHANGED=true
@@ -87,14 +88,12 @@ docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
 function pull_docker_images() {
   info "Pulling updated docker images"
   IMAGE_PRECHECK=true
-  image_version_check
   if tty -s; then
     ARGS=''
   else
     ARGS='-q'
   fi
   compose_client pull ${ARGS:-}
-  image_version_check
   log "Done."
 }
 

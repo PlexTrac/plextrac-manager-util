@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.6.3
+VERSION=0.6.4
 
 
 ## Podman Global Declaration Variable
@@ -320,7 +320,7 @@ function mod_initialize() {
 
 function mod_install() {
   if [ "${LOCK_UPDATES:-false}" == "true" ]; then
-    die "All Updates are locked due to a failed data migration. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
+    die "Updates are locked due to a failed data migration. Version Lock: $LOCK_VERSION. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
   fi
 
   if [ "$CONTAINER_RUNTIME" != "podman" ]; then
@@ -385,7 +385,7 @@ function mod_configure() {
 
 function mod_start() {
   if [ "${LOCK_UPDATES:-false}" == "true" ]; then
-    die "Updates are locked due to a failed data migration. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
+    die "Updates are locked due to a failed data migration. Version Lock: $LOCK_VERSION. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
   fi
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
     plextrac_start_podman "svcValues"
@@ -393,7 +393,6 @@ function mod_start() {
     title "Starting PlexTrac..."
     requires_user_plextrac
     # Enable database migrations on startup
-    mod_check_etl_status "${ETL_OUTPUT:-false}"
     compose_client --profile=database-migrations up -d --remove-orphans
 
     waitTimeout=${1:-90}
