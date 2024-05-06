@@ -30,7 +30,7 @@ function container_client() {
 }
 
 function image_version_check() {
-  die "Depricated: image_version_check"
+  die "Deprecated: image_version_check"
   if [ $IMAGE_PRECHECK == true ]
     then
       IMAGE_CHANGED=true
