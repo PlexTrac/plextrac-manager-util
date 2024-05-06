@@ -26,7 +26,7 @@ scale() {
 }
 
 depricated_rollout() {
-  die "Depricated: mod_rollout"
+  die "Deprecated: mod_rollout"
   # Added removal of the couchbase-migrations container due to this not getting attached to the new network scaled
   if [ `compose_client ps -a --format json | jq -r '.Name' | grep couchbase-migrations` ]
     then
