@@ -211,7 +211,7 @@ function create_volume_directories() {
 }
 
 function getCKEditorRTCConfig() {
-
+  declare -A serviceValues
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   serviceValues[api-image]="${PODMAN_API_IMAGE}"
 
