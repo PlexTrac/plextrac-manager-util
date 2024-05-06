@@ -50,14 +50,20 @@ supportedBoxes = [
   {
     :name     => "ubuntu2204",
     :box      => "bento/ubuntu-22.04",
+    :default  => false,
+  },
+  {
+    :name     => "ubuntu2204-arm64",
+    :box      => "bento/ubuntu-22.04-arm64",
     :default  => true,
+  },
+  {
+    :name     => "rl9-arm64",
+    :box      => "bento/rockylinux-9.3-arm64",
+    :default  => false,
   },
 ]
 
-# All Vagrant configuration is done below. The "2" in Vagrant.configure
-# configures the configuration version (we support older styles for
-# backwards compatibility). Please don't change it unless you know what
-# you're doing.
 Vagrant.configure("2") do |config|
   if Vagrant.has_plugin?("vagrant-hostmanager")
     # Manage hosts file entries
@@ -71,14 +77,11 @@ Vagrant.configure("2") do |config|
       end
     end
   end
-  # The most common configuration options are documented and commented below.
-  # For a complete reference, please see the online documentation at
-  # https://docs.vagrantup.com.
-
-  # Every Vagrant development environment requires a box. You can search for
-  # boxes at https://vagrantcloud.com/search.
+  config.vm.provider "vmware_desktop" do |vmware|
+      vmware.vmx["ethernet1.pcislotnumber"] = "224"
+  end
   supportedBoxes.each do |boxConfig|
-    hostname = "test-instance-#{boxConfig[:name]}.plextrac.local"
+    hostname = "#{boxConfig[:name]}.local"
     isDefault = boxConfig[:default] ? true : false 
     config.vm.define hostname, primary: isDefault, autostart: isDefault do |host|
       host.vm.box = boxConfig[:box]

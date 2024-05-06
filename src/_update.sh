@@ -4,6 +4,9 @@
 
 # subcommand function, this is the entrypoint eg `plextrac update`
 function mod_update() {
+  if [ "${LOCK_UPDATES:-false}" == "true" ]; then
+    die "Updates are locked due to a failed data migration. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
+  fi
   title "Updating PlexTrac"
   # I'm comparing an int :shrug:
   # shellcheck disable=SC2086
@@ -37,25 +40,21 @@ function mod_update() {
                 mod_configure
                 UPGRADE_STRATEGY="$i"
                 debug "Upgrade Strategy is $UPGRADE_STRATEGY"
+                # ETL Check before an update
+                ETL_OUTPUT=false
+                mod_check_etl_status "${ETL_OUTPUT-}"
                 if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-                  debug "Unable to do rolling deployment with podman. Skipping..."
+                  title "Pulling latest container images"
+                  podman_remove
+                  podman_pull_images
                 else
                   title "Pulling latest container images"
                   pull_docker_images
-                  if [ "$IMAGE_CHANGED" == true ]
-                    then
-                      title "Executing Rolling Deployment"
-                      mod_rollout
-                  fi
                 fi
+
                 # Sometimes containers won't start correctly at first, but will upon a retry
                 maxRetries=2
                 for i in $( seq 1 $maxRetries ); do
-                  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-                    title "Pulling latest container images"
-                    podman_remove
-                    podman_pull_images
-                  fi
                   mod_start || sleep 5 # Wait before going on to health checks, they should handle triggering retries if mod_start errors
                   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
                     unhealthy_services=$(for service in $(podman ps -a --format json | jq -r .[].Names | grep '"' | cut -d '"' -f2); do podman inspect $service --format json | jq -r '.[] | select(.State.Health.Status == "unhealthy" or (.State.Status != "running" and .State.ExitCode != 0) or .State.Status == "created") | .Name' | xargs -r printf "%s;"; done)
@@ -66,7 +65,6 @@ function mod_update() {
                   info "Detected unhealthy services: ${unhealthy_services}"
                   if [[ $i -ge $maxRetries ]]; then
                     error "One or more containers are in a failed state, please contact support!"
-                    exit 1
                   fi
                   info "An error occurred with one or more containers, attempting to start again"
                   sleep 5
@@ -74,21 +72,24 @@ function mod_update() {
             fi
       done
       mod_check
+      # ETL check AFTER an update
+      ETL_OUTPUT=false
+      mod_check_etl_status "${ETL_OUTPUT-}"
       title "Update complete"
   else
       debug "Proceeding with normal update"
       getCKEditorRTCConfig
       mod_configure
+      # ETL Check before an update
+      ETL_OUTPUT=false
+      mod_check_etl_status "${ETL_OUTPUT-}"
       if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-        debug "Unable to do rolling deployment with podman. Skipping..."
+        title "Pulling latest container images"
+        podman_remove
+        podman_pull_images
       else
         title "Pulling latest container images"
         pull_docker_images
-        if [ "$IMAGE_CHANGED" == true ]
-          then
-            title "Executing Rolling Deployment"
-            mod_rollout
-        fi
       fi
 
       # Sometimes containers won't start correctly at first, but will upon a retry
@@ -111,12 +112,13 @@ function mod_update() {
         info "Detected unhealthy services: ${unhealthy_services}"
         if [[ $i -ge $maxRetries ]]; then
           error "One or more containers are in a failed state, please contact support!"
-          exit 1
         fi
         info "An error occurred with one or more containers, attempting to start again"
         sleep 5
       done
       mod_check
+      ETL_OUTPUT=false
+      mod_check_etl_status "${ETL_OUTPUT-}"
       title "Update complete"
   fi
 }
@@ -201,6 +203,7 @@ function selfupdate_doUpgrade() {
   debug "Initially called '$ProgName' w/ args '$_INITIAL_CMD_ARGS'"
   debug "Script Backup: `sha256sum ${target}.bak`"
   debug "Script Update: `sha256sum $target`"
+
   if [ "${SKIP_APP_UPDATE:-false}" == "true" ]; then
     exit 0
   fi

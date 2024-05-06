@@ -249,6 +249,8 @@ function main() {
 
   if [ ${doModLog:-0} -eq 1 ]; then event__log_activity "command:`declare -F $mod`"; fi
   $mod
+
+
 }
 
 function _load_modules() {
@@ -318,6 +320,10 @@ function mod_initialize() {
 }
 
 function mod_install() {
+  if [ "${LOCK_UPDATES:-false}" == "true" ]; then
+    die "Updates are locked due to a failed data migration. Version Lock: $LOCK_VERSION. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
+  fi
+
   if [ "$CONTAINER_RUNTIME" != "podman" ]; then
     title "Installing PlexTrac Instance"
     requires_user_plextrac
@@ -387,6 +393,9 @@ function mod_configure() {
 }
 
 function mod_start() {
+  if [ "${LOCK_UPDATES:-false}" == "true" ]; then
+    die "Updates are locked due to a failed data migration. Version Lock: $LOCK_VERSION. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
+  fi
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
     plextrac_start_podman "svcValues"
   else
@@ -423,13 +432,6 @@ function mod_start() {
       msg " Done"
     )
   fi
-}
-
-function mod_autofix() {
-  title "Fixing Auto-Correctable Issues"
-  configure_couchbase_users
-  # Add postgres configuration monitor here
-  postgres_metrics_validation
 }
 
 function mod_version() {

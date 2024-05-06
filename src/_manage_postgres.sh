@@ -136,3 +136,63 @@ fi
   # /vagrant/src/plextrac autofix
 
 }
+
+function mod_autofix() {
+  title "Fixing Auto-Correctable Issues"
+  configure_couchbase_users
+  # Add postgres configuration monitor here
+  postgres_metrics_validation
+}
+
+function mod_check_etl_status() {
+  title "Checking Data ETL Status"
+  debug "Checking ETL health and status..."
+  ETL_OUTPUT=${ETL_OUTPUT:-true}
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local api_running=$(podman container inspect --format '{{.State.Status}}' "plextracapi" | wc -l)
+  else
+    local api_running=$(compose_client ps -q plextracapi | wc -l)
+  fi
+  if [ $api_running -gt 0 ]; then
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      RAW_OUTPUT=$(podman exec plextracapi npm run pg:etl:status --no-update-notifier --if-present)
+    else
+      RAW_OUTPUT=$(compose_client exec plextracapi npm run pg:etl:status --no-update-notifier --if-present)
+    fi
+    if [ "$RAW_OUTPUT" == "" ]; then
+      debug "No ETL status output found or it failed to run."
+      return
+    fi
+    # Find the json content by looking for the first line that starts
+    # with an opening brace and the first line that starts with a closing brace.
+    JSON_OUTPUT=$(echo "$RAW_OUTPUT" | sed '/^{/,/^}/!d')
+
+    # Find the summary content by finding the first line that starts
+    # with a closing brace and selecting all remaining lines after that one.
+    SUMMARY_OUTPUT=$(echo "$RAW_OUTPUT" | sed '1,/^}/d')
+    ETLS_COMBINED_STATUS=$(echo $JSON_OUTPUT | jq -r .etlsCombinedStatus)
+    if [ "${ETL_OUTPUT:-true}" == "true" ]; then
+      msg "$SUMMARY_OUTPUT\n"
+      debug "$JSON_OUTPUT\n"
+    fi
+
+    if [[ "$ETLS_COMBINED_STATUS" == "HEALTHY" ]]; then
+        info "All ETLs are in a healthy status."
+      else
+        etl_failure
+    fi
+  else
+    info "PlexTrac API container not running, skipping ETL status check"
+  fi
+}
+
+function etl_failure() {
+  error "One or more ETLs are in an unhealthy status."
+  LOCK_UPDATES=true
+  LOCK_VERSION=${running_ver:-"failed"}
+  sed -i "/^LOCK_VERSION/s/=.*$/=${LOCK_VERSION}/" "${PLEXTRAC_HOME}/.env"
+  sed -i '/^LOCK_UPDATES/s/=.*$/=true/' "${PLEXTRAC_HOME}/.env"
+  sed -i '/^UPGRADE_STRATEGY/s/=.*$/=NULL/' "${PLEXTRAC_HOME}/.env"
+  
+  die "Updates are locked due to a failed data migration. Version Lock: $LOCK_VERSION. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
+}
