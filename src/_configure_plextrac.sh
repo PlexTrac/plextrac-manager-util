@@ -211,8 +211,6 @@ function create_volume_directories() {
 }
 
 function getCKEditorRTCConfig() {
-  var=$(declare -p "$1")
-  eval "declare -A serviceValues="${var#*=}
 
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   serviceValues[api-image]="${PODMAN_API_IMAGE}"
