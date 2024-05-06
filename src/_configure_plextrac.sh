@@ -207,3 +207,13 @@ function create_volume_directories() {
   fi
 }
 
+function configure_waf() {
+  title "Create directory and file for customer curated WAF rules"
+  info "Validating directories for bind mounts"
+  debug "Ensuring directories exist for Volumes..."
+  if test -f "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"; then
+    debug "WAF Config already exists"
+  else
+    mkdir -vp ${PLEXTRAC_HOME}/volumes/naxsi-waf
+    echo "## Custom WAF Rules Below" > ${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules
+}

@@ -118,12 +118,14 @@ services:
       LETS_ENCRYPT_EMAIL: "${LETS_ENCRYPT_EMAIL:-}"
       OVERRIDE_SENTRY_FRONTEND_ENABLED: "${OVERRIDE_SENTRY_FRONTEND_ENABLED-}"
       USE_CUSTOM_CERT: "${USE_CUSTOM_CERT-}"
+      WAF_ENABLED: "${WAF_ENABLED:-true}"
     ports:
     - 0.0.0.0:80:80/tcp
     - 0.0.0.0:443:443/tcp
     restart: always
     volumes:
     - letsencrypt:/etc/letsencrypt:rw
+    - ${PLEXTRAC_HOME:-.}/volumes/web-application-firewall/customer_curated.rules:/etc/nginx/conf.d/customer_curated.rules:r
     healthcheck:
       test:
         - "CMD-SHELL"
