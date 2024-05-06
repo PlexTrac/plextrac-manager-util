@@ -41,12 +41,15 @@ function plextrac_install_podman() {
   PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke.cke-cs.com/cs:4.17.1}"
 
+  serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
   serviceValues[cb-image]="${PODMAN_CB_IMAGE}"
   serviceValues[pg-image]="${PODMAN_PG_IMAGE}"
   serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
   serviceValues[api-image]="${PODMAN_API_IMAGE}"
   serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
+  serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
 
   serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
   serviceValues[redis-entrypoint]=$(printf '%s' "--entrypoint=" "[" "\"redis-server\"" "," "\"--requirepass\"" "," "\"${REDIS_PASSWORD}\"" "]")
@@ -153,7 +156,9 @@ function plextrac_start_podman() {
   PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke.cke-cs.com/cs:4.17.1}"
 
+  serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
   serviceValues[cb-image]="${PODMAN_CB_IMAGE}"
   serviceValues[pg-image]="${PODMAN_PG_IMAGE}"
   serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
@@ -291,11 +296,11 @@ function podman_pull_images() {
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
 
-  serviceValues[cb-image]="${PODMAN_CB_IMAGE}"
-  serviceValues[pg-image]="${PODMAN_PG_IMAGE}"
-  serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
-  serviceValues[api-image]="${PODMAN_API_IMAGE}"
-  serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
+  service_images[cb-image]="${PODMAN_CB_IMAGE}"
+  service_images[pg-image]="${PODMAN_PG_IMAGE}"
+  service_images[redis-image]="${PODMAN_REDIS_IMAGE}"
+  service_images[api-image]="${PODMAN_API_IMAGE}"
+  service_images[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
 
   info "Pulling updated container images"
   for image in "${service_images[@]}"; do

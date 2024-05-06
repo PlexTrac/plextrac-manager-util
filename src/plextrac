@@ -40,7 +40,6 @@ svcValues[migrations-volumes]="--volumes-from=plextracapi"
 svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw -v nginx_ssl_certs:/etc/ssl/:Z,U -v nginx_logos:/usr/share/nginx/html/dist/img/:Z,U"
 svcValues[plextracnginx-healthcheck]='--health-cmd=["echo","GET","/","|","openssl","s_client","-quiet","-connect","127.0.0.1:443"]'
 svcValues[plextracnginx-alias]="--network-alias=ckeditor"
-svcValues[ckeditor-backend-image]="docker.cke.cke-cs.com/cs:4.17.1"
 
 
 trap 'cleanup $?' SIGINT ERR EXIT

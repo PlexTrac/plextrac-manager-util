@@ -211,11 +211,17 @@ function create_volume_directories() {
 }
 
 function getCKEditorRTCConfig() {
+  var=$(declare -p "$1")
+  eval "declare -A serviceValues="${var#*=}
+
+  PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  serviceValues[api-image]="${PODMAN_API_IMAGE}"
+
   if [ "${CKEDITOR_MIGRATE:-false}" = true ]; then
     debug "---"
     debug "Running CKEditor migration"
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      CKEDITOR_MIGRATE_OUTPUT=$(podman run --rm -it --name ckeditor-migration --network=plextrac --env-file ${PLEXTRAC_HOME}/.env plextrac/plextracapi:${UPGRADE_STRATEGY:-stable} npm run ckeditor:environment:migration --if-present | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
+      CKEDITOR_MIGRATE_OUTPUT=$(podman run --rm -it --name ckeditor-migration --network=plextrac --env-file ${PLEXTRAC_HOME}/.env "${serviceValues[api-image]}" npm run ckeditor:environment:migration --if-present | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
       podman rm -f ckeditor-migration &>/dev/null
     else
       # parses output and saves the result of the json meta data
