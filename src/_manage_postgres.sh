@@ -194,7 +194,5 @@ function etl_failure() {
   sed -i '/^LOCK_UPDATES/s/=.*$/=true/' "${PLEXTRAC_HOME}/.env"
   sed -i '/^UPGRADE_STRATEGY/s/=.*$/=NULL/' "${PLEXTRAC_HOME}/.env"
   
-  if [ "${LOCK_UPDATES:-false}" == "true" ]; then
-    die "Updates are locked due to a failed data migration. Version Lock: $LOCK_VERSION. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
-  fi
+  die "Updates are locked due to a failed data migration. Version Lock: $LOCK_VERSION. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
 }
