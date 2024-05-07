@@ -125,7 +125,7 @@ services:
     restart: always
     volumes:
     - letsencrypt:/etc/letsencrypt:rw
-    - ${PLEXTRAC_HOME:-.}/volumes/naxsi-waf/customer_curated.rules:/etc/nginx/conf.d/customer_curated.rules:r
+    - nginx-waf:/etc/nginx/conf.d/customer_curated.rules:Z
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -364,6 +364,12 @@ volumes:
       type: "none"
       o: "bind"
       device: "${PLEXTRAC_BACKUP_PATH}/postgres"
+  nginx-waf:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"
 
 networks:
   default:
