@@ -371,7 +371,6 @@ function mod_configure() {
   check_container_runtime
   generate_default_config
   login_dockerhub
-  configure_waf
   if [ "$CONTAINER_RUNTIME" == "docker" ] || [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
     updateComposeConfig
     validateComposeConfig

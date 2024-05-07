@@ -369,7 +369,7 @@ volumes:
     driver_opts:
       type: "none"
       o: "bind"
-      device: "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"
+      device: "${PLEXTRAC_HOME}/volumes/naxsi-waf"
 
 networks:
   default:
