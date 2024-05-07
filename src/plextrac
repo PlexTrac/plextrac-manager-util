@@ -1,8 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.6.4
-
+VERSION=0.6.5
 
 ## Podman Global Declaration Variable
 declare -A svcValues
@@ -40,6 +39,7 @@ svcValues[migrations-volumes]="--volumes-from=plextracapi"
 #Nginx
 svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw -v nginx_ssl_certs:/etc/ssl/:Z,U -v nginx_logos:/usr/share/nginx/html/dist/img/:Z,U"
 svcValues[plextracnginx-healthcheck]='--health-cmd=["echo","GET","/","|","openssl","s_client","-quiet","-connect","127.0.0.1:443"]'
+svcValues[plextracnginx-alias]="--network-alias=ckeditor"
 
 
 trap 'cleanup $?' SIGINT ERR EXIT
@@ -355,6 +355,14 @@ function mod_install() {
     fi
     pull_docker_images
     mod_start "${INSTALL_WAIT_TIMEOUT:-600}" # allow up to 10 or specified minutes for startup on install, due to migrations
+    # Configure the CKEditor RTC service as part of the install, which also requires a recreate of the backend
+    getCKEditorRTCConfig
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      podman rm -f plextracapi
+      mod_start
+    else
+      compose_client up -d "$coreBackendComposeService" --force-recreate
+    fi
     mod_info
     info "Post installation note:"
     log "If you wish to have access to historical logs, you can configure docker to send logs to journald."

@@ -95,7 +95,7 @@ function os_check() {
 
 function check_container_runtime() {
   if [ "$CONTAINER_RUNTIME" == "docker" ]; then debug "Using Docker and Docker Compose as the container runtime";
-  elif [ "$CONTAINER_RUNTIME" == "podman" ]; then debug "Using Podman as the container runtime"; 
+  elif [ "$CONTAINER_RUNTIME" == "podman" ]; then debug "Using Podman as the container runtime";
   elif [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then die "Using Podman-Compose is still currently unsupported";
   else error "Unknown container runtime: $CONTAINER_RUNTIME"; die "Valid container runtimes are: docker, podman, podman-compose";
   fi

@@ -36,6 +36,7 @@ function mod_update() {
             if [ "$i" != "$running_ver" ]
               then
                 debug "Upgrading to $i"
+                getCKEditorRTCConfig
                 mod_configure
                 UPGRADE_STRATEGY="$i"
                 debug "Upgrade Strategy is $UPGRADE_STRATEGY"
@@ -77,6 +78,7 @@ function mod_update() {
       title "Update complete"
   else
       debug "Proceeding with normal update"
+      getCKEditorRTCConfig
       mod_configure
       # ETL Check before an update
       ETL_OUTPUT=false
@@ -181,7 +183,7 @@ function selfupdate_doUpgrade() {
   tempDir=`mktemp -d -t plextrac-$releaseVersion-XXX`
   debug "Tempdir: $tempDir"
   target="${PLEXTRAC_HOME}/.local/bin/plextrac"
-  
+
   debug "`wget $releaseApiUrl -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
   debug "`wget -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
   debug "`wget -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAssetSHA256SUM) 2>&1 || error "Checksum download failed"`"
@@ -198,7 +200,7 @@ function selfupdate_doUpgrade() {
   debug `chmod -v a+x $target`
   info "Upgrade complete"
 
-  debug "Initially called '$ProgName' w/ args '$_INITIAL_CMD_ARGS'" 
+  debug "Initially called '$ProgName' w/ args '$_INITIAL_CMD_ARGS'"
   debug "Script Backup: `sha256sum ${target}.bak`"
   debug "Script Update: `sha256sum $target`"
 

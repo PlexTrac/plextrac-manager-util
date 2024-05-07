@@ -49,9 +49,12 @@ RUNAS_APPUSER=True
 PLEXTRAC_PARSER_URL=https://plextracparser:4443
 UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
+CKEDITOR_ENVIRONMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-`generateSecret`}
+CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}
 CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-"docker"}
 LOCK_UPDATES=${LOCK_UPDATES:-"false"}
 LOCK_VERSION=${LOCK_VERSION:-}
+
 
 `generate_default_couchbase_env | setDefaultSecrets`
 `generate_default_postgres_env | setDefaultSecrets`
@@ -122,7 +125,7 @@ function login_dockerhub() {
     if [ -z "${IMAGE_REGISTRY_USER:-}" ]; then
       debug "$IMAGE_REGISTRY username not found, continuing..."
       local image_user=""
-    else 
+    else
       local image_user="-u ${IMAGE_REGISTRY_USER:-}"
     fi
 
@@ -206,5 +209,48 @@ function create_volume_directories() {
     stat "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs"
     stat "${PLEXTRAC_HOME}/volumes/nginx_logos" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_logos"
     stat "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/naxsi-waf"; echo '## Custom WAF Rules Below' > "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"
+  fi
+}
+
+function getCKEditorRTCConfig() {
+  declare -A serviceValues
+  PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  serviceValues[api-image]="${PODMAN_API_IMAGE}"
+
+  if [ "${CKEDITOR_MIGRATE:-false}" = true ]; then
+    debug "---"
+    debug "Running CKEditor migration"
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      CKEDITOR_MIGRATE_OUTPUT=$(podman run --rm -it --name ckeditor-migration --network=plextrac --env-file ${PLEXTRAC_HOME}/.env "${serviceValues[api-image]}" npm run ckeditor:environment:migration --if-present | grep '^{' || debug "ERROR: Unable to run ckeditor:environment:migration")
+      podman rm -f ckeditor-migration &>/dev/null
+    else
+      # parses output and saves the result of the json meta data
+      # the last line, which only contains the JSON data, should be used
+      CKEDITOR_MIGRATE_OUTPUT=$(compose_client run --name ckeditor-migration --no-deps  ckeditor-migration || debug "ERROR: Unable to run ckeditor:environment:migration")
+      docker rm -f ckeditor-migration &>/dev/null
+    fi
+
+    ## Split the output so we can send logs out, but keep the key separate
+    CKEDITOR_JSON=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep '^{' || debug "INFO: no JSON found in response")
+    CKEDITOR_LOGS_OUTPUT=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep -v '^{' || debug "ERROR: Invalid response from ckeditor-migration")
+    # for each line in the variable $CKEDITOR_LOGS_OUTPUT send to logs with logger
+    while read -r line; do
+      logger -t ckeditor-migration $line
+    done <<< "$CKEDITOR_LOGS_OUTPUT"
+
+    # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
+    if [ "$(echo "$CKEDITOR_JSON" | jq -e ".[] | any(\".api_secret\")")" ]; then
+      BASE64_CKEDITOR=$(echo "$CKEDITOR_JSON" | base64 -w 0)
+      CKEDITOR_SERVER_CONFIG="$BASE64_CKEDITOR"
+      debug "Setting CKEDITOR_SERVER_CONFIG"
+      sed -i "s/CKEDITOR_SERVER_CONFIG=.*/CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG}/" ${PLEXTRAC_HOME}/.env
+      CKEDITOR_JSON=""
+      CKEDITOR_MIGRATE_OUTPUT=""
+      BASE64_CKEDITOR=""
+    else
+      debug "ERROR: Response did not contain JSON with expected key"
+    fi
+  else
+    debug "CKEditor service not found; migration has not been run"
   fi
 }

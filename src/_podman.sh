@@ -41,12 +41,15 @@ function plextrac_install_podman() {
   PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke.cke-cs.com/cs:4.17.1}"
 
+  serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
   serviceValues[cb-image]="${PODMAN_CB_IMAGE}"
   serviceValues[pg-image]="${PODMAN_PG_IMAGE}"
   serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
   serviceValues[api-image]="${PODMAN_API_IMAGE}"
   serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
+  serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
 
   serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
   serviceValues[redis-entrypoint]=$(printf '%s' "--entrypoint=" "[" "\"redis-server\"" "," "\"--requirepass\"" "," "\"${REDIS_PASSWORD}\"" "]")
@@ -57,6 +60,8 @@ function plextrac_install_podman() {
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
   fi
   serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err}"
+  serviceValues[ckeditor-backend-env_vars]="-e DATABASE_Driver=postgres -e DATABASE_HOST=postgres -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e REDIS_HOST=redis -e REDIS_CONNECTION_STRING=redis://redis:6379 -e DATABASE_POOL_CONNECTION_LIMIT=10 -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false}"
+
   title "Installing PlexTrac Instance"
   requires_user_plextrac
   mod_configure
@@ -132,7 +137,7 @@ function plextrac_install_podman() {
       debug "No uploads to restore"
     fi
   fi
-  
+
   mod_start "${INSTALL_WAIT_TIMEOUT:-600}" # allow up to 10 or specified minutes for startup on install, due to migrations
   mod_info
   info "Post installation note:"
@@ -151,7 +156,9 @@ function plextrac_start_podman() {
   PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke.cke-cs.com/cs:4.17.1}"
 
+  serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
   serviceValues[cb-image]="${PODMAN_CB_IMAGE}"
   serviceValues[pg-image]="${PODMAN_PG_IMAGE}"
   serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
@@ -164,10 +171,15 @@ function plextrac_start_podman() {
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
   fi
   serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err}"
-  
+  serviceValues[ckeditor-backend-env_vars]="-e DATABASE_Driver=postgres -e DATABASE_HOST=postgres -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e REDIS_HOST=redis -e REDIS_CONNECTION_STRING=redis://redis:6379 -e DATABASE_POOL_CONNECTION_LIMIT=10 -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false}"
+  if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
+    serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
+  fi
+  serviceValues[notification-env_vars]="-e API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE: ${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
+
   title "Starting PlexTrac..."
   requires_user_plextrac
-  
+
   for service in "${serviceNames[@]}"; do
   debug "Checking $service"
     local volumes=""
@@ -178,6 +190,8 @@ function plextrac_start_podman() {
     local entrypoint=""
     local deploy=""
     local env_vars=""
+    local alias=""
+    local init=""
     if container_client container exists "$service"; then
       if [ "$(container_client container inspect --format '{{.State.Status}}' "$service")" != "running" ]; then
         info "Starting $service"
@@ -209,9 +223,13 @@ function plextrac_start_podman() {
       elif [ "$service" == "notification-engine" ]; then
         local entrypoint="${serviceValues[notification-engine-entrypoint]}"
         local healthcheck="${serviceValues[notification-engine-healthcheck]}"
+        local env_vars="${serviceValues[notification-env_vars]}"
+        local init="--init"
       elif [ "$service" == "notification-sender" ]; then
         local entrypoint="${serviceValues[notification-sender-entrypoint]}"
         local healthcheck="${serviceValues[notification-sender-healthcheck]}"
+        local env_vars="${serviceValues[notification-env_vars]}"
+        local init="--init"
       elif [ "$service" == "contextual-scoring-service" ]; then
         local entrypoint="${serviceValues[contextual-scoring-service-entrypoint]}"
         local healthcheck="${serviceValues[contextual-scoring-service-healthcheck]}"
@@ -224,6 +242,10 @@ function plextrac_start_podman() {
         local ports="${serviceValues[plextracnginx-ports]}"
         local image="${serviceValues[plextracnginx-image]}"
         local healthcheck="${serviceValues[plextracnginx-healthcheck]}"
+        local alias="${serviceValues[plextracnginx-alias]}"
+      elif [ "$service" == "ckeditor-backend" ]; then
+        local image="${serviceValues[ckeditor-backend-image]}"
+        local env_vars="${serviceValues[ckeditor-backend-env_vars]}"
       fi
       info "Creating $service"
       # This specific if loop is because Bash escaping and the specific need for the podman flag --entrypoint were being a massive pain in figuring out. After hours of effort, simply making an if statement here and calling podman directly fixes the escaping issues
@@ -233,7 +255,7 @@ function plextrac_start_podman() {
         $volumes:z --name=${service} $deploy ${serviceValues[network]} $ports -d $image 1>/dev/null
         continue
       fi
-      container_client run ${serviceValues[env-file]} $env_vars $entrypoint $restart_policy $healthcheck \
+      container_client run ${serviceValues[env-file]} $env_vars $init $alias $entrypoint $restart_policy $healthcheck \
         $volumes --name=${service} $deploy ${serviceValues[network]} $ports -d $image 1>/dev/null
     fi
   done
@@ -274,11 +296,11 @@ function podman_pull_images() {
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
 
-  serviceValues[cb-image]="${PODMAN_CB_IMAGE}"
-  serviceValues[pg-image]="${PODMAN_PG_IMAGE}"
-  serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
-  serviceValues[api-image]="${PODMAN_API_IMAGE}"
-  serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
+  service_images[cb-image]="${PODMAN_CB_IMAGE}"
+  service_images[pg-image]="${PODMAN_PG_IMAGE}"
+  service_images[redis-image]="${PODMAN_REDIS_IMAGE}"
+  service_images[api-image]="${PODMAN_API_IMAGE}"
+  service_images[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
 
   info "Pulling updated container images"
   for image in "${service_images[@]}"; do
