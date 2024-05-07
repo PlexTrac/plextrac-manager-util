@@ -195,7 +195,7 @@ function create_volume_directories() {
   debug "Ensuring directories exist for Volumes..."
   if [ "$CONTAINER_RUNTIME" != "podman" ]; then
     debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
-    stat "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules" &>/dev/null || echo '## Custom WAF Rules Below' > "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"
+    stat "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/naxsi-waf"; echo '## Custom WAF Rules Below' > "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"
   else
     stat "${PLEXTRAC_BACKUP_PATH}/couchbase" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/couchbase"
     stat "${PLEXTRAC_BACKUP_PATH}/postgres" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/postgres"
