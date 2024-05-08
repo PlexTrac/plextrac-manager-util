@@ -145,6 +145,26 @@ function mod_autofix() {
 }
 
 function mod_check_etl_status() {
+  local migration_exited="running"
+  title "Checking Data Migration Status"
+  info "Checking Migration Status"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local migration_exited=$(podman container inspect --format '{{.State.Status}}' "migrations")
+  else
+    local migration_exited=$(docker inspect --format '{{.State.Status}}' "plextrac-couchbase-migrations-1")
+  fi
+  while [ "$migration_exited" == "running" ]; do
+    # Check if the migration container has exited, e.g., migrations have completed or failed
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      local migration_exited=$(podman container inspect --format '{{.State.Status}}' "migrations")
+    else
+      local migration_exited=$(docker inspect --format '{{.State.Status}}' "plextrac-couchbase-migrations-1")
+    fi
+    for s in / - \\ \|; do printf "\r$s"; sleep .1; done
+  done
+  printf "\r"
+  info "Migrations complete"
+
   title "Checking Data ETL Status"
   debug "Checking ETL health and status..."
   ETL_OUTPUT=${ETL_OUTPUT:-true}
