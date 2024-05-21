@@ -254,3 +254,9 @@ function getCKEditorRTCConfig() {
     debug "CKEditor service not found; migration has not been run"
   fi
 }
+
+function ckeditorNginxConf() {
+  debug "Enabling proxy for CKEditor Backend and NGINX Proxy settings"
+  compose_client up -d ckeditor-backend
+  compose_client up -d plextracnginx --force-recreate
+}

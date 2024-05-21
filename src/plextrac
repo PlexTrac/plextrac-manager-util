@@ -227,6 +227,12 @@ function main() {
         shift
         shift
         ;;
+      "-cke" | "--cke-migration")
+        IGNORE_ETL_STATUS="true"
+        MIGRATE_CKE="true"
+        shift
+        shift
+        ;;
       *)
         if declare -f mod_$1 >/dev/null 2>&1; then
           # enable event logging for sub commands
