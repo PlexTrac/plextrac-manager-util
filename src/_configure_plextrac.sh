@@ -255,6 +255,7 @@ function getCKEditorRTCConfig() {
   fi
 }
 
+# This will ensure that the two services for CKE are stood up and functional before we run the Environment or the RTC migrations
 function ckeditorNginxConf() {
   debug "Enabling proxy for CKEditor Backend and NGINX Proxy settings"
   compose_client up -d ckeditor-backend
