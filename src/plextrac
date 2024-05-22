@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.6.7
+VERSION=0.6.8
 
 ## Podman Global Declaration Variable
 declare -A svcValues
@@ -227,6 +227,11 @@ function main() {
         shift
         shift
         ;;
+      "-cke" | "--cke-migration")
+        IGNORE_ETL_STATUS="true"
+        MIGRATE_CKE="true"
+        shift
+        ;;
       *)
         if declare -f mod_$1 >/dev/null 2>&1; then
           # enable event logging for sub commands
@@ -356,13 +361,12 @@ function mod_install() {
     pull_docker_images
     mod_start "${INSTALL_WAIT_TIMEOUT:-600}" # allow up to 10 or specified minutes for startup on install, due to migrations
     # Configure the CKEditor RTC service as part of the install, which also requires a recreate of the backend
-    getCKEditorRTCConfig
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      podman rm -f plextracapi
-      mod_start
-    else
-      compose_client up -d "$coreBackendComposeService" --force-recreate
+    if [ "${MIGRATE_CKE:-false}" == "true" ]; then
+      ckeditorNginxConf
     fi
+    getCKEditorRTCConfig
+    compose_client up -d "$coreBackendComposeService" --force-recreate
+
     mod_info
     info "Post installation note:"
     log "If you wish to have access to historical logs, you can configure docker to send logs to journald."

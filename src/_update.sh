@@ -27,6 +27,10 @@ function mod_update() {
   # Check upstream tags avaialble to download
   mod_configure
   version_check
+  if [ "${MIGRATE_CKE:-false}" == "true" ]; then
+    debug "Enabling Environment and RTC Migration"
+    ckeditorNginxConf
+  fi
   if $contiguous_update
     then
       debug "Proceeding with contiguous update"

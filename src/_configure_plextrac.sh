@@ -237,6 +237,7 @@ function getCKEditorRTCConfig() {
     while read -r line; do
       logger -t ckeditor-migration $line
     done <<< "$CKEDITOR_LOGS_OUTPUT"
+    echo "$CKEDITOR_LOGS_OUTPUT" > ${PLEXTRAC_HOME}/ckeditor-migration.log
 
     # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
     if [ "$(echo "$CKEDITOR_JSON" | jq -e ".[] | any(\".api_secret\")")" ]; then
@@ -253,4 +254,11 @@ function getCKEditorRTCConfig() {
   else
     debug "CKEditor service not found; migration has not been run"
   fi
+}
+
+# This will ensure that the two services for CKE are stood up and functional before we run the Environment or the RTC migrations
+function ckeditorNginxConf() {
+  debug "Enabling proxy for CKEditor Backend and NGINX Proxy settings"
+  compose_client up -d ckeditor-backend
+  compose_client up -d plextracnginx --force-recreate
 }
