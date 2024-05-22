@@ -237,6 +237,7 @@ function getCKEditorRTCConfig() {
     while read -r line; do
       logger -t ckeditor-migration $line
     done <<< "$CKEDITOR_LOGS_OUTPUT"
+    echo "$CKEDITOR_LOGS_OUTPUT" > ${PLEXTRAC_HOME}/ckeditor-migration.log
 
     # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
     if [ "$(echo "$CKEDITOR_JSON" | jq -e ".[] | any(\".api_secret\")")" ]; then
