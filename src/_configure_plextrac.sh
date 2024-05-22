@@ -261,4 +261,5 @@ function ckeditorNginxConf() {
   debug "Enabling proxy for CKEditor Backend and NGINX Proxy settings"
   compose_client up -d ckeditor-backend
   compose_client up -d plextracnginx --force-recreate
+  sleep 20
 }
