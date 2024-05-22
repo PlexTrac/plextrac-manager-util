@@ -139,6 +139,9 @@ function plextrac_install_podman() {
   fi
 
   mod_start "${INSTALL_WAIT_TIMEOUT:-600}" # allow up to 10 or specified minutes for startup on install, due to migrations
+  podman rm -f plextracapi
+  mod_start
+  
   mod_info
   info "Post installation note:"
   log "If you wish to have access to historical logs, you can configure docker to send logs to journald."

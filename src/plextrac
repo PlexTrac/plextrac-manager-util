@@ -366,12 +366,8 @@ function mod_install() {
       ckeditorNginxConf
     fi
     getCKEditorRTCConfig
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      podman rm -f plextracapi
-      mod_start
-    else
-      compose_client up -d "$coreBackendComposeService" --force-recreate
-    fi
+    compose_client up -d "$coreBackendComposeService" --force-recreate
+
     mod_info
     info "Post installation note:"
     log "If you wish to have access to historical logs, you can configure docker to send logs to journald."
