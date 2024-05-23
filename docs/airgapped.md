@@ -3,7 +3,7 @@
 ## VM Prep
 
 1. Install Needful Packages
-	- bc, jq, yum-utils, docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin
+	- bc, jq, unzip, yum-utils, docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin
 	- Enable Docker: `systemctl enable docker`
 	- Restart Docker: `/bin/systemctl restart docker.service`
 2. Download Manager Util
