@@ -10,23 +10,32 @@ function mod_update() {
   title "Updating PlexTrac"
   # I'm comparing an int :shrug:
   # shellcheck disable=SC2086
-  if [ ${SKIP_SELF_UPGRADE:-0} -eq 0 ]; then
-    info "Checking for updates to the PlexTrac Management Utility"
-    if selfupdate_checkForNewRelease; then
-      event__log_activity "update:upgrade-utility" "${releaseInfo}"
-      selfupdate_doUpgrade
-      die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
-      exit 1 # just in case, previous line should already exit
+  if [ "${AIRGAPPED:-false}" == "false" ]; then
+    if [ ${SKIP_SELF_UPGRADE:-0} -eq 0 ]; then
+      info "Checking for updates to the PlexTrac Management Utility"
+      if selfupdate_checkForNewRelease; then
+        event__log_activity "update:upgrade-utility" "${releaseInfo}"
+        selfupdate_doUpgrade
+        die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
+        exit 1 # just in case, previous line should already exit
+      fi
+    else
+      info "Skipping self upgrade"
+      error "PlexTrac began/will begin doing contiguous updates to the PlexTrac application starting with the v2.0 release. From that point forward, all releases will need to be updated with minor version increments. Skipping updating the PlexTrac Manager Util can have adverse affects on the application if a minor version update is skipped. Are you sure you want to continue skipping updates to this utility?"
+      get_user_approval
     fi
   else
-    info "Skipping self upgrade"
-    error "PlexTrac began/will begin doing contiguous updates to the PlexTrac application starting with the v2.0 release. From that point forward, all releases will need to be updated with minor version increments. Skipping updating the PlexTrac Manager Util can have adverse affects on the application if a minor version update is skipped. Are you sure you want to continue skipping updates to this utility?"
-    get_user_approval
+    info "AIRGAPPED mode enabled, skipping utility update"
   fi
   info "Updating PlexTrac instance to latest release..."
   # Check upstream tags avaialble to download
   mod_configure
-  version_check
+  if [ "${AIRGAPPED:-false}" == "false" ]; then
+    version_check
+  else
+    info "AIRGAPPED mode enabled, skipping version check and using pinned version."
+    contiguous_update=false
+  fi
   if [ "${MIGRATE_CKE:-false}" == "true" ]; then
     debug "Enabling Environment and RTC Migration"
     ckeditorNginxConf
@@ -87,15 +96,18 @@ function mod_update() {
       # ETL Check before an update
       ETL_OUTPUT=false
       mod_check_etl_status "${ETL_OUTPUT-}"
-      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-        title "Pulling latest container images"
-        podman_remove
-        podman_pull_images
+      if [ "${AIRGAPPED:-false}" == "false" ]; then
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          title "Pulling latest container images"
+          podman_remove
+          podman_pull_images
+        else
+          title "Pulling latest container images"
+          pull_docker_images
+        fi
       else
-        title "Pulling latest container images"
-        pull_docker_images
+        info "AIRGAPPED mode enabled, skipping image pull"
       fi
-
       # Sometimes containers won't start correctly at first, but will upon a retry
       maxRetries=2
       for i in $( seq 1 $maxRetries ); do
@@ -217,6 +229,10 @@ function selfupdate_doUpgrade() {
 
 
 function mod_util-update() {
+  if [ "${AIRGAPPED:-false}" == "true" ]; then
+    info "AIRGAPPED mode enabled, skipping utility update"
+    return 0
+  fi
   info "Checking for updates to the PlexTrac Management Utility"
   SKIP_APP_UPDATE=true
   if selfupdate_checkForNewRelease; then

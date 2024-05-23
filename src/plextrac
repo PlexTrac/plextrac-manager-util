@@ -303,18 +303,22 @@ function mod_initialize() {
   info "Initializing environment for PlexTrac..."
   check_container_runtime
   requires_user_root
-  info "Setting up system packages"
-  system_packages__do_system_upgrade
-  system_packages__install_system_dependencies
-  if [ "$CONTAINER_RUNTIME" == "docker" ]; then
-    install_docker "${FORCEUPGRADE-}"
-    install_docker_compose "${FORCEUPGRADE-}"
-  fi
-  if [ "$CONTAINER_RUNTIME" == "podman" ] || [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
-    install_podman "${FORCEUPGRADE-}"
-    if [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
-      install_podman_compose "${FORCEUPGRADE-}"
+  if [ "${AIR_GAPPED:-false}" == "false" ]; then
+    info "Setting up system packages"
+    system_packages__do_system_upgrade
+    system_packages__install_system_dependencies
+    if [ "$CONTAINER_RUNTIME" == "docker" ]; then
+      install_docker "${FORCEUPGRADE-}"
+      install_docker_compose "${FORCEUPGRADE-}"
     fi
+    if [ "$CONTAINER_RUNTIME" == "podman" ] || [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
+      install_podman "${FORCEUPGRADE-}"
+      if [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
+        install_podman_compose "${FORCEUPGRADE-}"
+      fi
+    fi
+  else
+    info "Air-gapped environment detected, skipping system package installation"
   fi
   title "Setting up local PlexTrac user"
   create_user
@@ -358,7 +362,11 @@ function mod_install() {
         RESTORETARGET="uploads" mod_restore
       fi
     fi
-    pull_docker_images
+    if [ "${AIRGAPPED:-false}" == "false" ]; then
+      pull_docker_images
+    else
+      info "Air-gapped environment detected, skipping Image pull."
+    fi
     mod_start "${INSTALL_WAIT_TIMEOUT:-600}" # allow up to 10 or specified minutes for startup on install, due to migrations
     # Configure the CKEditor RTC service as part of the install, which also requires a recreate of the backend
     if [ "${MIGRATE_CKE:-false}" == "true" ]; then
@@ -382,7 +390,11 @@ function mod_configure() {
   requires_user_plextrac
   check_container_runtime
   generate_default_config
-  login_dockerhub
+  if [ "${AIRGAPPED:-false}" == "false" ]; then
+    login_dockerhub
+  else
+    info "Air-gapped environment detected, skipping DockerHub login"
+  fi
   if [ "$CONTAINER_RUNTIME" == "docker" ] || [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
     updateComposeConfig
     validateComposeConfig
