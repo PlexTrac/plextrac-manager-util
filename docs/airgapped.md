@@ -48,3 +48,9 @@ docker load < plextrac_images.tar
 
 5. Rerun `plextrac configure -v --air-gapped`
 6. Install PlexTrac: `plextrac install -v -y`
+
+## PlexTrac Updates
+
+You'll need to pull the new docker images and load them into the environment. Then you'll need to set the `UPGRADE_STRATEGY` value in the `.env` file to the new version. Then just run `plextrac update -v -y`
+
+> NOTE: PlexTrac REQUIRES contiguous updates, so don't skip a version for any reason unless you're installing the FIRST time.
