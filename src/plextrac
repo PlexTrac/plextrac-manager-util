@@ -307,7 +307,7 @@ function mod_initialize() {
   info "Initializing environment for PlexTrac..."
   check_container_runtime
   requires_user_root
-  if [ "${AIR_GAPPED:-false}" == "false" ]; then
+  if [ "${AIRGAPPED:-false}" == "false" ]; then
     info "Setting up system packages"
     system_packages__do_system_upgrade
     system_packages__install_system_dependencies
