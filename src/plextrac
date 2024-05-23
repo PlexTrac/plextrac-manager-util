@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.6.8
+VERSION=0.6.9
 
 ## Podman Global Declaration Variable
 declare -A svcValues
@@ -230,6 +230,10 @@ function main() {
       "-cke" | "--cke-migration")
         IGNORE_ETL_STATUS="true"
         MIGRATE_CKE="true"
+        shift
+        ;;
+      "--air-gapped")
+        AIRGAPPED="true"
         shift
         ;;
       *)
