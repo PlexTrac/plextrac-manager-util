@@ -16,7 +16,7 @@
 
 ```shell
 docker pull plextrac/plextracapi:<NEXT_VERSION>
-docker pull plextrac/plextracnginx:<NEXT_VERISON>
+docker pull plextrac/plextracnginx:<NEXT_VERSION>
 # The plextracdb shouldn't ever get updated so this will be a one time pull and can be omited from process / automation
 docker pull plextrac/plextracdb:7.2.0
 docker pull redis:6.2-alpine
