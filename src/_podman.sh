@@ -253,9 +253,9 @@ function plextrac_start_podman() {
       info "Creating $service"
       # This specific if loop is because Bash escaping and the specific need for the podman flag --entrypoint were being a massive pain in figuring out. After hours of effort, simply making an if statement here and calling podman directly fixes the escaping issues
       if [ "$service" == "migrations" ]; then
-        debug "Running migrations"
-        podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:migrate && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no $healthcheck \
-        $volumes:z --name=${service} $deploy ${serviceValues[network]} $ports -d $image 1>/dev/null
+        # debug "Running migrations"
+        # podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:migrate && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no $healthcheck \
+        # $volumes:z --name=${service} $deploy ${serviceValues[network]} $ports -d $image 1>/dev/null
         continue
       fi
       container_client run ${serviceValues[env-file]} $env_vars $init $alias $entrypoint $restart_policy $healthcheck \
@@ -276,7 +276,7 @@ function plextrac_start_podman() {
     done &
     progressBarPid=$!
     debug "Waiting for migrations to run and complete if needed"
-    timeout --preserve-status $waitTimeout podman wait migrations >/dev/null || { error "Migrations exceeded timeout"; kill $progressBarPid; exit 1; } &
+    timeout --preserve-status $waitTimeout podman wait migrations >/dev/null || { error "Migrations exceeded timeout"; kill $progressBarPid; } &
 
     timeoutPid=$!
     trap "kill $progressBarPid $timeoutPid >/dev/null 2>&1 || true" SIGINT SIGTERM
@@ -288,6 +288,22 @@ function plextrac_start_podman() {
 
     msg " Done"
   )
+}
+
+function podman_run_cb_migrations() {
+  var=$(declare -p "$1")
+  eval "declare -A serviceValues="${var#*=}
+  serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
+  serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err}"
+  PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  serviceValues[api-image]="${PODMAN_API_IMAGE}"
+  local env_vars="${serviceValues[migrations-env_vars]}"
+  local volumes=serviceValues[migrations-volumes]
+  local image="${serviceValues[api-image]}"
+
+  debug "Running migrations"
+  podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:migrate && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no \
+  $volumes:z --name=migrations ${serviceValues[network]} -d $image 1>/dev/null
 }
 
 function podman_pull_images() {

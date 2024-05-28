@@ -67,8 +67,10 @@ function mod_update() {
             mod_start || sleep 20
             if [ "$CONTAINER_RUNTIME" == "podman" ]; then
               unhealthy_services=$(for service in $(podman ps -a --format json | jq -r .[].Names | grep '"' | cut -d '"' -f2); do podman inspect $service --format json | jq -r '.[] | select(.State.Health.Status == "unhealthy" or (.State.Status != "running" and .State.ExitCode != 0) or .State.Status == "created") | .Name' | xargs -r printf "%s;"; done)
+              podman_run_cb_migrations
             else
               unhealthy_services=$(compose_client ps -a --format json | jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | xargs -r printf "%s;")
+              run_cb_migrations
             fi
             if [[ "${unhealthy_services}" != "" ]]; then
               info "Detected unhealthy services: ${unhealthy_services}"
@@ -109,8 +111,10 @@ function mod_update() {
       mod_start || sleep 20
       if [ "$CONTAINER_RUNTIME" == "podman" ]; then
         unhealthy_services=$(for service in $(podman ps -a --format json | jq -r .[].Names | grep '"' | cut -d '"' -f2); do podman inspect $service --format json | jq -r '.[] | select(.State.Health.Status == "unhealthy" or (.State.Status != "running" and .State.ExitCode != 0) or .State.Status == "created") | .Name' | xargs -r printf "%s;"; done)
+        podman_run_cb_migrations
       else
         unhealthy_services=$(compose_client ps -a --format json | jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | xargs -r printf "%s;")
+        run_cb_migrations
       fi
       if [[ "${unhealthy_services}" != "" ]]; then
         info "Detected unhealthy services: ${unhealthy_services}"

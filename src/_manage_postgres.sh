@@ -148,12 +148,17 @@ function mod_check_etl_status() {
   local migration_exited="running"
   title "Checking Data Migration Status"
   info "Checking Migration Status"
+  secs=300
+  endTime=$(( $(date +%s) + secs ))
   while [ "$migration_exited" == "running" ]; do
     # Check if the migration container has exited, e.g., migrations have completed or failed
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       local migration_exited=$(podman container inspect --format '{{.State.Status}}' "migrations")
     else
       local migration_exited=$(docker inspect --format '{{.State.Status}}' "plextrac-couchbase-migrations-1")
+    fi
+    if [ $(date +%s) -gt $endTime ]; then
+      die "Migration container has been running for over 5 minutes or is still running. Exiting..."
     fi
     for s in / - \\ \|; do printf "\r$s $(docker inspect --format '{{.State.Status}}' plextrac-couchbase-migrations-1) -- $(docker logs plextrac-couchbase-migrations-1 2> /dev/null | tail -n 1 -q)"; sleep .1; done
   done
