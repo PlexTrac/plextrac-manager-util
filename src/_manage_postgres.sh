@@ -155,7 +155,7 @@ function mod_check_etl_status() {
     else
       local migration_exited=$(docker inspect --format '{{.State.Status}}' "plextrac-couchbase-migrations-1")
     fi
-    for s in / - \\ \|; do printf "\r$s"; sleep .1; done
+    for s in / - \\ \|; do printf "\r$s $(docker inspect --format '{{.State.Status}}' plextrac-couchbase-migrations-1) -- $(docker logs plextrac-couchbase-migrations-1 2> /dev/null | tail -n 1 -q)"; sleep .1; done
   done
   printf "\r"
   info "Migrations complete"
