@@ -145,65 +145,82 @@ function mod_autofix() {
 }
 
 function mod_check_etl_status() {
-  if [ "${IGNORE_ETL_STATUS:-false}" == "false" ]; then
-    local migration_exited="running"
-    title "Checking Data Migration Status"
-    info "Checking Migration Status"
+  local migration_exited="running"
+  title "Checking Data Migration Status"
+  info "Checking Migration Status"
+  while [ "$migration_exited" == "running" ]; do
+    # Check if the migration container has exited, e.g., migrations have completed or failed
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       local migration_exited=$(podman container inspect --format '{{.State.Status}}' "migrations")
     else
       local migration_exited=$(docker inspect --format '{{.State.Status}}' "plextrac-couchbase-migrations-1")
     fi
-    while [ "$migration_exited" == "running" ]; do
-      # Check if the migration container has exited, e.g., migrations have completed or failed
-      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-        local migration_exited=$(podman container inspect --format '{{.State.Status}}' "migrations")
-      else
-        local migration_exited=$(docker inspect --format '{{.State.Status}}' "plextrac-couchbase-migrations-1")
-      fi
-      for s in / - \\ \|; do printf "\r$s"; sleep .1; done
-    done
-    printf "\r"
-    info "Migrations complete"
+    for s in / - \\ \|; do printf "\r$s"; sleep .1; done
+  done
+  printf "\r"
+  info "Migrations complete"
 
-    title "Checking Data ETL Status"
-    debug "Checking ETL health and status..."
-    ETL_OUTPUT=${ETL_OUTPUT:-true}
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      local api_running=$(podman container inspect --format '{{.State.Status}}' "plextracapi" | wc -l)
+  if [ "${IGNORE_ETL_STATUS:-false}" == "false" ]; then
+   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      local etl_running_backend_version="$(for i in $(podman ps -a -q --filter name=plextracapi); do podman inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
     else
-      local api_running=$(compose_client ps -q plextracapi | wc -l)
+      local etl_running_backend_version="$(for i in $(compose_client ps plextracapi -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
     fi
-    if [ $api_running -gt 0 ]; then
+    if [[ $etl_running_backend_version != "" ]]; then
+      debug "Running Version: $etl_running_backend_version"
+      # Get the major and minor version from the running containers
+      local etl_maj_ver=$(echo "$etl_running_backend_version" | cut -d '.' -f1)
+      local etl_min_ver=$(echo "$etl_running_backend_version" | cut -d '.' -f2)
+      local etl_running_ver=$(echo $etl_running_backend_version | awk -F. '{print $1"."$2}')
+      local etl_running_ver="$etl_maj_ver.$etl_min_ver"
+    else
+      debug "ETL RunVer: plextracapi is NOT running"
+      die "plextracapi service isn't running. Please run 'plextrac start' and re-run the update"
+    fi
+    local etl_breaking_ver=${etl_breaking_ver:-"2.0"}
+    debug "Running Version: $etl_running_ver, Breaking Version: $etl_breaking_ver"
+    if (( $(echo "$etl_breaking_ver <= $etl_running_ver" | bc -l) )); then
+      title "Checking Data ETL Status"
+      debug "Checking ETL health and status..."
+      ETL_OUTPUT=${ETL_OUTPUT:-true}
       if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-        RAW_OUTPUT=$(podman exec plextracapi npm run pg:etl:status --no-update-notifier --if-present)
+        local api_running=$(podman container inspect --format '{{.State.Status}}' "plextracapi" | wc -l)
       else
-        RAW_OUTPUT=$(compose_client exec plextracapi npm run pg:etl:status --no-update-notifier --if-present)
+        local api_running=$(compose_client ps -q plextracapi | wc -l)
       fi
-      if [ "$RAW_OUTPUT" == "" ]; then
-        debug "No ETL status output found or it failed to run."
-        return
-      fi
-      # Find the json content by looking for the first line that starts
-      # with an opening brace and the first line that starts with a closing brace.
-      JSON_OUTPUT=$(echo "$RAW_OUTPUT" | sed '/^{/,/^}/!d')
-
-      # Find the summary content by finding the first line that starts
-      # with a closing brace and selecting all remaining lines after that one.
-      SUMMARY_OUTPUT=$(echo "$RAW_OUTPUT" | sed '1,/^}/d')
-      ETLS_COMBINED_STATUS=$(echo $JSON_OUTPUT | jq -r .etlsCombinedStatus)
-      if [ "${ETL_OUTPUT:-true}" == "true" ]; then
-        msg "$SUMMARY_OUTPUT\n"
-        debug "$JSON_OUTPUT\n"
-      fi
-
-      if [[ "$ETLS_COMBINED_STATUS" == "HEALTHY" ]]; then
-          info "All ETLs are in a healthy status."
+      if [ $api_running -gt 0 ]; then
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          RAW_OUTPUT=$(podman exec plextracapi npm run pg:etl:status --no-update-notifier --if-present)
         else
-          etl_failure
+          RAW_OUTPUT=$(compose_client exec plextracapi npm run pg:etl:status --no-update-notifier --if-present)
+        fi
+        if [ "$RAW_OUTPUT" == "" ]; then
+          debug "No ETL status output found or it failed to run."
+          return
+        fi
+        # Find the json content by looking for the first line that starts
+        # with an opening brace and the first line that starts with a closing brace.
+        JSON_OUTPUT=$(echo "$RAW_OUTPUT" | sed '/^{/,/^}/!d')
+
+        # Find the summary content by finding the first line that starts
+        # with a closing brace and selecting all remaining lines after that one.
+        SUMMARY_OUTPUT=$(echo "$RAW_OUTPUT" | sed '1,/^}/d')
+        ETLS_COMBINED_STATUS=$(echo $JSON_OUTPUT | jq -r .etlsCombinedStatus)
+        if [ "${ETL_OUTPUT:-true}" == "true" ]; then
+          msg "$SUMMARY_OUTPUT\n"
+          debug "$JSON_OUTPUT\n"
+        fi
+
+        if [[ "$ETLS_COMBINED_STATUS" == "HEALTHY" ]]; then
+            info "All ETLs are in a healthy status."
+          else
+            etl_failure
+        fi
+      else
+        info "PlexTrac API container not running, skipping ETL status check"
       fi
     else
-      info "PlexTrac API container not running, skipping ETL status check"
+      info "Skipping ETL Check; Version prior to 2.0 detected: $running_ver"
     fi
   else
     error "Skipping ETL status check"

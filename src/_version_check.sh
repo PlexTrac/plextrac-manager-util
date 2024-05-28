@@ -25,7 +25,7 @@ function version_check() {
   ## LOGIC: RunVer
   debug "Running Version"
   # Get running version of Backend
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
     running_backend_version="$(for i in $(podman ps -a -q --filter name=plextracapi); do podman inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
   else
     running_backend_version="$(for i in $(compose_client ps plextracapi -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
