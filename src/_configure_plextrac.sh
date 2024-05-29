@@ -258,8 +258,13 @@ function getCKEditorRTCConfig() {
 
 # This will ensure that the two services for CKE are stood up and functional before we run the Environment or the RTC migrations
 function ckeditorNginxConf() {
-  debug "Enabling proxy for CKEditor Backend and NGINX Proxy settings"
-  compose_client up -d ckeditor-backend
-  compose_client up -d plextracnginx --force-recreate
-  sleep 20
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    podman rm -f plextracnginx &>/dev/null
+    mod_start # This will recreate NGINX or standup the ckeditor-backend services
+  else
+    debug "Enabling proxy for CKEditor Backend and NGINX Proxy settings"
+    compose_client up -d ckeditor-backend
+    compose_client up -d plextracnginx --force-recreate
+    sleep 20
+  fi
 }

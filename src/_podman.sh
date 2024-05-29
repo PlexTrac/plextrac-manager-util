@@ -23,14 +23,6 @@ function podman_setup() {
       container_client volume create "$volume" --driver=local --opt device="${pt_volumes[$volume]}" --opt type=none --opt o="bind" 1>/dev/null
     fi
   done
-
-  #####
-  # Placeholder for right now. These ENVs may need to be set in the .env file if we are using podman.
-  #####
-  # POSTGRES_HOST_AUTH_METHOD=scram-sha-256
-  # POSTGRES_INITDB_ARGS="--auth-local=scram-sha-256 --auth-host=scram-sha-256"
-  # PG_MIGRATE_PATH=/usr/src/plextrac-api
-  # PGDATA=/var/lib/postgresql/data/pgdata
 }
 
 function plextrac_install_podman() {
@@ -138,9 +130,15 @@ function plextrac_install_podman() {
     fi
   fi
 
-  mod_start "${INSTALL_WAIT_TIMEOUT:-600}" # allow up to 10 or specified minutes for startup on install, due to migrations
-  podman rm -f plextracapi
-  mod_start
+  mod_start # allow up to 10 or specified minutes for startup on install, due to migrations
+  run_cb_migrations 600
+  if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
+    ckeditorNginxConf
+    getCKEditorRTCConfig
+    podman rm -f plextracapi
+    mod_start # this doesn't re-run migrations
+    run_cb_migrations
+  fi
   
   mod_info
   info "Post installation note:"

@@ -160,9 +160,9 @@ function mod_check_etl_status() {
     if [ $(date +%s) -gt $endTime ]; then
       die "Migration container has been running for over 5 minutes or is still running. Exiting..."
     fi
-    for s in / - \\ \|; do printf "\r$s $(docker inspect --format '{{.State.Status}}' plextrac-couchbase-migrations-1) -- $(docker logs plextrac-couchbase-migrations-1 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+    for s in / - \\ \|; do printf "\r\033[K$s $(docker inspect --format '{{.State.Status}}' plextrac-couchbase-migrations-1) -- $(docker logs plextrac-couchbase-migrations-1 2> /dev/null | tail -n 1 -q)"; sleep .1; done
   done
-  printf "\r"
+  printf "\r\033[K"
   info "Migrations complete"
 
   if [ "${IGNORE_ETL_STATUS:-false}" == "false" ]; then
