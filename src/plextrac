@@ -388,7 +388,6 @@ function mod_install() {
     log "https://docs.plextrac.com/plextrac-documentation/product-documentation-1/on-premise-management/setting-up-historical-logs"
   else
     plextrac_install_podman "svcValues"
-    podman_run_cb_migrations "svcValues"
   fi
 }
 
@@ -434,7 +433,7 @@ function run_cb_migrations() {
   endTime=$(( $(date +%s) + secs ))
   # Run the cb migration container
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-    plextrac_run_migration_podman "svcValues"
+    podman_run_cb_migrations "svcValues"
   else
     compose_client --profile=database-migrations up -d couchbase-migrations --remove-orphans
   fi

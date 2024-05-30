@@ -52,7 +52,7 @@ function plextrac_install_podman() {
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
   fi
   serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e CKEDITOR_MIGRATE=${CKEDITOR_MIGRATE:-} -e CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}"
-  serviceValues[ckeditor-backend-env_vars]="-e DATABASE_Driver=postgres -e DATABASE_HOST=postgres -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e REDIS_HOST=redis -e REDIS_CONNECTION_STRING=redis://redis:6379 -e DATABASE_POOL_CONNECTION_LIMIT=10 -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false}"
+  serviceValues[ckeditor-backend-env_vars]="-e DATABASE_DATABASE=${PG_CKEDITOR_DB:?err} -e DATABASE_DRIVER=postgres -e DATABASE_HOST=postgres -e DATABASE_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e DATABASE_POOL_CONNECTION_LIMIT=10 -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e DATABASE_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false} -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e LOG_LEVEL=${CKEDITOR_LOG_LEVEL:-60} -e REDIS_CONNECTION_STRING=redis://redis:6379 -e REDIS_HOST=redis -e REDIS_PASSWORD=${REDIS_PASSWORD:?err}"
 
   title "Installing PlexTrac Instance"
   requires_user_plextrac
@@ -172,17 +172,22 @@ function plextrac_start_podman() {
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
   fi
   serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e CKEDITOR_MIGRATE=${CKEDITOR_MIGRATE:-} -e CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}"
-  serviceValues[ckeditor-backend-env_vars]="-e DATABASE_Driver=postgres -e DATABASE_HOST=postgres -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e REDIS_HOST=redis -e REDIS_CONNECTION_STRING=redis://redis:6379 -e DATABASE_POOL_CONNECTION_LIMIT=10 -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false}"
+  serviceValues[ckeditor-backend-env_vars]="-e DATABASE_DATABASE=${PG_CKEDITOR_DB:?err} -e DATABASE_DRIVER=postgres -e DATABASE_HOST=postgres -e DATABASE_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e DATABASE_POOL_CONNECTION_LIMIT=10 -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e DATABASE_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false} -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e LOG_LEVEL=${CKEDITOR_LOG_LEVEL:-} -e REDIS_CONNECTION_STRING=redis://redis:6379 -e REDIS_HOST=redis -e REDIS_PASSWORD=${REDIS_PASSWORD:?err}"
+  
   if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
     serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
   fi
-  serviceValues[notification-env_vars]="-e API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE: ${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
+  serviceValues[notification-env_vars]="-e API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE=${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
 
   title "Starting PlexTrac..."
   requires_user_plextrac
 
   for service in "${serviceNames[@]}"; do
-  debug "Checking $service"
+    if [ "$service" == "migrations" ]; then
+        # Skip the migration service, as it will be started separately
+        continue
+    fi
+    debug "Checking $service"
     local volumes=""
     local ports=""
     local healthcheck=""
@@ -250,42 +255,10 @@ function plextrac_start_podman() {
       fi
       info "Creating $service"
       # This specific if loop is because Bash escaping and the specific need for the podman flag --entrypoint were being a massive pain in figuring out. After hours of effort, simply making an if statement here and calling podman directly fixes the escaping issues
-      if [ "$service" == "migrations" ]; then
-        # debug "Running migrations"
-        # podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:migrate && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no $healthcheck \
-        # $volumes:z --name=${service} $deploy ${serviceValues[network]} $ports -d $image 1>/dev/null
-        continue
-      fi
       container_client run ${serviceValues[env-file]} $env_vars $init $alias $entrypoint $restart_policy $healthcheck \
         $volumes --name=${service} $deploy ${serviceValues[network]} $ports -d $image 1>/dev/null
     fi
   done
-  waitTimeout=${2:-90}
-  info "Waiting up to ${waitTimeout}s for application startup"
-  local progressBar
-  # todo: extract this to function waitForCondition
-  # it should take an optional param which is a function
-  # that should return 0 when ready
-  (
-    while true; do
-      progressBar=$(printf ".%s" "${progressBar:-}")
-      msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
-      sleep 2
-    done &
-    progressBarPid=$!
-    debug "Waiting for migrations to run and complete if needed"
-    timeout --preserve-status $waitTimeout podman wait migrations >/dev/null || { error "Migrations exceeded timeout"; kill $progressBarPid; } &
-
-    timeoutPid=$!
-    trap "kill $progressBarPid $timeoutPid >/dev/null 2>&1 || true" SIGINT SIGTERM
-
-    wait $timeoutPid
-
-    kill $progressBarPid >/dev/null 2>&1 || true
-    >&2 echo -n "${RESET}"
-
-    msg " Done"
-  )
 }
 
 function podman_run_cb_migrations() {
@@ -296,12 +269,12 @@ function podman_run_cb_migrations() {
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   serviceValues[api-image]="${PODMAN_API_IMAGE}"
   local env_vars="${serviceValues[migrations-env_vars]}"
-  local volumes=serviceValues[migrations-volumes]
+  local volumes="${serviceValues[migrations-volumes]}"
   local image="${serviceValues[api-image]}"
 
   debug "Running migrations"
   podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:migrate && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no \
-  $volumes:z --name=migrations ${serviceValues[network]} -d $image 1>/dev/null
+  $volumes:z --replace --name="migrations" ${serviceValues[network]} -d $image 1>/dev/null
 }
 
 function podman_pull_images() {

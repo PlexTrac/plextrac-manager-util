@@ -153,14 +153,18 @@ function mod_check_etl_status() {
   while [ "$migration_exited" == "running" ]; do
     # Check if the migration container has exited, e.g., migrations have completed or failed
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      local migration_exited=$(podman container inspect --format '{{.State.Status}}' "migrations")
+      local migration_exited=$(podman container inspect --format '{{.State.Status}}' "migrations" || migration_exited="exited")
     else
-      local migration_exited=$(docker inspect --format '{{.State.Status}}' "plextrac-couchbase-migrations-1")
+      local migration_exited=$(docker inspect --format '{{.State.Status}}' "plextrac-couchbase-migrations-1" || migration_exited="exited")
     fi
     if [ $(date +%s) -gt $endTime ]; then
       die "Migration container has been running for over 5 minutes or is still running. Exiting..."
     fi
-    for s in / - \\ \|; do printf "\r\033[K$s $(docker inspect --format '{{.State.Status}}' plextrac-couchbase-migrations-1) -- $(docker logs plextrac-couchbase-migrations-1 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      for s in / - \\ \|; do printf "\r\033[K$s $(podman inspect --format '{{.State.Status}}' migrations) -- $(podman logs migrations 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+    else
+      for s in / - \\ \|; do printf "\r\033[K$s $(docker inspect --format '{{.State.Status}}' plextrac-couchbase-migrations-1) -- $(docker logs plextrac-couchbase-migrations-1 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+    fi
   done
   printf "\r\033[K"
   info "Migrations complete"
