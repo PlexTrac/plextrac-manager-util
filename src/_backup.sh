@@ -44,13 +44,17 @@ function backup_fullUploadsBackup() {
 function backup_fullCouchbaseBackup() {
   info "$couchbaseComposeService: Performing backup of couchbase database"
   local user_id=$(id -u plextrac)
-  local cmd="compose_client exec -T --user $user_id"
+  local cmd="compose_client exec -T"
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-    cmd='docker exec'
+    cmd='podman exec'
   fi
   if [ "$CONTAINER_RUNTIME" != "podman" ]; then
     debug "`$cmd $couchbaseComposeService \
       chown -R $user_id:$user_id /backups 2>&1`"
+  fi
+  local cmd="compose_client exec -T --user $user_id"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    cmd='podman exec'
   fi
   debug "`$cmd $couchbaseComposeService \
     cbbackup -m full "http://127.0.0.1:8091" /backups -u ${CB_BACKUP_USER} -p ${CB_BACKUP_PASS} 2>&1`"
@@ -66,7 +70,7 @@ function backup_fullPostgresBackup() {
   local user_id=$(id -u plextrac)
   local cmd="compose_client exec -T --user $user_id"
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-    cmd='docker exec'
+    cmd='podman exec'
   fi
   if [ "$CONTAINER_RUNTIME" != "podman" ]; then
     debug "`compose_client exec -T $postgresComposeService chown -R $user_id:$user_id /backups 2>&1`"
