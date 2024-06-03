@@ -142,14 +142,14 @@ function login_dockerhub() {
   if [ -n "${CKE_REGISTRY:-}" ]; then
     debug "Custom CKE Image Registry Found... Attempting login"
     if [ -z "${CKE_REGISTRY_USER:-}" ]; then
-      debug "$CKEDITOR_REGISTRY username not found, continuing..."
+      debug "${CKE_REGISTRY:-} username not found, continuing..."
       local cke_user=""
     else
       local cke_user="-u ${CKE_REGISTRY_USER:-}"
     fi
 
     if [ -z "${CKE_REGISTRY_PASS:-}" ]; then
-      debug "$CKEDITOR_REGISTRY password not found, continuing..."
+      debug "${CKE_REGISTRY:-} password not found, continuing..."
       local cke_pass=""
       container_client login ${CKE_REGISTRY} $cke_user || die "Failed to login to ${CKE_REGISTRY}"
     else
