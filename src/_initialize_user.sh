@@ -18,7 +18,7 @@ function create_user() {
     fi
     if ! id -g "plextrac" >/dev/null 2>&1
     then
-      groupadd -gf $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) ${PLEXTRAC_USER_NAME:-plextrac}
+      groupadd -g $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) ${PLEXTRAC_USER_NAME:-plextrac} -f
     fi
     usermod -g ${PLEXTRAC_USER_NAME:-plextrac} ${PLEXTRAC_USER_NAME:-plextrac}
     log "Done."
