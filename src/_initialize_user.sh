@@ -18,7 +18,7 @@ function create_user() {
     fi
     if ! id -g "plextrac" >/dev/null 2>&1
     then
-      groupadd -g $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) ${PLEXTRAC_USER_NAME:-plextrac}
+      groupadd -gf $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) ${PLEXTRAC_USER_NAME:-plextrac}
     fi
     usermod -g ${PLEXTRAC_USER_NAME:-plextrac} ${PLEXTRAC_USER_NAME:-plextrac}
     log "Done."
@@ -56,4 +56,4 @@ function fix_file_ownership() {
   local user=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
   chown -R $user:$user "${PLEXTRAC_HOME}"
   log "Done."
-} 
+}
