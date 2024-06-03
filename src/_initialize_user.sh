@@ -53,6 +53,7 @@ function copy_scripts() {
 
 function fix_file_ownership() {
   info "Fixing file ownership in ${PLEXTRAC_HOME} for plextrac"
-  chown -R plextrac:plextrac "${PLEXTRAC_HOME}"
+  local user=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+  chown -R $user:$user "${PLEXTRAC_HOME}"
   log "Done."
 } 
