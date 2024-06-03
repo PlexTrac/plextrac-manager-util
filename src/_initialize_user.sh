@@ -1,5 +1,5 @@
 function create_user() {
-  if ! id -u "plextrac" >/dev/null 2>&1
+  if ! id -u "${PLEXTRAC_USER_NAME:-plextrac}" >/dev/null 2>&1
   then
     info "Adding plextrac user..."
     local user_id="-u 1337"
@@ -9,18 +9,18 @@ function create_user() {
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       useradd --shell /bin/bash $user_id \
               --create-home --home "${PLEXTRAC_HOME}" \
-              plextrac
+              ${PLEXTRAC_USER_NAME:-plextrac}
     else
       useradd $user_id --groups docker \
               --shell /bin/bash \
               --create-home --home "${PLEXTRAC_HOME}" \
-              plextrac
+              ${PLEXTRAC_USER_NAME:-plextrac}
     fi
     if ! id -g "plextrac" >/dev/null 2>&1
     then
-      groupadd -g $(id -u plextrac) plextrac
+      groupadd -g $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) ${PLEXTRAC_USER_NAME:-plextrac}
     fi
-    usermod -g plextrac plextrac
+    usermod -g ${PLEXTRAC_USER_NAME:-plextrac} ${PLEXTRAC_USER_NAME:-plextrac}
     log "Done."
   fi
 }

@@ -54,7 +54,7 @@ function clean_compressCouchbaseBackups() {
     -exec tar --remove-files -czvf /backups/{}.tar.gz {} \;
     2>&1`"
   debug "Fixing permissions on backups"
-  local user_id=$(id -u plextrac)
+  local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
   debug "`$cmd --entrypoint= --workdir /backups $image \
     find . -maxdepth 1 -type f -name '*.tar.gz' \
     -exec chown $user_id:$user_id {} \;

@@ -227,6 +227,11 @@ function main() {
         shift
         shift
         ;;
+      "-uname" | "--user-name")
+        PLEXTRAC_USER_NAME=${2:-}
+        shift
+        shift
+        ;;
       "-cke" | "--cke-migration")
         IGNORE_ETL_STATUS="true"
         MIGRATE_CKE="true"

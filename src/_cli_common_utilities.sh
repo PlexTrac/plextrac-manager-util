@@ -31,8 +31,8 @@ function requires_user_root() {
 }
 
 function requires_user_plextrac {
-  if [ "$EUID" -ne $(id -u plextrac) ]; then
-    die "${RED}Please run as plextrac user${RESET}"
+  if [ "$EUID" -ne $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) ]; then
+    die "${RED}Please run as ${PLEXTRAC_USER_NAME:-plextrac} user${RESET}"
   fi
 }
 
