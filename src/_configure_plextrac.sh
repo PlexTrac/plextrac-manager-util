@@ -284,12 +284,12 @@ function ckeditorNginxConf() {
     podman rm -f plextracnginx &>/dev/null
     podman rm -f ckeditor-backend &>/dev/null
     mod_start # This will recreate NGINX and standup the ckeditor-backend services
-    debug "Waiting 40 seconds for services to start"
-    sleep 40
+    debug "Waiting 80 seconds for services to start"
+    sleep 80
   else
     compose_client up -d ckeditor-backend
     compose_client up -d plextracnginx --force-recreate
-    debug "Waiting 40 seconds for services to start"
-    sleep 40
+    debug "Waiting 80 seconds for services to start"
+    sleep 80
   fi
 }

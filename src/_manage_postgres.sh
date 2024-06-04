@@ -160,10 +160,11 @@ function mod_check_etl_status() {
     if [ $(date +%s) -gt $endTime ]; then
       die "Migration container has been running for over 5 minutes or is still running. Exiting..."
     fi
+
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      for s in / - \\ \|; do printf "\r\033[K$s $(podman inspect --format '{{.State.Status}}' migrations) -- $(podman logs migrations 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+      for s in / - \\ \|; do printf "\r\033[K$s $(podman inspect --format '{{.State.Status}}' migrations || echo "Exited") -- $(podman logs migrations 2> /dev/null | tail -n 1 -q || echo "Exited")"; sleep .1; done
     else
-      for s in / - \\ \|; do printf "\r\033[K$s $(docker inspect --format '{{.State.Status}}' plextrac-couchbase-migrations-1) -- $(docker logs plextrac-couchbase-migrations-1 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+      for s in / - \\ \|; do printf "\r\033[K$s $(docker inspect --format '{{.State.Status}}' plextrac-couchbase-migrations-1 || echo "Exited") -- $(docker logs plextrac-couchbase-migrations-1 2> /dev/null | tail -n 1 -q || echo "Exited")"; sleep .1; done
     fi
   done
   printf "\r\033[K"
