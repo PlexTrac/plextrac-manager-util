@@ -43,7 +43,7 @@ function backup_fullUploadsBackup() {
 
 function backup_fullCouchbaseBackup() {
   info "$couchbaseComposeService: Performing backup of couchbase database"
-  local user_id=$(id -u plextrac)
+  local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
   local cmd="compose_client exec -T"
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
     cmd='podman exec'
@@ -67,7 +67,7 @@ function backup_fullCouchbaseBackup() {
 
 function backup_fullPostgresBackup() {
   info "$postgresComposeService: Performing backup of postgres database"
-  local user_id=$(id -u plextrac)
+  local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
   local cmd="compose_client exec -T --user $user_id"
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
     cmd='podman exec'

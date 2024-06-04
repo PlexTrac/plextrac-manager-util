@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.6.11
+VERSION=0.7.0
 
 ## Podman Global Declaration Variable
 declare -A svcValues
@@ -227,6 +227,11 @@ function main() {
         shift
         shift
         ;;
+      "-uname" | "--user-name")
+        PLEXTRAC_USER_NAME=${2:-}
+        shift
+        shift
+        ;;
       "-cke" | "--cke-migration")
         IGNORE_ETL_STATUS="true"
         MIGRATE_CKE="true"
@@ -371,13 +376,15 @@ function mod_install() {
     else
       info "Air-gapped environment detected, skipping Image pull."
     fi
-    mod_start "${INSTALL_WAIT_TIMEOUT:-600}" # allow up to 10 or specified minutes for startup on install, due to migrations
+    mod_start
+    run_cb_migrations 600 # allow up to 10 or specified minutes for startup on install, due to migrations
     # Configure the CKEditor RTC service as part of the install, which also requires a recreate of the backend
-    if [ "${MIGRATE_CKE:-false}" == "true" ]; then
+    if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
       ckeditorNginxConf
+      getCKEditorRTCConfig
+      compose_client up -d "$coreBackendComposeService" --force-recreate
+      run_cb_migrations
     fi
-    getCKEditorRTCConfig
-    compose_client up -d "$coreBackendComposeService" --force-recreate
 
     mod_info
     info "Post installation note:"
@@ -421,35 +428,41 @@ function mod_start() {
     title "Starting PlexTrac..."
     requires_user_plextrac
     # Enable database migrations on startup
-    compose_client --profile=database-migrations up -d --remove-orphans
+    compose_client up -d --remove-orphans
+  fi
+}
 
-    waitTimeout=${1:-90}
-    info "Waiting up to ${waitTimeout}s for application startup"
-    local progressBar
-    # todo: extract this to function waitForCondition
-    # it should take an optional param which is a function
-    # that should return 0 when ready
-    (
-      while true; do
-        progressBar=$(printf ".%s" "${progressBar:-}")
-        msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
-        sleep 2
-      done &
-      progressBarPid=$!
-      timeout --preserve-status $waitTimeout docker wait \
-        "$(compose_client ps couchbase-migrations -q)" >/dev/null \
-        || { error "Migrations exceeded timeout"; kill $progressBarPid; exit 1; } &
-
-      timeoutPid=$!
-      trap "kill $progressBarPid $timeoutPid >/dev/null 2>&1 || true" SIGINT SIGTERM
-
-      wait $timeoutPid
-
-      kill $progressBarPid >/dev/null 2>&1 || true
-      >&2 echo -n "${RESET}"
-
-      msg " Done"
-    )
+function run_cb_migrations() {
+  info "Running Database Migrations"
+  secs=${1:-300}
+  endTime=$(( $(date +%s) + secs ))
+  # Run the cb migration container
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    podman_run_cb_migrations "svcValues"
+  else
+    compose_client --profile=database-migrations up -d couchbase-migrations --remove-orphans
+  fi
+  # While the duraction of 5 minutes is running, check if the migration container has exited
+  while [ $(date +%s) -lt $endTime ]; do
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      local migration_exited=$(podman container inspect --format '{{.State.Status}}' "migrations")
+    else
+      local migration_exited=$(docker inspect --format '{{.State.Status}}' "plextrac-couchbase-migrations-1")
+    fi
+    if [ "$migration_exited" == "exited" ]; then
+      printf "\r\033[K"
+      info "Migrations completed"
+      break
+    fi
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      for s in / - \\ \|; do printf "\r\033[K$s $(podman inspect --format '{{.State.Status}}' migrations) -- $(podman logs migrations 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+    else
+      for s in / - \\ \|; do printf "\r\033[K$s $(docker inspect --format '{{.State.Status}}' plextrac-couchbase-migrations-1) -- $(docker logs plextrac-couchbase-migrations-1 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+    fi
+    sleep 1
+  done
+  if [ $(date +%s) -ge $endTime ]; then
+    error "Migration container timed out and may still be running. Please check the logs for more information"
   fi
 }
 

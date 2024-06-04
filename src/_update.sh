@@ -65,6 +65,7 @@ function mod_update() {
             fi
               
             mod_start || sleep 20
+            run_cb_migrations
             if [ "$CONTAINER_RUNTIME" == "podman" ]; then
               unhealthy_services=$(for service in $(podman ps -a --format json | jq -r .[].Names | grep '"' | cut -d '"' -f2); do podman inspect $service --format json | jq -r '.[] | select(.State.Health.Status == "unhealthy" or (.State.Status != "running" and .State.ExitCode != 0) or .State.Status == "created") | .Name' | xargs -r printf "%s;"; done)
             else
@@ -107,6 +108,7 @@ function mod_update() {
         podman_pull_images
       fi
       mod_start || sleep 20
+      run_cb_migrations
       if [ "$CONTAINER_RUNTIME" == "podman" ]; then
         unhealthy_services=$(for service in $(podman ps -a --format json | jq -r .[].Names | grep '"' | cut -d '"' -f2); do podman inspect $service --format json | jq -r '.[] | select(.State.Health.Status == "unhealthy" or (.State.Status != "running" and .State.ExitCode != 0) or .State.Status == "created") | .Name' | xargs -r printf "%s;"; done)
       else

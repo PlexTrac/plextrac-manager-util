@@ -56,7 +56,7 @@ The following will need to be done before running any PlexTrac specific commands
     ```bash
     vim /etc/default/grub
 
-    # Add the following line and then save
+    # Add the following line to the `GRUB_CMDLINE_LINUX` key and then save
     systemd.unified_cgroup_hierarchy=1
 
     # From CLI, run:
