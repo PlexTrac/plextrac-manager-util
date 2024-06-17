@@ -135,7 +135,7 @@ function mod_help() {
   log " -d | --debug                        ${DIM}enables debug output VERY NOISY${RESET}"
   log " -v | --verbose                      ${DIM}enables verbose output, helpful for troubleshooting errors${RESET}"
   log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
-  log " --uid | --user-id                   ${DIM}during initialization, assign a specific user ID on 'plextrac' user creation${RESET}"
+  log " -uid | --user-id                   ${DIM}during initialization, assign a specific user ID on 'plextrac' user creation${RESET}"
   log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
   log " --install-timeout NUM               ${DIM}seconds to wait for install migrations to complete. The default is 600 (10 mins)${RESET}"
 }
@@ -447,7 +447,7 @@ function run_cb_migrations() {
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       local migration_exited=$(podman container inspect --format '{{.State.Status}}' "migrations")
     else
-      local migration_exited=$(docker inspect --format '{{.State.Status}}' "plextrac-couchbase-migrations-1")
+      local migration_exited=$(docker inspect --format '{{.State.Status}}' `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'`)
     fi
     if [ "$migration_exited" == "exited" ]; then
       printf "\r\033[K"
@@ -457,7 +457,7 @@ function run_cb_migrations() {
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       for s in / - \\ \|; do printf "\r\033[K$s $(podman inspect --format '{{.State.Status}}' migrations) -- $(podman logs migrations 2> /dev/null | tail -n 1 -q)"; sleep .1; done
     else
-      for s in / - \\ \|; do printf "\r\033[K$s $(docker inspect --format '{{.State.Status}}' plextrac-couchbase-migrations-1) -- $(docker logs plextrac-couchbase-migrations-1 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+      for s in / - \\ \|; do printf "\r\033[K$s $(docker inspect --format '{{.State.Status}}' `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'`) -- $(docker logs `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'` 2> /dev/null | tail -n 1 -q)"; sleep .1; done
     fi
     sleep 1
   done
