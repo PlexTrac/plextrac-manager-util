@@ -150,11 +150,20 @@ function mod_check_etl_status() {
   info "Checking Migration Status"
   secs=300
   endTime=$(( $(date +%s) + secs ))
-  if [[ $(docker ps -a | grep migrations 2>/dev/null | awk '{print $1}') != "" ]]; then
-    migration_exited="running"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    if [[ $(podman ps -a | grep migrations 2>/dev/null | awk '{print $1}') != "" ]]; then
+      migration_exited="running"
+    else
+      migration_exited="exited"
+      debug "Migration container not found"
+    fi
   else
-    migration_exited="exited"
-    debug "Migration container not found"
+    if [[ $(docker ps -a | grep migrations 2>/dev/null | awk '{print $1}') != "" ]]; then
+      migration_exited="running"
+    else
+      migration_exited="exited"
+      debug "Migration container not found"
+    fi
   fi
   while [ "$migration_exited" == "running" ]; do
     # Check if the migration container has exited, e.g., migrations have completed or failed
