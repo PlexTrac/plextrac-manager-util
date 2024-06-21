@@ -444,21 +444,13 @@ function run_cb_migrations() {
   fi
   # While the duraction of 5 minutes is running, check if the migration container has exited
   while [ $(date +%s) -lt $endTime ]; do
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      local migration_exited=$(podman container inspect --format '{{.State.Status}}' "migrations")
-    else
-      local migration_exited=$(docker inspect --format '{{.State.Status}}' `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'`)
-    fi
+    local migration_exited=$(container_client inspect --format '{{.State.Status}}' `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'`)
     if [ "$migration_exited" == "exited" ]; then
       printf "\r\033[K"
       info "Migrations completed"
       break
     fi
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      for s in / - \\ \|; do printf "\r\033[K$s $(podman inspect --format '{{.State.Status}}' migrations) -- $(podman logs migrations 2> /dev/null | tail -n 1 -q)"; sleep .1; done
-    else
-      for s in / - \\ \|; do printf "\r\033[K$s $(docker inspect --format '{{.State.Status}}' `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'`) -- $(docker logs `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'` 2> /dev/null | tail -n 1 -q)"; sleep .1; done
-    fi
+    for s in / - \\ \|; do printf "\r\033[K$s $(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'`) -- $(container_client logs `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'` 2> /dev/null | tail -n 1 -q)"; sleep .1; done
     sleep 1
   done
   if [ $(date +%s) -ge $endTime ]; then
