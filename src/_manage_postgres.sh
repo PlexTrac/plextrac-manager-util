@@ -158,7 +158,7 @@ function mod_check_etl_status() {
   fi
   while [ "$migration_exited" == "running" ]; do
     # Check if the migration container has exited, e.g., migrations have completed or failed
-    local migration_exited=$(container_client inspect --format '{{.State.Status}}' `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'` || migration_exited="exited")
+    local migration_exited=$(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'` || migration_exited="exited")
     if [ $(date +%s) -gt $endTime ]; then
       die "Migration container has been running for over 5 minutes or is still running. Exiting..."
     fi
