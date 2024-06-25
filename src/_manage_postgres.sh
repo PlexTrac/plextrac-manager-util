@@ -158,7 +158,8 @@ function mod_check_etl_status() {
       local migration_exited=$(docker inspect --format '{{.State.Status}}' `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'` || migration_exited="exited")
     fi
     if [ $(date +%s) -gt $endTime ]; then
-      die "Migration container has been running for over 5 minutes or is still running. Exiting..."
+      error "Migration container has been running for over 5 minutes or is still running.Please ensure they complete or fail before taking further action with the PlexTrac Manager Utility. You can check on the logs by running 'docker compose logs -f couchbase-migrations'"
+      die "Exiting PlexTrac Manager Utility."
     fi
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       for s in / - \\ \|; do printf "\r\033[K$s $(podman inspect --format '{{.State.Status}}' migrations) -- $(podman logs migrations 2> /dev/null | tail -n 1 -q)"; sleep .1; done
