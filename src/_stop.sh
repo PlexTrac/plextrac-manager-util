@@ -5,14 +5,31 @@
 
 function mod_stop() {
   title "Attempting to gracefully stop PlexTrac..."
-  debug "Stopping API, NGINX, Notification engine/sender"
-  compose_client stop plextracapi plextracnginx notification-engine notification-sender
+  debug "Stopping API Services..."
+  for service in $(container_client ps --format '{{.Names}}' | grep -Eo 'plextracapi|plextracnginx|notification-engine|notification-sender|contextual-scoring-service'); do
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      container_client stop $service
+    else
+      compose_client stop $service
+    fi
+  done
   sleep 2
+  debug "Done."
   debug "Stopping Couchbase, Postres, and Redis"
-  compose_client stop redis plextracdb postgres
+  for service in $(docker ps --format '{{.Names}}' | grep -Eo 'couchbase|postgres|redis'); do
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      container_client stop $service
+    else
+      compose_client stop $service
+    fi
+  done
   sleep 2
   debug "Ensuring all services are stopped"
-  compose_client stop
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    container_client stop -a
+  else
+    compose_client stop
+  fi
   info "-----"
   info "PlexTrac stopped. It's now safe to update and restart"
 }

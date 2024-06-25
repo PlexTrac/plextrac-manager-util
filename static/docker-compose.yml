@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   plextracapi:
     deploy:
@@ -56,6 +54,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
       PG_HOST: ${PG_HOST:-postgres}
       PG_MIGRATE_PATH: /usr/src/plextrac-api
+      PG_SUPER_USER: ${POSTGRES_USER:?err}
+      PG_SUPER_PASSWORD: ${POSTGRES_PASSWORD:?err}
       PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
       PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
       PG_CORE_DB: ${PG_CORE_DB:?err}
@@ -64,8 +64,21 @@ services:
       PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:?err}
       PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:?err}
       PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:?err}
+      PG_CKEDITOR_ADMIN_PASSWORD: ${PG_CKEDITOR_ADMIN_PASSWORD:?err}
+      PG_CKEDITOR_ADMIN_USER: ${PG_CKEDITOR_ADMIN_USER:?err}
+      PG_CKEDITOR_DB: ${PG_CKEDITOR_DB:?err}
+      PG_CKEDITOR_RO_PASSWORD: ${PG_CKEDITOR_RO_PASSWORD:?err}
+      PG_CKEDITOR_RO_USER: ${PG_CKEDITOR_RO_USER:?err}
+      PG_CKEDITOR_RW_PASSWORD: ${PG_CKEDITOR_RW_PASSWORD:?err}
+      PG_CKEDITOR_RW_USER: ${PG_CKEDITOR_RW_USER:?err}
       PG_TENANTS_WRITE_MODE: ${PG_TENANTS_WRITE_MODE:-couchbase_only}
       PG_TENANTS_READ_MODE: ${PG_TENANTS_READ_MODE:-couchbase_only}
+      CKEDITOR_MIGRATE: ${CKEDITOR_MIGRATE:-}
+      CKEDITOR_SERVER_CONFIG: ${CKEDITOR_SERVER_CONFIG:-}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
 
   plextracdb:
     environment:
@@ -107,12 +120,15 @@ services:
       LETS_ENCRYPT_EMAIL: "${LETS_ENCRYPT_EMAIL:-}"
       OVERRIDE_SENTRY_FRONTEND_ENABLED: "${OVERRIDE_SENTRY_FRONTEND_ENABLED-}"
       USE_CUSTOM_CERT: "${USE_CUSTOM_CERT-}"
+      CKEDITOR_MIGRATE: "${CKEDITOR_MIGRATE:-}"
+      WAF_ENABLED: "${WAF_ENABLED:-true}"
     ports:
     - 0.0.0.0:80:80/tcp
     - 0.0.0.0:443:443/tcp
     restart: always
     volumes:
     - letsencrypt:/etc/letsencrypt:rw
+    - ${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules:/etc/nginx/conf.d/customer_curated.rules:Z
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -120,6 +136,10 @@ services:
       interval: 5s
       retries: 8
       start_period: 5s
+    networks:
+      default:
+        aliases:
+          - ckeditor
 
   notification-engine:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
@@ -129,6 +149,7 @@ services:
     - plextracdb
     - redis
     restart: always
+    init: True
     environment:
       CB_API_PASS: "${CB_API_PASS:?err}"
       CB_API_USER: "${CB_API_USER:?err}"
@@ -162,6 +183,7 @@ services:
     - plextracdb
     - redis
     restart: always
+    init: True
     environment:
       CB_API_PASS: "${CB_API_PASS:?err}"
       CB_API_USER: "${CB_API_USER:?err}"
@@ -173,6 +195,7 @@ services:
       REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
       serviceConfig: ${serviceConfig:-}
+      API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE: "${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
     healthcheck:
       test:
       - "CMD"
@@ -229,6 +252,15 @@ services:
     volumes:
     - redis:/etc/redis:rw
     restart: always
+    healthcheck:
+      test:
+      - "CMD"
+      - "redis-cli"
+      - "--raw"
+      - "incr"
+      - "ping"
+      interval: 10s
+      timeout: 30s
 
   postgres:
     image: postgres:14-alpine
@@ -248,6 +280,13 @@ services:
       PG_RUNBOOKS_RO_USER: ${PG_RUNBOOKS_RO_USER:?err}
       PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:?err}
       PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:?err}
+      PG_CKEDITOR_ADMIN_PASSWORD: ${PG_CKEDITOR_ADMIN_PASSWORD:?err}
+      PG_CKEDITOR_ADMIN_USER: ${PG_CKEDITOR_ADMIN_USER:?err}
+      PG_CKEDITOR_DB: ${PG_CKEDITOR_DB:?err}
+      PG_CKEDITOR_RO_PASSWORD: ${PG_CKEDITOR_RO_PASSWORD:?err}
+      PG_CKEDITOR_RO_USER: ${PG_CKEDITOR_RO_USER:?err}
+      PG_CKEDITOR_RW_PASSWORD: ${PG_CKEDITOR_RW_PASSWORD:?err}
+      PG_CKEDITOR_RW_USER: ${PG_CKEDITOR_RW_USER:?err}
       POSTGRES_HOST_AUTH_METHOD: scram-sha-256
       POSTGRES_INITDB_ARGS: '--auth-local=scram-sha-256 --auth-host=scram-sha-256'
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?err}
@@ -260,16 +299,16 @@ services:
     ports:
     - 127.0.0.1:5432:5432/tcp
     restart: always
-  
+    healthcheck: # Define healthcheck to be able to use the `service_healthy` condition.
+      test: pg_isready -U ${POSTGRES_USER:-internalonly}
+      interval: 10s
+      timeout: 30s
+      retries: 5
+
   contextual-scoring-service:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     deploy:
       replicas: 1
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 5
-        window: 120s
     depends_on:
     - postgres
     - redis

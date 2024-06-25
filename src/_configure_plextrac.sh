@@ -49,6 +49,12 @@ RUNAS_APPUSER=True
 PLEXTRAC_PARSER_URL=https://plextracparser:4443
 UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
 PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
+CKEDITOR_ENVIRONMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-`generateSecret`}
+CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}
+CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-"docker"}
+LOCK_UPDATES=${LOCK_UPDATES:-"false"}
+LOCK_VERSION=${LOCK_VERSION:-}
+
 
 `generate_default_couchbase_env | setDefaultSecrets`
 `generate_default_postgres_env | setDefaultSecrets`
@@ -104,26 +110,52 @@ function setDefaultSecrets() {
 
 function login_dockerhub() {
   local output
+  local default_registry="docker.io"
   info "Logging into Image Registry"
   if [ -z ${DOCKER_HUB_KEY} ]; then
     die "ERROR: Docker Hub key not found, please set DOCKER_HUB_KEY in the .env and re-run configuration"
   fi
-  output="`docker login -u ${DOCKER_HUB_USER:-plextracusers} --password-stdin 2>&1 <<< "${DOCKER_HUB_KEY}"`" || die "${output}"
+  output="`container_client login "$default_registry" -u ${DOCKER_HUB_USER:-plextracusers} --password-stdin 2>&1 <<< "${DOCKER_HUB_KEY}"`" || die "${output}"
   debug "$output"
   log "${GREEN}DockerHUB${RESET}: SUCCESS"
 
   if [ -n "${IMAGE_REGISTRY:-}" ]; then
-  debug "Custom Image Registry Found..."
-  debug "Attempting login"
-    if [ -z "${IMAGE_REGISTRY_PASS:-}" ]; then
-      die "ERROR: Image registry password not found, please set IMAGE_REGISTRY_PASS in the .env and re-run configuration"
-    fi
+    debug "Custom Image Registry Found..."
+    debug "Attempting login"
     if [ -z "${IMAGE_REGISTRY_USER:-}" ]; then
-      die "ERROR: Image registry username not found, please set IMAGE_REGISTRY_USER in the .env and re-run configuration"
+      debug "$IMAGE_REGISTRY username not found, continuing..."
+      local image_user=""
+    else
+      local image_user="-u ${IMAGE_REGISTRY_USER:-}"
     fi
-    output="$(docker login ${IMAGE_REGISTRY} -u ${IMAGE_REGISTRY_USER} --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}")" || die "${output}"
-    debug "$output"
+
+    if [ -z "${IMAGE_REGISTRY_PASS:-}" ]; then
+      debug "$IMAGE_REGISTRY password not found, continuing..."
+      local image_pass=""
+      container_client login ${IMAGE_REGISTRY} $image_user || die "Failed to login to ${IMAGE_REGISTRY}"
+    else
+      container_client login ${IMAGE_REGISTRY} $image_user --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}" || die "Failed to login to ${IMAGE_REGISTRY}"
+    fi
     log "${BLUE}$IMAGE_REGISTRY${RESET}: SUCCESS"
+  fi
+
+  if [ -n "${CKE_REGISTRY:-}" ]; then
+    debug "Custom CKE Image Registry Found... Attempting login"
+    if [ -z "${CKE_REGISTRY_USER:-}" ]; then
+      debug "${CKE_REGISTRY:-} username not found, continuing..."
+      local cke_user=""
+    else
+      local cke_user="-u ${CKE_REGISTRY_USER:-}"
+    fi
+
+    if [ -z "${CKE_REGISTRY_PASS:-}" ]; then
+      debug "${CKE_REGISTRY:-} password not found, continuing..."
+      local cke_pass=""
+      container_client login ${CKE_REGISTRY} $cke_user || die "Failed to login to ${CKE_REGISTRY}"
+    else
+      container_client login ${CKE_REGISTRY} $cke_user --password-stdin 2>&1 <<< "${CKE_REGISTRY_PASS}" || die "Failed to login to ${CKE_REGISTRY}"
+    fi
+    log "${ORANGE}$CKE_REGISTRY${RESET}: SUCCESS"
   fi
   log "Done."
 }
@@ -138,6 +170,13 @@ function updateComposeConfig() {
   if ! test -f "$targetComposeFile"; then
     debug "Creating initial file"
     echo "$decodedComposeFile" > $targetComposeFile
+  fi
+
+  if grep '# version: '\''3.8'\''' docker-compose.override.yml; then
+    debug "Version already configured"
+  else
+    sed -i 's/version: '\''3.8'\''/# version: '\''3.8'\''/g' ./docker-compose.override.yml
+    echo "Version removed from compose file"
   fi
   log "Done."
 
@@ -157,7 +196,11 @@ function updateComposeConfig() {
 
 function validateComposeConfig() {
   info "Validating Docker Compose Config"
-  composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
+  if [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
+    composeConfigCheck=$(compose_client config 2>&1) || configValidationFailed=1
+  elif [ "$CONTAINER_RUNTIME" == "docker" ]; then
+    composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
+  fi
   if [ ${configValidationFailed:-0} -ne 0 ]; then
     error "Invalid Docker Compose Configuration"
     log "Please check for valid syntax in override files"
@@ -170,9 +213,83 @@ function validateComposeConfig() {
 
 function create_volume_directories() {
   title "Create directories for bind mounts"
-  debug "Ensuring directories exist for Docker Volumes..."
-  debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
-  info "Directories for bind mounts"
-  log "Done."
+  info "Validating directories for bind mounts"
+  debug "Ensuring directories exist for Volumes..."
+  if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+    debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
+    stat "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/naxsi-waf"; echo '## Custom WAF Rules Below' > "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"
+  else
+    stat "${PLEXTRAC_BACKUP_PATH}/couchbase" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/couchbase"
+    stat "${PLEXTRAC_BACKUP_PATH}/postgres" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/postgres"
+    stat "${PLEXTRAC_BACKUP_PATH}/uploads" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/uploads"
+    stat "${PLEXTRAC_HOME}/volumes" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes"
+    stat "${PLEXTRAC_HOME}/volumes/postgres-initdb" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/postgres-initdb"
+    stat "${PLEXTRAC_HOME}/volumes/redis" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/redis"
+    stat "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs"
+    stat "${PLEXTRAC_HOME}/volumes/nginx_logos" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_logos"
+    stat "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/naxsi-waf"; echo '## Custom WAF Rules Below' > "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"
+  fi
 }
 
+function getCKEditorRTCConfig() {
+  declare -A serviceValues
+  PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  serviceValues[api-image]="${PODMAN_API_IMAGE}"
+
+  if [ "${CKEDITOR_MIGRATE:-false}" = true ]; then
+    debug "---"
+    debug "Running CKEditor migration"
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      CKEDITOR_MIGRATE_OUTPUT=$(podman run --rm -it --name ckeditor-migration --network=plextrac --replace --env-file ${PLEXTRAC_HOME}/.env "${serviceValues[api-image]}" npm run ckeditor:environment:migration --no-update-notifier --if-present || debug "ERROR: Unable to run ckeditor:environment:migration")
+      podman rm -f ckeditor-migration &>/dev/null
+    else
+      # parses output and saves the result of the json meta data
+      # the last line, which only contains the JSON data, should be used
+      CKEDITOR_MIGRATE_OUTPUT=$(compose_client run --name ckeditor-migration --no-deps  ckeditor-migration || debug "ERROR: Unable to run ckeditor:environment:migration")
+      docker rm -f ckeditor-migration &>/dev/null
+    fi
+
+    ## Split the output so we can send logs out, but keep the key separate
+    CKEDITOR_JSON=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep '^{' || debug "INFO: no JSON found in response")
+    CKEDITOR_LOGS_OUTPUT=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep -v '^{' || debug "ERROR: Invalid response from ckeditor-migration; no logs recorded")
+    # for each line in the variable $CKEDITOR_LOGS_OUTPUT send to logs with logger
+    while read -r line; do
+      logger -t ckeditor-migration $line
+    done <<< "$CKEDITOR_LOGS_OUTPUT"
+  
+    echo "$CKEDITOR_LOGS_OUTPUT" > "${PLEXTRAC_HOME}/ckeditor-migration.log"
+
+    # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
+    if [ "$(echo "$CKEDITOR_JSON" | jq -e ".[] | any(\".api_secret\")")" ]; then
+      BASE64_CKEDITOR=$(echo "$CKEDITOR_JSON" | base64 -w 0)
+      CKEDITOR_SERVER_CONFIG="$BASE64_CKEDITOR"
+      debug "Setting CKEDITOR_SERVER_CONFIG"
+      sed -i "s/CKEDITOR_SERVER_CONFIG=.*/CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG}/" ${PLEXTRAC_HOME}/.env
+      CKEDITOR_JSON=""
+      CKEDITOR_MIGRATE_OUTPUT=""
+      BASE64_CKEDITOR=""
+    else
+      debug "ERROR: Response did not contain JSON with expected key"
+    fi
+  else
+    debug "CKEditor service not found; migration has not been run"
+  fi
+}
+
+# This will ensure that the two services for CKE are stood up and functional before we run the Environment or the RTC migrations
+function ckeditorNginxConf() {
+  info "Ensuring CKEditor Backend and NGINX Proxy are running"
+  debug "Enabling proxy for CKEditor Backend and NGINX Proxy settings"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    podman rm -f plextracnginx &>/dev/null
+    podman rm -f ckeditor-backend &>/dev/null
+    mod_start # This will recreate NGINX and standup the ckeditor-backend services
+    debug "Waiting 40 seconds for services to start"
+    sleep 40
+  else
+    compose_client up -d ckeditor-backend
+    compose_client up -d plextracnginx --force-recreate
+    debug "Waiting 40 seconds for services to start"
+    sleep 40
+  fi
+}

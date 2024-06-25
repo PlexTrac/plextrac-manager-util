@@ -3,6 +3,7 @@ dist/*
 *.bak
 .dccache
 backups
+.DS*
 
 done.txt
 static/nginx_init.sh

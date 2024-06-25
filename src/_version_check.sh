@@ -25,7 +25,11 @@ function version_check() {
   ## LOGIC: RunVer
   debug "Running Version"
   # Get running version of Backend
-  running_backend_version="$(for i in $(docker compose ps plextracapi -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    running_backend_version="$(for i in $(podman ps -a -q --filter name=plextracapi); do podman inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+  else
+    running_backend_version="$(for i in $(compose_client ps plextracapi -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+  fi
 
   # CONDITION: plextracapi IS/NOT RUNNING
   # Validate that the app is running and returning a version
@@ -124,11 +128,11 @@ function version_check() {
                 unset 'upstream_tags[i]'
             fi
         done
-        new_array=()
+        new_array=("")
         for i in "${!upstream_tags[@]}"; do
             new_array+=( "${upstream_tags[i]}" )
         done
-        if "${#new_array[@]}" > 0; then
+        if [ "${#new_array[@]}" -gt 0 ]; then
                 upstream_tags=("${new_array[@]}")
                 unset new_array
         else
@@ -144,7 +148,7 @@ function version_check() {
           # Set Contiguous updates to false here to ensure that since the app is on latest version, it still attempts to pull patch version updates
           contiguous_update=false
         fi
-        if "${upstream_tags[@]}" != ""; then
+        if [[ "${upstream_tags[@]}" != "" ]]; then
                 # Sort the upstream tags weve chosen as the upgrade path
                 IFS=$'\n' upgrade_path=($(sort -V <<<"${upstream_tags[*]}"))
                 # Reset IFS to default value

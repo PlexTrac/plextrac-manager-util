@@ -31,8 +31,8 @@ function requires_user_root() {
 }
 
 function requires_user_plextrac {
-  if [ "$EUID" -ne 1337 ]; then
-    die "${RED}Please run as plextrac user${RESET}"
+  if [ "$EUID" -ne $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) ]; then
+    die "${RED}Please run as ${PLEXTRAC_USER_NAME:-plextrac} user${RESET}"
   fi
 }
 
@@ -86,9 +86,17 @@ function os_check() {
   OS_NAME=$(grep '^NAME' /etc/os-release | cut -d '=' -f2)
   OS_VERSION=$(grep '^VERSION_ID' /etc/os-release | cut -d '=' -f2)
   color_always="--color=always"
-  if echo "$OS_NAME" | grep -q "Red"; then
-    if echo "$OS_VERSION" | grep -q "7"; then
+  if grep -q "Red" <(echo "$OS_NAME"); then
+    if grep -q "7." <(echo "$OS_VERSION"); then
       color_always=""
       fi
+  fi
+}
+
+function check_container_runtime() {
+  if [ "$CONTAINER_RUNTIME" == "docker" ]; then debug "Using Docker and Docker Compose as the container runtime";
+  elif [ "$CONTAINER_RUNTIME" == "podman" ]; then debug "Using Podman as the container runtime";
+  elif [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then die "Using Podman-Compose is still currently unsupported";
+  else error "Unknown container runtime: $CONTAINER_RUNTIME"; die "Valid container runtimes are: docker, podman, podman-compose";
   fi
 }

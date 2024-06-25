@@ -1,14 +1,26 @@
 function create_user() {
-  # create "plextrac" user with UID/GID 1337 to match the UID/GID of the container user
-  # this is required for anything in the uploads directory to
-  if ! id -u "plextrac" >/dev/null 2>&1
+  if ! id -u "${PLEXTRAC_USER_NAME:-plextrac}" >/dev/null 2>&1
   then
     info "Adding plextrac user..."
-    useradd --uid 1337 \
-            --groups docker \
-            --shell /bin/bash \
-            --create-home --home "${PLEXTRAC_HOME}" \
-            plextrac
+    local user_id="-u 1337"
+    if [ "${PLEXTRAC_USER_ID:-}" ]; then
+      local user_id="-u ${PLEXTRAC_USER_ID}"
+    fi
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      useradd --shell /bin/bash $user_id \
+              --create-home --home "${PLEXTRAC_HOME}" \
+              ${PLEXTRAC_USER_NAME:-plextrac}
+    else
+      useradd $user_id --groups docker \
+              --shell /bin/bash \
+              --create-home --home "${PLEXTRAC_HOME}" \
+              ${PLEXTRAC_USER_NAME:-plextrac}
+    fi
+    if ! id -g "plextrac" >/dev/null 2>&1
+    then
+      groupadd -g $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) ${PLEXTRAC_USER_NAME:-plextrac} -f
+    fi
+    usermod -g ${PLEXTRAC_USER_NAME:-plextrac} ${PLEXTRAC_USER_NAME:-plextrac}
     log "Done."
   fi
 }
@@ -32,7 +44,7 @@ function configure_user_environment() {
 
 function copy_scripts() {
   info "Copying plextrac CLI to user PATH..."
-  tmp=`mktemp -p /tmp plextrac-XXX`
+  tmp=`mktemp -p ~/ plextrac-XXX`
   debug "tmp script location: $tmp"
   debug "`$0 dist 2>/dev/null > $tmp && cp -uv $tmp "${PLEXTRAC_HOME}/.local/bin/plextrac"`"
   chmod +x "${PLEXTRAC_HOME}/.local/bin/plextrac"
@@ -41,6 +53,7 @@ function copy_scripts() {
 
 function fix_file_ownership() {
   info "Fixing file ownership in ${PLEXTRAC_HOME} for plextrac"
-  chown -R plextrac:plextrac "${PLEXTRAC_HOME}"
+  local user=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+  chown -R $user:$user "${PLEXTRAC_HOME}"
   log "Done."
 }

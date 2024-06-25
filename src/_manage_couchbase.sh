@@ -20,7 +20,12 @@ ENDCOUCHBASE
 function manage_api_user() {
   info "Creating unprivileged user ${CB_API_USER} with access to ${CB_BUCKET}"
   get_user_approval
-  compose_client exec -T $couchbaseComposeService \
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local cruntime="container_client exec"
+  else
+    local cruntime="compose_client exec -T"
+  fi
+  $cruntime $couchbaseComposeService \
     couchbase-cli user-manage --set -c 127.0.0.1:8091 -u "${CB_ADMIN_USER}" -p "${CB_ADMIN_PASS}" \
       --rbac-username "${CB_API_USER}" --rbac-password "${CB_API_PASS}" --rbac-name='PlexTrac-API-User' \
       --roles bucket_full_access[${CB_BUCKET}] --auth-domain local
@@ -29,7 +34,12 @@ function manage_api_user() {
 function manage_backup_user() {
   info "Creating backup user ${CB_BACKUP_USER} with access to ${CB_BUCKET}"
   get_user_approval
-  compose_client exec -T $couchbaseComposeService \
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local cruntime="container_client exec"
+  else
+    local cruntime="compose_client exec -T"
+  fi
+  $cruntime $couchbaseComposeService \
     couchbase-cli user-manage --set -c 127.0.0.1:8091 -u "${CB_ADMIN_USER}" -p "${CB_ADMIN_PASS}" \
       --rbac-username "${CB_BACKUP_USER}" --rbac-password "${CB_BACKUP_PASS}" --rbac-name='PlexTrac-Backup-User' \
       --roles bucket_full_access[${CB_BUCKET}] --auth-domain local
@@ -40,7 +50,12 @@ function test_couchbase_access() {
   pass=$2
   bucket=${3:-reportMe}
   info "Checking user $user can access couchbase"
-  bucketList=$(compose_client exec -T -- $couchbaseComposeService \
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local cruntime="container_client exec"
+  else
+    local cruntime="compose_client exec -T"
+  fi
+  bucketList=$($cruntime -- $couchbaseComposeService \
                  couchbase-cli bucket-list -c 127.0.0.1:8091 -u $user -p $pass -o json || echo "noaccess")
   if [ "$bucketList" != "noaccess" ]; then
     bucketList=$(jq '.[].name' <<<$bucketList -r 2>/dev/null)

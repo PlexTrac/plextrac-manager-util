@@ -7,7 +7,7 @@ function mod_backup() {
   backup_ensureBackupDirectory
   backup_fullPostgresBackup
   backup_fullCouchbaseBackup
-  backup_fullUploadsBackup
+  backup_fullUploadsBackup "svcValues"
 }
 
 function backup_ensureBackupDirectory() {
@@ -19,21 +19,44 @@ function backup_ensureBackupDirectory() {
 }
 
 function backup_fullUploadsBackup() {
+  var=$(declare -p "$1")
+  eval "declare -A serviceValues="${var#*=}
   # Yoink uploads out to a compressed tarball
   info "$coreBackendComposeService: Performing backup of uploads directory"
   uploadsBackupDir="${PLEXTRAC_BACKUP_PATH}/uploads"
   mkdir -p $uploadsBackupDir
-  debug "`compose_client run --user 1337 -v ${uploadsBackupDir}:/backups \
-    --workdir /usr/src/plextrac-api --rm --entrypoint='' -T  $coreBackendComposeService \
-    tar -czf /backups/$(date -u "+%Y-%m-%dT%H%M%Sz").tar.gz uploads`"
+ if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local current_date=$(date -u "+%Y-%m-%dT%H%M%Sz")
+    podman exec --workdir="/usr/src/plextrac-api" plextracapi tar -czf "uploads/$current_date.tar.gz" uploads
+    debug "Archiving uploads succeeded"
+    podman cp plextracapi:/usr/src/plextrac-api/uploads/$current_date.tar.gz $uploadsBackupDir
+    debug "Copying to host succeeded"
+    podman exec --workdir="/usr/src/plextrac-api/uploads" plextracapi rm $current_date.tar.gz
+    debug "Cleaned Archive from container"
+  else
+    debug "`compose_client run --user $(id -u) -v ${uploadsBackupDir}:/backups \
+      --workdir /usr/src/plextrac-api --rm --entrypoint='' -T  $coreBackendComposeService \
+      tar -czf /backups/$(date -u "+%Y-%m-%dT%H%M%Sz").tar.gz uploads`"
+  fi
   log "Done."
 }
 
 function backup_fullCouchbaseBackup() {
   info "$couchbaseComposeService: Performing backup of couchbase database"
-  debug "`compose_client exec -T $couchbaseComposeService \
-    chown -R 1337:1337 /backups 2>&1`"
-  debug "`compose_client exec -T --user 1337 $couchbaseComposeService \
+  local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+  local cmd="compose_client exec -T"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    cmd='podman exec'
+  fi
+  if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+    debug "`$cmd $couchbaseComposeService \
+      chown -R $user_id:$user_id /backups 2>&1`"
+  fi
+  local cmd="compose_client exec -T --user $user_id"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    cmd='podman exec'
+  fi
+  debug "`$cmd $couchbaseComposeService \
     cbbackup -m full "http://127.0.0.1:8091" /backups -u ${CB_BACKUP_USER} -p ${CB_BACKUP_PASS} 2>&1`"
   latestBackup=`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`
   backupDir=`basename $latestBackup`
@@ -44,20 +67,25 @@ function backup_fullCouchbaseBackup() {
 
 function backup_fullPostgresBackup() {
   info "$postgresComposeService: Performing backup of postgres database"
-  debug "`compose_client exec -T $postgresComposeService \
-    chown -R 1337:1337 /backups 2>&1`"
+  local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+  local cmd="compose_client exec -T --user $user_id"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    cmd='podman exec'
+  fi
+  if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+    debug "`compose_client exec -T $postgresComposeService chown -R $user_id:$user_id /backups 2>&1`"
+  fi
   backupTimestamp=$(date -u "+%Y-%m-%dT%H%M%Sz")
   targetPath=/backups/$backupTimestamp
-  debug "`compose_client exec -T --user 1337 $postgresComposeService mkdir -p $targetPath`"
+  debug "`$cmd $postgresComposeService mkdir -p $targetPath`"
   pgBackupFlags='--format=custom --compress=1 --verbose'
   for db in ${postgresDatabases[@],,}; do
     log "Backing up $db to $targetPath"
-    debug "`compose_client exec -T --user 1337 -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+    debug "`$cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
       pg_dump -U $POSTGRES_USER $db $pgBackupFlags --file=$targetPath/$db.psql 2>&1`"
   done
   debug "Compressing Postgres backup"
-  debug "`tar -C ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp --remove-files -czvf \
-    ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp.tar.gz .`"
+  tar -C ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp --remove-files -czvf ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp.tar.gz .
   log "Done"
 }
 

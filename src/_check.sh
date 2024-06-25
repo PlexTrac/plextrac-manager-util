@@ -12,25 +12,22 @@ function mod_check() {
     title "Running checks on installation at '${PLEXTRAC_HOME}'"
     _check_base_required_packages
     requires_user_plextrac
-    info "Checking Docker Compose Config"
-    compose_client config -q && info "Config check passed"
-    pending=`composeConfigNeedsUpdated || true`
-    if [ "$pending" != "" ]; then
-        error "Pending Changes:"
-        msg "    %s\n" "$pending"
+    if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+      info "Checking Docker Compose Config"
+      compose_client config -q && info "Config check passed"
+      pending=`composeConfigNeedsUpdated || true`
+      if [ "$pending" != "" ]; then
+          error "Pending Changes:"
+          msg "    %s\n" "$pending"
+      fi
     fi
     mod_etl_fix
     VALIDATION_ONLY=1 configure_couchbase_users
     postgres_metrics_validation
     check_for_maintenance_mode
-
-    # echo >&2 ""
-
-    # title "Notifications"
-    # info "Summary"
-    # msg "`compose_client exec plextracapi npm run status:notifications | fgrep -v '> '`"
   fi
 }
+
 function check_for_maintenance_mode() {
   title "Checking Maintenance Mode"
   IN_MAINTENANCE=$(wget -O - -q https://127.0.0.1/api/v2/health/full --no-check-certificate | jq .data.inMaintenanceMode) || IN_MAINTENANCE="Unknown"
@@ -38,22 +35,30 @@ function check_for_maintenance_mode() {
 }
 
 function mod_etl_fix() {
-  debug "Running ETL Fix"
-  local dir=`compose_client exec plextracapi find -type d -name etl-logs`
-  if [ -n "$dir" ]; then
-    local owner=`compose_client exec plextracapi stat -c '%U' uploads/etl-logs`
-    info "Checking volume permissions"
-    if [ "$owner" != "plextrac" ]
-      then
-        info "Volume permissions are wrong; initiating fix"
-        compose_client exec -u 0 plextracapi chown -R 1337:1337 uploads/etl-logs
-    else
-      info "Volume permissions are correct"
-    fi
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    error "ETL Fix is not supported with Podman. Skipping"
+    return
   else
-    info "Fixing ETL Folder creation"
-    compose_client exec plextracapi mkdir uploads/etl-logs
-    compose_client exec plextracapi chown -R 1337:1337 uploads/etl-logs
+    debug "Running ETL Fix"
+    local cmd="compose_client"
+    local dir=`compose_client exec plextracapi find -type d -name etl-logs`
+    if [ -n "$dir" ]; then
+      local owner=`compose_client exec plextracapi stat -c '%U' uploads/etl-logs`
+      info "Checking volume permissions"
+      if [ "$owner" != "${PLEXTRAC_USER_NAME:-plextrac}" ]
+        then
+          local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+          info "Volume permissions are wrong; initiating fix"
+          compose_client exec -u 0 plextracapi chown -R $user_id:$user_id uploads/etl-logs
+      else
+        info "Volume permissions are correct"
+      fi
+    else
+      info "Fixing ETL Folder creation"
+      compose_client exec plextracapi mkdir uploads/etl-logs
+      local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+      compose_client exec plextracapi chown -R $user_id:$user_id uploads/etl-logs
+    fi
   fi
 }
 

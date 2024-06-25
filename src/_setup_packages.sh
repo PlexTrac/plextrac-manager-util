@@ -19,11 +19,13 @@ function system_packages__do_system_upgrade() {
   info "Updating OS packages, this make take some time!"
   nobest="--nobest"
   os_check
-  if echo "$OS_NAME" | grep -q 'CentOS'; then
+  if grep -q 'CentOS' <(echo "$OS_NAME"); then
     nobest=""
-  elif echo "$OS_NAME"  | grep -q 'Hat'; then
-    if echo "$OS_VERSION" | grep -v '7'; then
-      nobest="--nobest"
+  elif grep -q 'Hat' <(echo "$OS_NAME"); then
+    if grep -vq '7.' <(echo "$OS_VERSION"); then
+      if [ "$CONTAINER_RUNTIME" == "docker" ]; then
+        nobest="--nobest"
+      fi
     else
       nobest=""
     fi
@@ -37,7 +39,7 @@ function system_packages__do_system_upgrade() {
       debug "$out"
       ;;
     "yum")
-      out=`yum upgrade -q -y $nobest 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
+      out=`yum upgrade -y $nobest 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
       debug "$out"
       ;;
     *)  
@@ -105,7 +107,7 @@ function install_docker() {
         info "installing docker, this might take some time..."
         _system_cmd_with_debug_and_fail "yum install -q -y yum-utils"
         # RHEL Docker repo has been deprecated, so only CentOS repo is used
-          _system_cmd_with_debug_and_fail "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo"
+        _system_cmd_with_debug_and_fail "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo"
         system_packages__refresh_package_lists
         _system_cmd_with_debug_and_fail "yum install -q -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>&1"
         _system_cmd_with_debug_and_fail "systemctl enable docker 2>&1"
@@ -159,4 +161,73 @@ function _system_cmd_with_debug_and_fail() {
   fail_msg=${2:-"Command failed: '$cmd'"}
   out=`eval $cmd` || { error "$fail_msg"; debug "$out"; return 1; }
   debug "$out"
+}
+
+function install_podman() {
+  if ! command -v podman &> /dev/null || [ "${1:-}" == "force" ]; then
+    case `systemPackageManager` in
+      "yum")
+        info "installing podman, this might take some time..."
+        if grep -q "Red Hat" <(echo "$OS_NAME"); then
+          if grep -q "8." <(echo "$OS_VERSION"); then
+            _system_cmd_with_debug_and_fail "yum module enable -y container-tools:rhel8"
+          elif grep -q "9." <(echo "$OS_VERSION"); then
+            _system_cmd_with_debug_and_fail "yum install -y container-tools"
+          fi
+        fi
+        _system_cmd_with_debug_and_fail "yum install -q -y podman podman-plugins"
+        event__log_activity "install:podman" $(podman --version)
+        ;;
+      *)
+        error "unsupported"
+        exit 1
+        ;;
+    esac
+    log "Done."
+  else
+    info "podman already installed, version: $(podman --version | grep -o -E '.\..\..')"
+  fi
+}
+
+function install_podman_compose() {
+  if ! command -v podman-compose &> /dev/null || [ "${1:-}" == "force" ]; then
+    case `systemPackageManager` in
+      "yum")
+        info "installing podman-compose, this might take some time..."
+        os_check
+        # If its RHEL
+        if echo "$OS_NAME" | grep -q "Red"; then
+          arch="$(arch)"
+          debug "$arch"
+          os_ver=$(echo "$OS_VERSION" | cut -d '.' -f1)
+          debug "$os_ver"
+            _system_cmd_with_debug_and_fail "subscription-manager repos --enable codeready-builder-for-rhel-$os_ver-$arch-rpms"
+            _system_cmd_with_debug_and_fail "yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$os_ver.noarch.rpm"
+        fi
+
+        # If its CentOS or Rocky Linux
+        if echo "$OS_NAME" | grep -q "CentOS" || echo "$OS_NAME" | grep -q "Rocky"; then
+          if echo "$OS_VERSION" | grep -q "9."; then
+            _system_cmd_with_debug_and_fail "yum config-manager --set-enabled crb 2>&1"
+          elif echo "$OS_VERSION" | grep -q "8."; then
+            _system_cmd_with_debug_and_fail "yum config-manager --set-enabled powertools 2>&1"
+          fi
+        fi
+        if echo "$OS_NAME" | grep -q "CentOS"; then
+          _system_cmd_with_debug_and_fail "yum install -y epel-release epel-next-release 2>&1"
+        elif echo "$OS_NAME" | grep -q "Rocky"; then
+          _system_cmd_with_debug_and_fail "yum install -y epel-release 2>&1"
+        fi
+        _system_cmd_with_debug_and_fail "yum install -q -y podman-compose 2>&1"
+        event__log_activity "install:podman-compose" $(podman-compose --version 2>1)
+        ;;
+      *)
+        error "unsupported"
+        exit 1
+        ;;
+    esac
+    log "Done."
+  else
+    info "podman-compose already installed, version: $(podman-compose --version 2>1 | grep compose | grep -o -E '.\..\..')"
+  fi
 }
