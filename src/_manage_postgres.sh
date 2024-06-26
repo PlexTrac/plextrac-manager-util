@@ -150,22 +150,20 @@ function mod_check_etl_status() {
   info "Checking Migration Status"
   secs=300
   endTime=$(( $(date +%s) + secs ))
+  if [[ $(container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}') != "" ]]; then
+    migration_exited="running"
+  else
+    migration_exited="exited"
+    debug "Migration container not found"
+  fi
   while [ "$migration_exited" == "running" ]; do
     # Check if the migration container has exited, e.g., migrations have completed or failed
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      local migration_exited=$(podman container inspect --format '{{.State.Status}}' "migrations" || migration_exited="exited")
-    else
-      local migration_exited=$(docker inspect --format '{{.State.Status}}' `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'` || migration_exited="exited")
-    fi
+    local migration_exited=$(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'` || migration_exited="exited")
     if [ $(date +%s) -gt $endTime ]; then
       error "Migration container has been running for over 5 minutes or is still running. Please ensure they complete or fail before taking further action with the PlexTrac Manager Utility. You can check on the logs by running 'docker compose logs -f couchbase-migrations'"
       die "Exiting PlexTrac Manager Utility."
     fi
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      for s in / - \\ \|; do printf "\r\033[K$s $(podman inspect --format '{{.State.Status}}' migrations) -- $(podman logs migrations 2> /dev/null | tail -n 1 -q)"; sleep .1; done
-    else
-      for s in / - \\ \|; do printf "\r\033[K$s $(docker inspect --format '{{.State.Status}}' `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'`) -- $(docker logs `docker ps -a | grep migrations 2>/dev/null | awk '{print $1}'` 2> /dev/null | tail -n 1 -q)"; sleep .1; done
-    fi
+    for s in / - \\ \|; do printf "\r\033[K$s $(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'`) -- $(container_client logs `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'` 2> /dev/null | tail -n 1 -q)"; sleep .1; done
   done
   printf "\r\033[K"
   info "Migrations complete"
