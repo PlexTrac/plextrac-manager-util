@@ -31,5 +31,5 @@ function mod_stop() {
     compose_client stop
   fi
   info "-----"
-  info "PlexTrac stopped. It's now safe to update and restart"
+  info "PlexTrac stopped. It's now safe to update the OS and restart"
 }
