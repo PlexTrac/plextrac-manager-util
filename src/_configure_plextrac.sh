@@ -54,7 +54,7 @@ LOCK_UPDATES=${LOCK_UPDATES:-"false"}
 LOCK_VERSION=${LOCK_VERSION:-}
 MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-`generateSecret`}
 MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:-`generateSecret`}
-CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:-`head -c 64 /dev/urandom | base64 | tr -cd '[:alnum:]._-' | head -c 20`}
+CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:-`generateSecret 20`}
 CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:-`generateSecret`}
 
 
@@ -94,7 +94,7 @@ CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:-`generateSecret`}
 
 function generateSecret() {
   # replace any non-alphanumeric characters so postgres doesn't choke
-  echo `head -c 64 /dev/urandom | base64 | tr -cd '[:alnum:]._-' | head -c 32`
+  echo `head -c 64 /dev/urandom | base64 | tr -cd '[:alnum:]._-' | head -c ${1:-32}`
 }
 
 function setDefaultSecrets() {
