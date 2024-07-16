@@ -12,12 +12,14 @@ function mod_update() {
   # shellcheck disable=SC2086
   if [ "${AIRGAPPED:-false}" == "false" ]; then
     if [ ${SKIP_SELF_UPGRADE:-0} -eq 0 ]; then
-      info "Checking for updates to the PlexTrac Management Utility"
-      if selfupdate_checkForNewRelease; then
-        event__log_activity "update:upgrade-utility" "${releaseInfo}"
-        selfupdate_doUpgrade
-        die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
-        exit 1 # just in case, previous line should already exit
+      if [ ${UTIL_UPDATED:-0} -eq 0 ]; then
+        info "Checking for updates to the PlexTrac Management Utility"
+        if selfupdate_checkForNewRelease; then
+          event__log_activity "update:upgrade-utility" "${releaseInfo}"
+          selfupdate_doUpgrade
+          die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
+          exit 1 # just in case, previous line should already exit
+        fi
       fi
     else
       info "Skipping self upgrade"
@@ -209,7 +211,7 @@ function selfupdate_doUpgrade() {
   if [ "${SKIP_APP_UPDATE:-false}" == "true" ]; then
     exit 0
   fi
-  eval "SKIP_SELF_UPGRADE=1 $ProgName $_INITIAL_CMD_ARGS"
+  eval "UTIL_UPDATED=1 $ProgName $_INITIAL_CMD_ARGS"
   exit $?
 }
 
