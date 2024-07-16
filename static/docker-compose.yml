@@ -42,6 +42,7 @@ services:
     command: |
       sh -c
         "npm run maintenance:enable &&
+         npm run pg:superuser:bootstrap --if-present &&
          npm run pg:migrate &&
          npm run db:migrate &&
          npm run pg:etl up all &&
@@ -263,7 +264,7 @@ services:
       timeout: 30s
 
   postgres:
-    image: postgres:14-alpine
+    image: plextrac/plextracpostgres:stable
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata
       PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
