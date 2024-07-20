@@ -34,7 +34,7 @@ function backup_fullUploadsBackup() {
     podman exec --workdir="/usr/src/plextrac-api/uploads" plextracapi rm $current_date.tar.gz
     debug "Cleaned Archive from container"
   else
-    debug "`compose_client run --user $(id -u) -v ${uploadsBackupDir}:/backups \
+    debug "`compose_client run --user $(id -u) --no-deps -v ${uploadsBackupDir}:/backups \
       --workdir /usr/src/plextrac-api --rm --entrypoint='' -T  $coreBackendComposeService \
       tar -czf /backups/$(date -u "+%Y-%m-%dT%H%M%Sz").tar.gz uploads`"
   fi
