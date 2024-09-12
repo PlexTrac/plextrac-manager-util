@@ -450,7 +450,14 @@ function run_cb_migrations() {
       info "Migrations completed"
       break
     fi
-    for s in / - \\ \|; do printf "\r\033[K$s $(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'`) -- $(container_client logs `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'` 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+    for s in / - \\ \|; do
+        local log=""
+        local container=""  
+        container="$(container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}')"
+        log="$(container_client logs $container 2> /dev/null | tail -n 1 -q || true)"
+        printf "\r\033[K%s %s -- %s" "$s" "$container" "$log"
+        sleep .1
+    done
     sleep 1
   done
   if [ $(date +%s) -ge $endTime ]; then
