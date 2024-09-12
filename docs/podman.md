@@ -1,6 +1,24 @@
+# Podman
+
+This is a very basic guide to using Podman and explaining how it works a bit
+
+## How To's
+
+### Using Custom SSL Certificates and Custom Logos
+
+The Custom SSL Certificates and Custom Logos are mounted at the following locations:
+
+```shell
+"${PLEXTRAC_HOME:-.}/volumes/nginx_ssl_certs"
+"${PLEXTRAC_HOME:-.}/volumes/nginx_logos"
+```
+
+To use a Custom SSL Certificate or Logo, simply navigate to this location on the HOST OS, replace the files present there with the appropriate replacements, and then restart the NGINX container `podman restart plextracnginx`
+
 ## Additional Package Requirements
 
 podman | >=v4.6 (RHEL 8/9 only)
+`jq`, `bc`, `bash v5+`, and `wget`
 
 ## Podman support
 
@@ -9,11 +27,11 @@ We've expanded the capabilities to support podman in specific circumstances.
 *OS:* RHEL 8/9+
 *Podman Compose:* No (currently)
 
-> Note: the module for podman was written with RHEL 9 specifically in mind. It is not officially supported at this time to use the container runtime set to Podman on Debian, Ubuntu, or CentOS.
-
-> Note: All testing has been done on BASE images without hardening with a security profile or SELinux or anything -- its just a stock operating system
+> Note: the module for podman was written with RHEL 8/9 specifically in mind. It is not officially supported at this time to use the container runtime set to Podman on Debian, Ubuntu, or CentOS.
+> Note: All testing has been done on BASE images without hardening with a security profile or SELinux or anything -- its just a stock operating system.
 
 ---
+
 
 ### Podman Troubleshooting
 
