@@ -126,7 +126,7 @@ function _getServiceContainerVersion() {
         if [ "$CONTAINER_RUNTIME" == "podman" ]; then
           version=$(podman image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}' 2>/dev/null || echo '')
         else
-          version=$(docker image inspect postgres:14-alpine --format '{{range $index, $value := .Config.Env}}{{$value}}{{"\n"}}{{end}}' | grep PG_VERSION | cut -d '=' -f2 || echo '')
+          version=$(docker image inspect $imageId --format '{{range $index, $value := .Config.Env}}{{$value}}{{"\n"}}{{end}}' | grep PG_VERSION | cut -d '=' -f2 || echo '')
         fi
         ;;
       "redis")
