@@ -49,6 +49,7 @@ function mod_update() {
       for i in ${upgrade_path[@]}
         do
           if [ "$i" != "$running_ver" ]; then
+            info "Starting Update..."
             debug "Upgrading to $i"
             getCKEditorRTCConfig
             mod_configure
@@ -85,6 +86,7 @@ function mod_update() {
       mod_check_etl_status "${ETL_OUTPUT-}"
       title "Update complete"
   else
+      info "Starting Update..."
       debug "Proceeding with normal update"
       getCKEditorRTCConfig
       mod_configure
