@@ -143,7 +143,9 @@ function version_check() {
         # This grabs the first element in the version sorted list which should always be the highest version available on DockerHub; this should match stable's version"
         if [[ -n "${upstream_tags[*]}" ]]; then
           debug "Setting latest upstream version var to array first index"
-          latest_ver="${upstream_tags[0]}"
+          # Sorting the tags to ensure we grab the latest and remove empty objects from the previous unset commands
+          sorted_upstream_tags=($(sort -V <<<"${upstream_tags[*]}"))
+          latest_ver="${sorted_upstream_tags[0]}"
         else
           debug "Setting latest to running version"
           latest_ver=$running_ver
