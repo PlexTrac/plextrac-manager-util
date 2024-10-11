@@ -7,6 +7,14 @@ function mod_update() {
   if [ "${LOCK_UPDATES:-false}" == "true" ]; then
     die "Updates are locked due to a failed data migration. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
   fi
+
+  if [ "${UPGRADE_STRATEGY}" == "stable" ] && [ -z "${PLEXTRAC_MANAGED:-}" ]; then
+    sed -i 's/UPGRADE_STRATEGY=stable/UPGRADE_STRATEGY=2.10/g' .env
+    info "Set Upgrade Startegy to 2.10 for stable release cycle. Please do not remove this version pin unless instructed to do so by PlexTrac Support."
+  else
+    info "Cloud hosted customer - no modification of UPGRADE_STRATEGY necessary"
+  fi
+
   title "Updating PlexTrac"
   # I'm comparing an int :shrug:
   # shellcheck disable=SC2086
