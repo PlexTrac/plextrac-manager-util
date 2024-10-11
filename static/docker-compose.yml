@@ -10,6 +10,8 @@ services:
     - postgres
     environment:
       STARTUP_MODE: API_ONLY
+      CLOUD_STORAGE_ENDPOINT: ${CLOUD_STORAGE_ENDPOINT:-minio}
+      CLOUD_STORAGE_SSL: ${CLOUD_STORAGE_SSL:-false}
     env_file:
     - .env
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
