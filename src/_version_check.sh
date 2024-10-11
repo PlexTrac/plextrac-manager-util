@@ -79,7 +79,8 @@ function version_check() {
 
         ## LOGIC: LATEST_STABLE
         # IF LATEST_STABLE <= 2.0
-        if (( $(echo "$latest_ver <= $breaking_ver" | bc -l) ))
+        #if (( $(echo "$latest_ver <= $breaking_ver" | bc -l) ))
+        if [ $(printf "%03d%03d%03d%03d" $(echo "${latest_ver}" | tr '.' ' ')) -le $(printf "%03d%03d%03d%03d" $(echo "${breaking_ver}" | tr '.' ' ')) ]
           then
             debug "Updating normally to $latest_ver without warning"
             contiguous_update=false
@@ -123,7 +124,7 @@ function version_check() {
         for i in "${!upstream_tags[@]}"
           do
             #if (( $(echo "${upstream_tags[i]} <= $running_ver" | bc -l) ))
-            if [[ $(printf "%03d%03d%03d%03d" $(echo "${upstream_tags[i]}" | tr '.' ' ')) -le $(printf "%03d%03d%03d%03d" $(echo "${running_ver}" | tr '.' ' ')) ]]
+            if [ $(printf "%03d%03d%03d%03d" $(echo "${upstream_tags[i]}" | tr '.' ' ')) -le $(printf "%03d%03d%03d%03d" $(echo "${running_ver}" | tr '.' ' ')) ]
               then
                 debug "correcting upstream_tags to remove running version and versions prior"
                 unset 'upstream_tags[i]'
