@@ -79,11 +79,12 @@ function version_check() {
 
         ## LOGIC: LATEST_STABLE
         # IF LATEST_STABLE <= 2.0
-        if (( $(echo "$latest_ver <= $breaking_ver" | bc -l) ))
-          then 
+        #if (( $(echo "$latest_ver <= $breaking_ver" | bc -l) ))
+        if [ $(printf "%03d%03d%03d%03d" $(echo "${latest_ver}" | tr '.' ' ')) -le $(printf "%03d%03d%03d%03d" $(echo "${breaking_ver}" | tr '.' ' ')) ]
+          then
             debug "Updating normally to $latest_ver without warning"
             contiguous_update=false
-          
+
           # IF LATEST_STABLE > 2.0
           else
             debug "Stable version is greater than $breaking_ver. Running contiguous update"
@@ -122,7 +123,8 @@ function version_check() {
         # Remove the running version from the Upgrade path
         for i in "${!upstream_tags[@]}"
           do
-            if (( $(echo "${upstream_tags[i]} <= $running_ver" | bc -l) ))
+            #if (( $(echo "${upstream_tags[i]} <= $running_ver" | bc -l) ))
+            if [ $(printf "%03d%03d%03d%03d" $(echo "${upstream_tags[i]}" | tr '.' ' ')) -le $(printf "%03d%03d%03d%03d" $(echo "${running_ver}" | tr '.' ' ')) ]
               then
                 debug "correcting upstream_tags to remove running version and versions prior"
                 unset 'upstream_tags[i]'
@@ -141,7 +143,9 @@ function version_check() {
         # This grabs the first element in the version sorted list which should always be the highest version available on DockerHub; this should match stable's version"
         if [[ -n "${upstream_tags[*]}" ]]; then
           debug "Setting latest upstream version var to array first index"
-          latest_ver="${upstream_tags[0]}"
+          # Sorting the tags to ensure we grab the latest and remove empty objects from the previous unset commands
+          sorted_upstream_tags=($(sort -V <<<"${upstream_tags[*]}"))
+          latest_ver="${sorted_upstream_tags[0]}"
         else
           debug "Setting latest to running version"
           latest_ver=$running_ver
