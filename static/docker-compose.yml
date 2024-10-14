@@ -10,6 +10,8 @@ services:
     - postgres
     environment:
       STARTUP_MODE: API_ONLY
+      CLOUD_STORAGE_ENDPOINT: ${CLOUD_STORAGE_ENDPOINT:-minio}
+      CLOUD_STORAGE_SSL: ${CLOUD_STORAGE_SSL:-false}
     env_file:
     - .env
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
@@ -123,6 +125,10 @@ services:
       USE_CUSTOM_CERT: "${USE_CUSTOM_CERT-}"
       CKEDITOR_MIGRATE: "${CKEDITOR_MIGRATE:-}"
       WAF_ENABLED: "${WAF_ENABLED:-true}"
+      UPSTREAM_CLOUD_BUCKET: ${UPSTREAM_CLOUD_BUCKET:-cloud}
+      UPSTREAM_CLOUD_PREFIX: ${UPSTREAM_CLOUD_PREFIX:-uploads}
+      MINIO_ENABLED : ${MINIO_ENABLED:-true}
+      UPSTREAM_CLOUD_HOST: ${UPSTREAM_CLOUD_HOST:-minio}
     ports:
     - 0.0.0.0:80:80/tcp
     - 0.0.0.0:443:443/tcp
@@ -335,12 +341,48 @@ services:
       - "--no-update-notifier"
     entrypoint: npm run
     command: "start:contextual-scoring-service"
+  
+  minio:
+    ports:
+      - 9000:9000
+      - 9001:9001
+    image: chainguard/minio:latest
+    restart: always
+    volumes:
+      - minio-data:/data
+    entrypoint: minio
+    command: server /data --console-address ':9001' --address '0.0.0.0:9000'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?err}
+      MINIO_LOCAL_USER: ${MINIO_LOCAL_USER:-localadmin}
+      MINIO_LOCAL_PASSWORD: ${MINIO_LOCAL_PASSWORD:?err}
+      CLOUD_STORAGE_ENDPOINT: ${CLOUD_STORAGE_ENDPOINT:-127.0.0.1}
+      CLOUD_STORAGE_PORT: ${CLOUD_STORAGE_PORT:-9000}
+      CLOUD_STORAGE_SSL: ${CLOUD_STORAGE_SSL:-false}
+      CLOUD_STORAGE_ACCESS_KEY: ${CLOUD_STORAGE_ACCESS_KEY:?err}
+      CLOUD_STORAGE_SECRET_KEY: ${CLOUD_STORAGE_SECRET_KEY:?err}
+  minio-bootstrap:
+    image: plextrac/plextrac-minio-bootstrap:stable
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?err}
+      MINIO_LOCAL_USER: ${MINIO_LOCAL_USER:-localadmin}
+      MINIO_LOCAL_PASSWORD: ${MINIO_LOCAL_PASSWORD:?err}
+      CLOUD_STORAGE_ACCESS_KEY: ${CLOUD_STORAGE_ACCESS_KEY:?err}
+      CLOUD_STORAGE_SECRET_KEY: ${CLOUD_STORAGE_SECRET_KEY:?err}
+      MINIO_ENABLED : ${MINIO_ENABLED:-true}
+      UPSTREAM_CLOUD_BUCKET: ${UPSTREAM_CLOUD_BUCKET:-cloud}
+      
 
 volumes:
   dbdata: {}
   uploads: {}
   letsencrypt: {}
   localesOverride: {}
+  minio-data: {}
   postgres-data: {}
   postgres-initdb:
     driver: local
