@@ -25,10 +25,15 @@ function generate_default_config() {
   source <(echo "${existingCfg}")
   set +o allexport
 
+  # NOTE: we need to leave API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE until all versions of the app are no longer running code
+  # that relies on this variable. It has been replaced by INTERNAL_API_KEY_SHARED for newer versions.
 
   # Generate base env, using imported vars from above where applicable
   generatedEnv="
 API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE=${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:-`generateSecret`}
+INTERNAL_API_KEY_SHARED=${INTERNAL_API_KEY_SHARED:-`generateSecret`}
+CORE_API_BASE_URL=http://plextracapi:4350
+CTEM_API_BASE_URL=http://ph-ctem-api:3332
 JWT_KEY=${JWT_KEY:-`generateSecret`}
 MFA_KEY=${MFA_KEY:-`generateSecret`}
 COOKIE_KEY=${COOKIE_KEY:-`generateSecret`}
