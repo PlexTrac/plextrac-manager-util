@@ -5,41 +5,40 @@ services:
       update_config:
         parallelism: 1
     depends_on:
-    - plextracdb
-    - redis
-    - postgres
+      - plextracdb
+      - redis
+      - postgres
     environment:
       STARTUP_MODE: API_ONLY
       CLOUD_STORAGE_ENDPOINT: ${CLOUD_STORAGE_ENDPOINT:-minio}
       CLOUD_STORAGE_SSL: ${CLOUD_STORAGE_SSL:-false}
     env_file:
-    - .env
+      - .env
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     restart: always
     volumes:
-    - uploads:/usr/src/plextrac-api/uploads:rw
-    - datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp:r
-    - localesOverride:/usr/src/plextrac-api/localesOverride:rw
+      - uploads:/usr/src/plextrac-api/uploads:rw
+      - datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp:r
+      - localesOverride:/usr/src/plextrac-api/localesOverride:rw
     healthcheck:
       test:
-      # Handle cURL being removed due to upstream vuln
-      - 'CMD-SHELL'
-      - 'python3 - << EOF'
-      - 'import requests'
-      - 'print(requests.get("http://127.0.0.1:4350/api/v2/health/live").json())'
-      - 'EOF'
-
+        # Handle cURL being removed due to upstream vuln
+        - 'CMD-SHELL'
+        - 'python3 - << EOF'
+        - 'import requests'
+        - 'print(requests.get("http://127.0.0.1:4350/api/v2/health/live").json())'
+        - 'EOF'
 
   couchbase-migrations:
     profiles:
-    - "database-migrations"
+      - "database-migrations"
     depends_on:
-    - plextracdb
-    - redis
-    - postgres
+      - plextracdb
+      - redis
+      - postgres
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     volumes:
-    - uploads:/usr/src/plextrac-api/uploads:rw
+      - uploads:/usr/src/plextrac-api/uploads:rw
     entrypoint: ""
     command: |
       sh -c
@@ -97,18 +96,18 @@ services:
       bucket: "${bucket-}"
     image: plextrac/plextracdb:6.5.1
     ports:
-    - 127.0.0.1:8091:8091/tcp
-    - 127.0.0.1:8092:8092/tcp
-    - 127.0.0.1:8093:8093/tcp
-    - 127.0.0.1:8094:8094/tcp
+      - 127.0.0.1:8091:8091/tcp
+      - 127.0.0.1:8092:8092/tcp
+      - 127.0.0.1:8093:8093/tcp
+      - 127.0.0.1:8094:8094/tcp
     restart: always
     volumes:
-    - dbdata:/opt/couchbase/var:rw
-    - couchbase-backups:/backups:rw
+      - dbdata:/opt/couchbase/var:rw
+      - couchbase-backups:/backups:rw
     healthcheck:
       test:
-      - "CMD-SHELL"
-      - "curl --head --fail -X GET -u $CB_ADMIN_USER:$CB_ADMIN_PASS -H 'Content-Type: application/json' http://localhost:8091/pools/default/buckets/reportMe || exit 1"
+        - "CMD-SHELL"
+        - "curl --head --fail -X GET -u $CB_ADMIN_USER:$CB_ADMIN_PASS -H 'Content-Type: application/json' http://localhost:8091/pools/default/buckets/reportMe || exit 1"
       interval: 10s
       retries: 6
       start_period: 30s
@@ -127,15 +126,15 @@ services:
       WAF_ENABLED: "${WAF_ENABLED:-true}"
       UPSTREAM_CLOUD_BUCKET: ${UPSTREAM_CLOUD_BUCKET:-cloud}
       UPSTREAM_CLOUD_PREFIX: ${UPSTREAM_CLOUD_PREFIX:-uploads}
-      MINIO_ENABLED : ${MINIO_ENABLED:-true}
+      MINIO_ENABLED: ${MINIO_ENABLED:-true}
       UPSTREAM_CLOUD_HOST: ${UPSTREAM_CLOUD_HOST:-minio}
     ports:
-    - 0.0.0.0:80:80/tcp
-    - 0.0.0.0:443:443/tcp
+      - 0.0.0.0:80:80/tcp
+      - 0.0.0.0:443:443/tcp
     restart: always
     volumes:
-    - letsencrypt:/etc/letsencrypt:rw
-    - ${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules:/etc/nginx/conf.d/customer_curated.rules:Z
+      - letsencrypt:/etc/letsencrypt:rw
+      - ${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules:/etc/nginx/conf.d/customer_curated.rules:Z
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -153,8 +152,8 @@ services:
     deploy:
       replicas: 1
     depends_on:
-    - plextracdb
-    - redis
+      - plextracdb
+      - redis
     restart: always
     init: True
     environment:
@@ -165,16 +164,18 @@ services:
       REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
       API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE: "${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
+      INTERNAL_API_KEY_SHARED: "${INTERNAL_API_KEY_SHARED:?err}"
+      CORE_API_BASE_URL: "${CORE_API_BASE_URL:?err}"
     healthcheck:
       test:
-      - "CMD"
-      - "npm"
-      - "run"
-      - "healthcheck:notification-engine"
-      - "readiness"
-      - "10"
-      - "--"
-      - "--no-update-notifier"
+        - "CMD"
+        - "npm"
+        - "run"
+        - "healthcheck:notification-engine"
+        - "readiness"
+        - "10"
+        - "--"
+        - "--no-update-notifier"
       interval: 5s
       timeout: 5s
       retries: 3
@@ -187,8 +188,8 @@ services:
     deploy:
       replicas: 1
     depends_on:
-    - plextracdb
-    - redis
+      - plextracdb
+      - redis
     restart: always
     init: True
     environment:
@@ -203,15 +204,17 @@ services:
       REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
       serviceConfig: ${serviceConfig:-}
       API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE: "${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
+      INTERNAL_API_KEY_SHARED: "${INTERNAL_API_KEY_SHARED:?err}"
+      CORE_API_BASE_URL: "${CORE_API_BASE_URL:?err}"
     healthcheck:
       test:
-      - "CMD"
-      - "npm"
-      - "run"
-      - "healthcheck:notification-sender"
-      - "readiness"
-      - "--"
-      - "--no-update-notifier"
+        - "CMD"
+        - "npm"
+        - "run"
+        - "healthcheck:notification-sender"
+        - "readiness"
+        - "--"
+        - "--no-update-notifier"
     entrypoint: npm run
     command: "start:notification-sender"
 
@@ -220,9 +223,9 @@ services:
     deploy:
       replicas: 0
     depends_on:
-    - postgres
-    - plextracdb
-    - redis
+      - postgres
+      - plextracdb
+      - redis
     restart: always
     environment:
       CB_API_PASS: "${CB_API_PASS:?err}"
@@ -240,32 +243,32 @@ services:
       PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
     healthcheck:
       test:
-      - "CMD"
-      - "npm"
-      - "run"
-      - "healthcheck:datalake-maintainer"
-      - "liveness"
-      - "--"
-      - "--no-update-notifier"
+        - "CMD"
+        - "npm"
+        - "run"
+        - "healthcheck:datalake-maintainer"
+        - "liveness"
+        - "--"
+        - "--no-update-notifier"
     entrypoint: npm run
     command: "start:datalake-maintainer"
     volumes:
-    - datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp:r
+      - datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp:r
 
   redis:
     image: redis:6.2-alpine
     command: "redis-server --requirepass ${REDIS_PASSWORD}"
     container_name: redis
     volumes:
-    - redis:/etc/redis:rw
+      - redis:/etc/redis:rw
     restart: always
     healthcheck:
       test:
-      - "CMD"
-      - "redis-cli"
-      - "--raw"
-      - "incr"
-      - "ping"
+        - "CMD"
+        - "redis-cli"
+        - "--raw"
+        - "incr"
+        - "ping"
       interval: 10s
       timeout: 30s
 
@@ -299,14 +302,15 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?err}
       POSTGRES_USER: ${POSTGRES_USER:?err}
     volumes:
-    # this is where the initdb script & SQL template go
-    - postgres-initdb:/docker-entrypoint-initdb.d
-    - postgres-data:/var/lib/postgresql/data
-    - postgres-backups:/backups
+      # this is where the initdb script & SQL template go
+      - postgres-initdb:/docker-entrypoint-initdb.d
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-backups:/backups
     ports:
-    - 127.0.0.1:5432:5432/tcp
+      - 127.0.0.1:5432:5432/tcp
     restart: always
-    healthcheck: # Define healthcheck to be able to use the `service_healthy` condition.
+    healthcheck:
+      # Define healthcheck to be able to use the `service_healthy` condition.
       test: pg_isready -U ${POSTGRES_USER:-internalonly}
       interval: 10s
       timeout: 30s
@@ -317,8 +321,8 @@ services:
     deploy:
       replicas: 1
     depends_on:
-    - postgres
-    - redis
+      - postgres
+      - redis
     restart: always
     environment:
       CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
@@ -332,16 +336,16 @@ services:
       PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
     healthcheck:
       test:
-      - "CMD"
-      - "npm"
-      - "run"
-      - "healthcheck:contextual-scoring-service"
-      - "liveness"
-      - "--"
-      - "--no-update-notifier"
+        - "CMD"
+        - "npm"
+        - "run"
+        - "healthcheck:contextual-scoring-service"
+        - "liveness"
+        - "--"
+        - "--no-update-notifier"
     entrypoint: npm run
     command: "start:contextual-scoring-service"
-  
+
   minio:
     ports:
       - 9000:9000
@@ -373,9 +377,8 @@ services:
       MINIO_LOCAL_PASSWORD: ${MINIO_LOCAL_PASSWORD:?err}
       CLOUD_STORAGE_ACCESS_KEY: ${CLOUD_STORAGE_ACCESS_KEY:?err}
       CLOUD_STORAGE_SECRET_KEY: ${CLOUD_STORAGE_SECRET_KEY:?err}
-      MINIO_ENABLED : ${MINIO_ENABLED:-true}
+      MINIO_ENABLED: ${MINIO_ENABLED:-true}
       UPSTREAM_CLOUD_BUCKET: ${UPSTREAM_CLOUD_BUCKET:-cloud}
-      
 
 volumes:
   dbdata: {}
