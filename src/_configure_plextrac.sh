@@ -25,8 +25,8 @@ function generate_default_config() {
   source <(echo "${existingCfg}")
   set +o allexport
 
-  # NOTE: we need to leave API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE until all versions of the app are no longer running code
-  # that relies on this variable. It has been replaced by INTERNAL_API_KEY_SHARED for newer versions.
+  # NOTE: we need to leave API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE until all cloud-hosted environments are no
+  # longer running code that relies on this variable. It has been replaced by INTERNAL_API_KEY_SHARED for newer versions.
 
   # Generate base env, using imported vars from above where applicable
   generatedEnv="
