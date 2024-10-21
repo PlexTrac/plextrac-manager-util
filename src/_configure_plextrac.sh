@@ -33,7 +33,7 @@ function generate_default_config() {
 API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE=${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:-`generateSecret`}
 INTERNAL_API_KEY_SHARED=${INTERNAL_API_KEY_SHARED:-`generateSecret`}
 CORE_API_BASE_URL=http://plextracapi:4350
-CTEM_API_BASE_URL=http://ph-ctem-api:3332
+CTEM_API_BASE_URL=http://ctem-api:3332
 JWT_KEY=${JWT_KEY:-`generateSecret`}
 MFA_KEY=${MFA_KEY:-`generateSecret`}
 COOKIE_KEY=${COOKIE_KEY:-`generateSecret`}
