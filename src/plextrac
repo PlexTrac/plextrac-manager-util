@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.7.9
+VERSION=0.7.10
 
 ## Podman Global Declaration Variable
 declare -A svcValues
