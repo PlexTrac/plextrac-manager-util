@@ -22,6 +22,7 @@ function mod_check() {
       fi
     fi
     mod_etl_fix
+    mod_uploads_vol_fix
     VALIDATION_ONLY=1 configure_couchbase_users
     postgres_metrics_validation
     check_for_maintenance_mode
@@ -44,20 +45,37 @@ function mod_etl_fix() {
     local dir=`compose_client exec plextracapi find -type d -name etl-logs`
     if [ -n "$dir" ]; then
       local owner=`compose_client exec plextracapi stat -c '%U' uploads/etl-logs`
-      info "Checking volume permissions"
+      info "Checking ETL log destination permissions"
       if [ "$owner" != "${PLEXTRAC_USER_NAME:-plextrac}" ]
         then
           local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
-          info "Volume permissions are wrong; initiating fix"
+          info "ETL log destination permissions are wrong; initiating fix"
           compose_client exec -u 0 plextracapi chown -R $user_id:$user_id uploads/etl-logs
       else
-        info "Volume permissions are correct"
+        info "ETL log destination permissions are correct"
       fi
     else
       info "Fixing ETL Folder creation"
       compose_client exec plextracapi mkdir uploads/etl-logs
       local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
       compose_client exec plextracapi chown -R $user_id:$user_id uploads/etl-logs
+    fi
+  fi
+}
+
+function mod_uploads_vol_fix() {
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    error "Uploads volume ownership checks are not supported with Podman. Skipping"
+    return
+  else
+    info "Checking uploads volume ownership"
+    local user=`compose_client exec plextracapi whoami`
+    local dotfile_exist=`compose_client exec plextracapi find uploads -type f -name .vol-chown-pt`
+    if [ "$user" != "root"  ] && [ "$dotfile_exist" = "" ]; then
+      # this uid:gid is hardcoded in the base image and expected by the backend, do NOT change this chown
+      info "Ensuring upload volume ownership is 1337:1337, this may take awhile..."
+      compose_client exec -u 0 plextracapi chown -R 1337:1337 uploads/
+      compose_client exec plextracapi touch uploads/.vol-chown-pt
     fi
   fi
 }
