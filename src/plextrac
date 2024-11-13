@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.7.10
+VERSION=0.7.11
 
 ## Podman Global Declaration Variable
 declare -A svcValues
@@ -128,6 +128,7 @@ function mod_help() {
   log "restore                              ${DIM}restore instance from backups${RESET}"
   log "start                                ${DIM}start a PlexTrac instance${RESET}"
   log "stop                                 ${DIM}stop PlexTrac${RESET}"
+  log "restart                              ${DIM}restart PlexTrac${RESET}"
   log "update                               ${DIM}updates the management utility & applies any configuration or application updates${RESET}"
   log ""
   info "Available flags to modify command behavior:"
@@ -430,6 +431,11 @@ function mod_start() {
     # Enable database migrations on startup
     compose_client up -d --remove-orphans
   fi
+}
+
+function mod_restart() {
+  mod_stop
+  mod_start
 }
 
 function run_cb_migrations() {
