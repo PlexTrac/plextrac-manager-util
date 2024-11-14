@@ -282,7 +282,7 @@ function podman_pull_images() {
 
   declare -A service_images
   PODMAN_CB_IMAGE="${PODMAN_CB_IMAGE:-docker.io/plextrac/plextracdb:7.2.0}"
-  PODMAN_PG_IMAGE="${PODMAN_PG_IMAGE:-docker.io/postgres:14-alpine}"
+  PODMAN_PG_IMAGE="${PODMAN_PG_IMAGE:-docker.io/plextrac/plextracpostgres:stable}"
   PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
