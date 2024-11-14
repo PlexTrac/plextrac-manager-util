@@ -41,7 +41,7 @@ function image_version_check() {
       # Get list of expected services from the `docker compose config`
       if [ "$CONTAINER_RUNTIME" == "podman" ]; then
         expected_services="docker.io/plextrac/plextracdb:7.2.0
-docker.io/postgres:14-alpine
+docker.io/plextrac/plextracpostgres:stable
 docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}
 docker.io/redis:6.2-alpine
 docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
