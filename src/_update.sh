@@ -116,6 +116,7 @@ function mod_update() {
         if [ "$CONTAINER_RUNTIME" == "podman" ]; then
           title "Removing old podman containers"
           podman_remove
+        fi
       fi
 
       mod_start || sleep 20
