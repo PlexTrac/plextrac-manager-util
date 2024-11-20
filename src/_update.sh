@@ -112,6 +112,10 @@ function mod_update() {
         fi
       else
         info "AIRGAPPED mode enabled, skipping image pull"
+        # podman needs to remove containers before attempting to start with updated containers
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          title "Removing old podman containers"
+          podman_remove
       fi
 
       mod_start || sleep 20
