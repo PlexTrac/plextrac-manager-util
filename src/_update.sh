@@ -114,11 +114,6 @@ function mod_update() {
         info "AIRGAPPED mode enabled, skipping image pull"
       fi
 
-      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-        title "Pulling latest container images"
-        podman_remove
-        podman_pull_images
-      fi
       mod_start || sleep 20
       run_cb_migrations
       if [ "$CONTAINER_RUNTIME" == "podman" ]; then
