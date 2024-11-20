@@ -36,6 +36,7 @@ svcValues[contextual-scoring-service-entrypoint]='--entrypoint ["npm","run","sta
 svcValues[contextual-scoring-service-healthcheck]='--health-cmd=["npm","run","healthcheck:contextual-scoring-service","liveness","10","--","--no-update-notifier"]'
 #Migrations
 svcValues[migrations-volumes]="--volumes-from=plextracapi"
+svcValues[migrations-entrypoint]='--entrypoint "npm run maintenance:enable && npm run pg:superuser:bootstrap --if-present && npm run pg:migrate && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"'
 #Nginx
 svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw -v nginx_ssl_certs:/etc/ssl/:Z,U -v nginx_logos:/usr/share/nginx/html/dist/img/:Z,U"
 svcValues[plextracnginx-healthcheck]='--health-cmd=["echo","GET","/","|","openssl","s_client","-quiet","-connect","127.0.0.1:443"]'
