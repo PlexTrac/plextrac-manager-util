@@ -139,7 +139,7 @@ function plextrac_install_podman() {
     mod_start # this doesn't re-run migrations
     run_cb_migrations
   fi
-  
+
   mod_info
   info "Post installation note:"
   log "If you wish to have access to historical logs, you can configure docker to send logs to journald."
@@ -173,7 +173,7 @@ function plextrac_start_podman() {
   fi
   serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e CKEDITOR_MIGRATE=${CKEDITOR_MIGRATE:-} -e CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}"
   serviceValues[ckeditor-backend-env_vars]="-e DATABASE_DATABASE=${PG_CKEDITOR_DB:?err} -e DATABASE_DRIVER=postgres -e DATABASE_HOST=postgres -e DATABASE_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e DATABASE_POOL_CONNECTION_LIMIT=10 -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e DATABASE_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false} -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e LOG_LEVEL=${CKEDITOR_LOG_LEVEL:-} -e REDIS_CONNECTION_STRING=redis://redis:6379 -e REDIS_HOST=redis -e REDIS_PASSWORD=${REDIS_PASSWORD:?err}"
-  
+
   if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
     serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
   fi
@@ -274,7 +274,7 @@ function podman_run_cb_migrations() {
   local image="${serviceValues[api-image]}"
 
   debug "Running migrations"
-  podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:migrate && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no \
+  podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:superuser:bootstrap --if-present && npm run pg:migrate && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no \
   $volumes:z --replace --name="migrations" ${serviceValues[network]} -d $image 1>/dev/null
 }
 

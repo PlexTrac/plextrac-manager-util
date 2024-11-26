@@ -452,7 +452,7 @@ function run_cb_migrations() {
     fi
     for s in / - \\ \|; do
         local log=""
-        local container=""  
+        local container=""
         container="$(container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}')"
         log="$(container_client logs $container 2> /dev/null | tail -n 1 -q || true)"
         printf "\r\033[K%s %s -- %s" "$s" "$container" "$log"
