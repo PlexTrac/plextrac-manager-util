@@ -350,8 +350,8 @@ services:
   
   minio:
     ports:
-      - 9000:9000
-      - 9001:9001
+      - 127.0.0.1:9000:9000
+      - 127.0.0.1:9001:9001
     image: chainguard/minio@sha256:92b5ea1641d52262d6f65c95cffff4668663e00d6b2033875774ba1c2212cfa7
     restart: always
     volumes:
