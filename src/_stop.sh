@@ -25,7 +25,7 @@ function mod_stop() {
     if [[ "$running_frontend_version" != "$expected_frontend_version" ]]; then
       error "The running frontend version (${running_frontend_version}) does not match the expected version (${expected_frontend_version})"
       error "During a system reboot or shutdown, the docker engine normally handles this gracefully and automatically, so using 'plextrac stop' may be unnecessary"
-      die "Since 'plextrac stop' runs a docker compose down, we cannot guarantee a 'plextrac start' will bring up the correct version. Please pin the version or run an update first"
+      die "Since 'plextrac stop' runs a docker compose down, we cannot guarantee a 'plextrac start' will bring up the correct version. Please change UPGRADE_STRATEGY to the current running version ${running_frontend_version} or run an update first"
     fi
   fi
 
