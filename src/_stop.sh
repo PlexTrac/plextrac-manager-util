@@ -14,8 +14,8 @@ function mod_stop() {
     running_frontend_version="$(for i in $(compose_client ps plextracnginx -q); do  docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
     expected_backend_tag="$(compose_client config | grep image | grep plextracapi | head -n 1 | awk '{print $2}')"
     expected_frontend_tag="$(compose_client config | grep image | grep plextracnginx | head -n 1 | awk '{print $2}')"
-    expected_backend_version="$(compose_client image inspect $expected_backend_tag --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")')"
-    expected_frontend_version="$(compose_client image inspect $expected_frontend_tag --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")')"
+    expected_backend_version="$(docker image inspect $expected_backend_tag --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")')"
+    expected_frontend_version="$(docker image inspect $expected_frontend_tag --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")')"
 
     if [[ "$running_backend_version" != "$expected_backend_version" ]]; then
       error "The running backend version ${running_backend_version} does not match the expected version (${expected_backend_version})"
