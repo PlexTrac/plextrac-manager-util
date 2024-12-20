@@ -127,7 +127,7 @@ function mod_help() {
   log "reload-cert                          ${DIM}reload PlexTrac SSL certificates${RESET}"
   log "restore                              ${DIM}restore instance from backups${RESET}"
   log "start                                ${DIM}manually start a PlexTrac instance if normal processes did not succeed${RESET}"
-  log "stop                                 ${DIM}manually stops the PlexTrac instance. Normally handled automatically by the docker engine${RESET}"
+  log "stop                                 ${DIM}manually stops the PlexTrac instance. Not a part of normal maintenance${RESET}"
   log "update                               ${DIM}updates the management utility & applies any configuration or application updates${RESET}"
   log ""
   info "Available flags to modify command behavior:"
