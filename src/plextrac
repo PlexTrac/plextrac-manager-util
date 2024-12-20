@@ -126,8 +126,8 @@ function mod_help() {
   log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
   log "reload-cert                          ${DIM}reload PlexTrac SSL certificates${RESET}"
   log "restore                              ${DIM}restore instance from backups${RESET}"
-  log "start                                ${DIM}start a PlexTrac instance${RESET}"
-  log "stop                                 ${DIM}stop PlexTrac${RESET}"
+  log "start                                ${DIM}manually start a PlexTrac instance if normal processes did not succeed${RESET}"
+  log "stop                                 ${DIM}manually stops the PlexTrac instance. Normally handled automatically by the docker engine${RESET}"
   log "update                               ${DIM}updates the management utility & applies any configuration or application updates${RESET}"
   log ""
   info "Available flags to modify command behavior:"
@@ -469,4 +469,3071 @@ function mod_version() {
   echo "${VERSION}"
 }
 
+
+function mod_autocomplete() {
+  info "Configuring plextrac CLI autocomplete..."
+  shelltype=$(echo $SHELL | rev | cut -d '/' -f1 | rev)
+  if [ ! -f "${PLEXTRAC_HOME}/.cli_completion.d" ]; then
+    debug "Creating autocomplete directory"
+    mkdir -p "${PLEXTRAC_HOME}/.cli_completion.d"
+  fi
+  if [ -f "${PLEXTRAC_HOME}/.local/bin/plextrac" ]; then
+    command_list="$(grep -E "function mod" ${PLEXTRAC_HOME}/.local/bin/plextrac | cut -d ' ' -f2 | cut -d '_' -f2 | cut -d '(' -f1 | grep -v etl)"
+    command_list=$(echo -n $command_list | tr '\n' ' ' | sed 's/ $//')
+    plextrac_compgen="_plextrac()
+{
+  local cur=\${COMP_WORDS[COMP_CWORD]}
+  COMPREPLY=( \$(compgen -W \"$command_list\" -- \$cur) )
+}
+complete -F _plextrac plextrac"
+
+    shellrc_content='
+if [ -d ~/.cli_completion.d ]; then
+  for ac in ~/.cli_completion.d/*; do
+    if [ -f "$ac" ]; then
+      . "$ac"
+    fi
+  done
+fi
+unset ac'
+    debug "`echo \"${plextrac_compgen}\" > ${PLEXTRAC_HOME}/.cli_completion.d/plextrac`"
+    if grep -q ".cli_completion.d" "${PLEXTRAC_HOME}/.${shelltype}rc"; then
+      debug "bash_completion.d already sourced in ${PLEXTRAC_HOME}/.${shelltype}rc"
+    else
+      debug "`echo "${shellrc_content}" >> "${PLEXTRAC_HOME}/.${shelltype}rc"`"
+    fi
+  else
+    error "plextrac CLI not found in ${PLEXTRAC_HOME}/.local/bin/plextrac"
+  fi
+  info "Done. Logout and back in to use autocomplete."
+}
+# Handle backing up PlexTrac instance
+# Usage
+#  plextrac backup
+
+function mod_backup() {
+  title "Running PlexTrac Backups"
+  backup_ensureBackupDirectory
+  backup_fullPostgresBackup
+  backup_fullCouchbaseBackup
+  backup_fullUploadsBackup "svcValues"
+}
+
+function backup_ensureBackupDirectory() {
+  if ! test -d "${PLEXTRAC_BACKUP_PATH}"; then
+    info "Ensuring backup directory exists at $PLEXTRAC_BACKUP_PATH"
+    debug "`mkdir -vp "${PLEXTRAC_BACKUP_PATH}"`"
+    log "Done"
+  fi
+}
+
+function backup_fullUploadsBackup() {
+  var=$(declare -p "$1")
+  eval "declare -A serviceValues="${var#*=}
+  # Yoink uploads out to a compressed tarball
+  info "$coreBackendComposeService: Performing backup of uploads directory"
+  uploadsBackupDir="${PLEXTRAC_BACKUP_PATH}/uploads"
+  mkdir -p $uploadsBackupDir
+ if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local current_date=$(date -u "+%Y-%m-%dT%H%M%Sz")
+    podman exec --workdir="/usr/src/plextrac-api" plextracapi tar -czf "uploads/$current_date.tar.gz" uploads
+    debug "Archiving uploads succeeded"
+    podman cp plextracapi:/usr/src/plextrac-api/uploads/$current_date.tar.gz $uploadsBackupDir
+    debug "Copying to host succeeded"
+    podman exec --workdir="/usr/src/plextrac-api/uploads" plextracapi rm $current_date.tar.gz
+    debug "Cleaned Archive from container"
+  else
+    debug "`compose_client run --user $(id -u) --no-deps -v ${uploadsBackupDir}:/backups \
+      --workdir /usr/src/plextrac-api --rm --entrypoint='' -T  $coreBackendComposeService \
+      tar -czf /backups/$(date -u "+%Y-%m-%dT%H%M%Sz").tar.gz uploads`"
+  fi
+  log "Done."
+}
+
+function backup_fullCouchbaseBackup() {
+  info "$couchbaseComposeService: Performing backup of couchbase database"
+  local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+  local cmd="compose_client exec -T"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    cmd='podman exec'
+  fi
+  if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+    debug "`$cmd $couchbaseComposeService \
+      chown -R $user_id:$user_id /backups 2>&1`"
+  fi
+  local cmd="compose_client exec -T --user $user_id"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    cmd='podman exec'
+  fi
+  debug "`$cmd $couchbaseComposeService \
+    cbbackup -m full "http://127.0.0.1:8091" /backups -u ${CB_BACKUP_USER} -p ${CB_BACKUP_PASS} 2>&1`"
+  latestBackup=`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`
+  backupDir=`basename $latestBackup`
+  debug "Compressing Couchbase backup"
+  debug "`tar -C $(dirname $latestBackup) --remove-files -czvf $latestBackup.tar.gz $backupDir 2>&1`"
+  log "Done."
+}
+
+function backup_fullPostgresBackup() {
+  info "$postgresComposeService: Performing backup of postgres database"
+  local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+  local cmd="compose_client exec -T --user $user_id"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    cmd='podman exec'
+  fi
+  if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+    debug "`compose_client exec -T $postgresComposeService chown -R $user_id:$user_id /backups 2>&1`"
+  fi
+  backupTimestamp=$(date -u "+%Y-%m-%dT%H%M%Sz")
+  targetPath=/backups/$backupTimestamp
+  debug "`$cmd $postgresComposeService mkdir -p $targetPath`"
+  pgBackupFlags='--format=custom --compress=1 --verbose'
+  for db in ${postgresDatabases[@],,}; do
+    log "Backing up $db to $targetPath"
+    debug "`$cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+      pg_dump -U $POSTGRES_USER $db $pgBackupFlags --file=$targetPath/$db.psql 2>&1`"
+  done
+  debug "Compressing Postgres backup"
+  tar -C ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp --remove-files -czvf ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp.tar.gz .
+  log "Done"
+}
+
+# function validate_backups() {
+#   # We should have a backup within the last 24h
+#
+# }
+# Handle running checks on the PlexTrac instance
+# Usage
+#   plextrac check        # run checks against the active installation
+#   plextrac check --pre  # run pre-install checks
+
+function mod_check() {
+  if [ ${DO_PREINSTALL_CHECKS:-0} -eq 1 ]; then
+    title "Running pre-installation checks"
+    _check_system_meets_minimum_requirements
+    _check_no_existing_installation
+  else
+    title "Running checks on installation at '${PLEXTRAC_HOME}'"
+    _check_base_required_packages
+    requires_user_plextrac
+    if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+      info "Checking Docker Compose Config"
+      compose_client config -q && info "Config check passed"
+      pending=`composeConfigNeedsUpdated || true`
+      if [ "$pending" != "" ]; then
+          error "Pending Changes:"
+          msg "    %s\n" "$pending"
+      fi
+    fi
+    mod_etl_fix
+    mod_uploads_vol_fix
+    VALIDATION_ONLY=1 configure_couchbase_users
+    postgres_metrics_validation
+    check_for_maintenance_mode
+  fi
+}
+
+function check_for_maintenance_mode() {
+  title "Checking Maintenance Mode"
+  IN_MAINTENANCE=$(wget -O - -q https://127.0.0.1/api/v2/health/full --no-check-certificate | jq .data.inMaintenanceMode) || IN_MAINTENANCE="Unknown"
+  info "Maintenance Mode: $IN_MAINTENANCE"
+}
+
+function mod_etl_fix() {
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    error "ETL Fix is not supported with Podman. Skipping"
+    return
+  else
+    debug "Running ETL Fix"
+    local cmd="compose_client"
+    local dir=`compose_client exec plextracapi find -type d -name etl-logs`
+    if [ -n "$dir" ]; then
+      local owner=`compose_client exec plextracapi stat -c '%U' uploads/etl-logs`
+      info "Checking ETL log destination permissions"
+      if [ "$owner" != "${PLEXTRAC_USER_NAME:-plextrac}" ]
+        then
+          local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+          info "ETL log destination permissions are wrong; initiating fix"
+          compose_client exec -u 0 plextracapi chown -R $user_id:$user_id uploads/etl-logs
+      else
+        info "ETL log destination permissions are correct"
+      fi
+    else
+      info "Fixing ETL Folder creation"
+      compose_client exec plextracapi mkdir uploads/etl-logs
+      local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+      compose_client exec plextracapi chown -R $user_id:$user_id uploads/etl-logs
+    fi
+  fi
+}
+
+function mod_uploads_vol_fix() {
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    error "Uploads volume ownership checks are not supported with Podman. Skipping"
+    return
+  else
+    info "Checking uploads volume ownership"
+    local user=`compose_client exec plextracapi whoami`
+    local dotfile_exist=`compose_client exec plextracapi find uploads -type f -name .vol-chown-pt`
+    if [ "$user" != "root"  ] && [ "$dotfile_exist" = "" ]; then
+      # this uid:gid is hardcoded in the base image and expected by the backend, do NOT change this chown
+      info "Ensuring upload volume ownership is 1337:1337, this may take awhile..."
+      compose_client exec -u 0 plextracapi chown -R 1337:1337 uploads/
+      compose_client exec plextracapi touch uploads/.vol-chown-pt
+    fi
+  fi
+}
+
+# Check for an existing installation
+function _check_no_existing_installation() {
+  if [ ${IGNORE_EXISTING_INSTALLATION:-0} -eq 1 ]; then
+    info "SKIPPING existing installation checks (check command arguments)"
+    return 0
+  fi
+  info "Checking for pre-existing installation at '${PLEXTRAC_HOME}'"
+  status=0
+  if test -d "${PLEXTRAC_HOME}"; then
+    debug "Found directory '${PLEXTRAC_HOME}'"
+    if test -f "${PLEXTRAC_HOME}/docker-compose.yml"; then
+      error "Found existing docker-compose.yml"
+      status=1
+    fi
+    if test -f "${PLEXTRAC_HOME}/docker-compose.override.yml"; then
+      error "Found existing docker-compose.override.yml"
+      status=1
+    fi
+  fi
+  return $status
+}
+
+function _check_system_meets_minimum_requirements() {
+  info "Checking for initial packages"
+  _check_base_required_packages
+  info "Checking system meets minimum requirements"
+  _check_os_supported_flavor_and_release
+}
+
+# Check common files to get the os flavor/release version
+function _check_os_supported_flavor_and_release() {
+  debug "Supported Operation Systems:"
+  debug "`jq -r '(["NAME", "VERSIONS"] | (., map(length*"-"))), (.operating_systems[] | [.name, .versions[]]) | @tsv' <<<"$SYSTEM_REQUIREMENTS"`"
+  debug ""
+
+  name=$(head -1 /etc/os-release | cut -d '=' -f2 | tr -d '"')
+  debug "Detected OS name: '${name}'"
+  release=$(cat /etc/os-release | grep VERSION_ID | cut -d '=' -f2 | tr -d '"')
+  debug "Detected OS release/version: '${release}'"
+
+  query=".operating_systems[] | select((.name==\"$name\" and .versions[]==\"$release\")) | .family"
+
+  output=`jq --exit-status -r "${query}" <<<"${SYSTEM_REQUIREMENTS}"` || \
+    { error "Detected OS $name:$release does not meet system requirements"
+      debug "json query filter: '${query}'"; debug "$output" ; exit 1 ; }
+  log "Detected supported OS '$name:$release' from family '$output'"
+}
+
+# Check for some base required packages to even validate the system
+function _check_base_required_packages() {
+  requiredCommands=('jq' 'wget' 'unzip' 'bc')
+  missingCommands=()
+  status=0
+  for cmd in ${requiredCommands[@]}; do
+    debug "--"
+    debug "Checking if '$cmd' is available"
+    output="`command -V "$cmd" 2>&1`" || { debug "Missing required command '$cmd'"; debug "$output";
+                                         missingCommands+=("$cmd"); status=1 ; continue; }
+    debug "$cmd is available"
+  done
+  if [ $status -ne 0 ]; then
+    error "Missing required commands: ${missingCommands[*]}"
+    # special handling for centos/rhel, which need epel enabled
+    if command -v yum >/dev/null 2>&1; then
+      installCmd="${BOLD}\$${RESET} ${CYAN}"
+      yum repolist -q | grep epel || installCmd+='yum install --assumeyes epel-release && '
+
+      declare -A cmdToPkg=([jq]=jq [wget]=wget)
+      installCmd="$installCmd""yum install --assumeyes`for cmd in ${missingCommands[@]}; do echo -n " ${cmdToPkg[$cmd]}"; done`"
+
+      log "${BOLD}Please enable the EPEL repo and install required packages:"
+      log "$installCmd"
+    fi
+    # debian based systems should all be roughly similar
+    if command -v apt-get >/dev/null 2>&1; then
+      declare -A cmdToPkg=([jq]=jq [wget]=wget)
+      installCandidates=`for cmd in ${missingCommands[@]}; do echo -n " ${cmdToPkg[$cmd]}"; done`
+      log "${BOLD}Please install required packages:"
+      log "${BOLD}\$${RESET} ${CYAN}apt-get install -y ${installCandidates}"
+    fi
+  else
+    info "All expected packages present: ${requiredCommands[@]}"
+  fi
+  return $status
+}
+
+# Disk related functions
+
+function check_disk_capacity() {
+  dfOutput=`df -H -x tmpfs -x devtmpfs -x vfat -x squashfs`
+  msg "    %s\n" "$dfOutput"
+  currentDate=$(date -R)
+  hostname=$(hostname -f)
+  FAILMSG=""
+  while read -r output; do
+    usePercentage=$(echo $output | awk -F'%' '{ print $1}')
+    partition=$(echo $output | awk '{ print $2 }' )
+    if [ $usePercentage -ge 85 ]; then
+      FAILMSG="${FAILMSG}\n    ${partition} is at ${usePercentage}% usage"
+    fi
+  done <<< $(awk 'NR != 1 { print $5 " " $1 }' <<<"$dfOutput")
+
+  if [ "$FAILMSG" != "" ]; then
+    error "Low disk space on ${hostname} at ${currentDate}:\n${RESET}${FAILMSG}\n"
+    error "Please verify you've got enough disk space before continuing! Either prune images using 'docker image prune -a' or expand the volume!"
+    return 1
+  fi
+}
+# Handle cleaning up PlexTrac instance backups
+# Usage
+#  plextrac clean
+#
+# Keeps at least 1 backup, removes any older than RETAIN_BACKUP_DAYS
+
+RETAIN_BACKUP_DAYS=${RETAIN_BACKUP_DAYS:-3}
+
+function mod_clean() {
+  info_backupDiskUsage
+  title "Running PlexTrac Cleanup"
+  debug "Rotating old archives first to avoid excessive disk utilization"
+  clean_rotateCompressedArchives
+  clean_compressCouchbaseBackups
+  clean_pruneDockerResources
+  clean_sweepUploadsCache
+}
+
+function info_backupDiskUsage() {
+  info "Getting disk utilization metrics for backups"
+  debug "Set to retain up to ${RETAIN_BACKUP_DAYS} days of archives in ${PLEXTRAC_BACKUP_PATH}"
+  log "`du -sh ${PLEXTRAC_BACKUP_PATH}/*`"
+}
+
+function clean_rotateCompressedArchives() {
+  info "Rotating ${RETAIN_BACKUP_DAYS} days of compressed archives from ${PLEXTRAC_BACKUP_PATH}"
+
+  findString="find ${PLEXTRAC_BACKUP_PATH} -daystart -type f -name '*.tar.gz'"
+
+  totalArchives=`eval $findString -printf '.' | wc -c`
+  debug "Total archives in ${PLEXTRAC_BACKUP_PATH}: $totalArchives"
+
+  rotationCandidates=`eval $findString -mtime +${RETAIN_BACKUP_DAYS}`
+  debug "Removing `wc -w <<< "$rotationCandidates"` archives"
+
+  for i in $rotationCandidates; do
+    debug "\tRemoving" "$i"
+    debug "`rm -f $i`"
+  done
+  log "Done."
+}
+
+function clean_compressCouchbaseBackups() {
+  info "$couchbaseComposeService: Archiving Couchbase Backups"
+  local cmd="compose_client run --rm -T"
+  local image="plextracdb"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local cmd="container_client run --rm"
+    local image="$(docker image inspect $(docker container inspect plextracdb --format '{{.Image}}') --format '{{ index .RepoTags 0}}')"
+  fi
+  # Run from within a container due to permissions issues (Couchbase runs as root)
+  debug "`$cmd --entrypoint= --workdir /backups $image \
+    find . -daystart -maxdepth 1 -mtime +1 -type d \
+    -exec tar --remove-files -czvf /backups/{}.tar.gz {} \;
+    2>&1`"
+  debug "Fixing permissions on backups"
+  local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+  debug "`$cmd --entrypoint= --workdir /backups $image \
+    find . -maxdepth 1 -type f -name '*.tar.gz' \
+    -exec chown $user_id:$user_id {} \;
+    2>&1`"
+  log "Done."
+}
+
+function clean_pruneDockerResources() {
+  info "Docker: Cleaning stopped containers & images"
+  debug "`docker container prune -f`"
+  debug "`docker image prune -f`"
+  log "Done."
+}
+
+function clean_sweepUploadsCache() {
+  info "core-backend: Cleaning uploads/exports caches"
+  local cmd="compose_client exec -T"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    cmd="container_client exec"
+  fi
+  # Leaving the cleanup fairly light, this should help a ton without getting aggressive
+  debug "`$cmd -w /usr/src/plextrac-api/uploads plextracapi \
+    find . -maxdepth 1 -type f -regex '^.*\.\(json\|xml\|ptrac\|csv\|nessus\)$' -delete`"
+}
+
+function get_user_approval() {
+  # If interactive, prompt for user approval & return 0
+  # If non-interactive, log failure and return 1
+  # If -y/--assume-yes/ASSUME_YES flags/envvars are set, return 0
+  # If -y/--assume-yes/ASSUME_YES flags/envvars are NOT allowed, skip returning 0
+  if [ ${ASSUME_YES:-false} == "true" ]; then return 0; fi
+  tty -s || die "Unable to request user approval in non-interactive shell, try passing the -y or --assume-yes CLI flag"
+  PS3='Please select an option: '
+  select opt in "Yes" "No" "Exit"; do
+    case "${REPLY,,}" in
+      "yes" | "y" | 1)
+        return 0
+        ;;
+      "no" | "n" | 2)
+        return 1
+        ;;
+      "q" | "quit" | "exit" | 3)
+        die "User cancelled selection";;
+      *)
+        error "Invalid selection: $REPLY was not one of the provided options"
+        ;;
+    esac
+  done
+}
+
+function requires_user_root() {
+  if [ "$EUID" -ne 0 ]; then
+    die "${RED}Please run as root user (eg, with sudo)${RESET}"
+  fi
+}
+
+function requires_user_plextrac {
+  if [ "$EUID" -ne $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) ]; then
+    die "${RED}Please run as ${PLEXTRAC_USER_NAME:-plextrac} user${RESET}"
+  fi
+}
+
+function event__log_activity() {
+  local event_log_filepath="${PLEXTRAC_HOME}/event.log"
+  if ! test -d `dirname "${event_log_filepath}"`; then { debug "missing parent directory to create event log"; return 0; }; fi
+  local activity_timestamp=`date -u +%s`
+  local activity_name="${1:-func:${FUNCNAME[1]}}"
+  local activity_data="${2:--}"
+
+  # old versions of tee don't support -p flag, so check here first by grepping help
+  if `tee --help | grep -q "diagnose errors writing to non pipes"`; then tee_options='-pa'; else tee_options='-a'; fi
+
+  debug "`printf "Logged event '%s' at %s\n" $activity_name $activity_timestamp | tee $tee_options "${event_log_filepath}" 2>&1 || echo "Unable to write to event log"`"
+
+  if [ "$activity_data" != "-" ]; then activity_data="`printf "|\n>>>\n%s\n<<<\n" "$activity_data"`"; fi
+  debug "`{
+    echo "Event Details:"
+    echo "  activity: $activity_name"
+    echo "  timestamp: \`date -d @$activity_timestamp +%c\`"
+    echo "  user: ${USER:-$EUID}"
+    echo "  data: $activity_data"
+    echo ""
+  } |& tee $tee_options "$event_log_filepath" 2>&1 || echo "Unable to write to event log"`"
+}
+
+function panic() {
+  echo >&2 "$*"
+  stacktrace
+  exit 1
+}
+
+function stacktrace() {
+  local frame=0 LINE SUB FILE
+  while read LINE SUB FILE < <(caller "$frame"); do
+    printf '  %s @ %s:%s' "${SUB}" "${FILE}" "${LINE}"
+    ((frame++))
+  done
+}
+
+function _load_static() {
+  if ! grep -q -e "^DOCKER_COMPOSE_ENCODED=.*" $0; then
+    local staticFilesDir="$(dirname $0)/../static"
+    export DOCKER_COMPOSE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.yml"`
+    export DOCKER_COMPOSE_OVERRIDE_ENCODED=`base64 -w0 "$staticFilesDir/docker-compose.override.yml"`
+    export SYSTEM_REQUIREMENTS=`cat "$staticFilesDir/system-requirements.json"`
+  fi
+}
+
+function os_check() {
+  OS_NAME=$(grep '^NAME' /etc/os-release | cut -d '=' -f2)
+  OS_VERSION=$(grep '^VERSION_ID' /etc/os-release | cut -d '=' -f2)
+  color_always="--color=always"
+  if grep -q "Red" <(echo "$OS_NAME"); then
+    if grep -q "7." <(echo "$OS_VERSION"); then
+      color_always=""
+      fi
+  fi
+}
+
+function check_container_runtime() {
+  if [ "$CONTAINER_RUNTIME" == "docker" ]; then debug "Using Docker and Docker Compose as the container runtime";
+  elif [ "$CONTAINER_RUNTIME" == "podman" ]; then debug "Using Podman as the container runtime";
+  elif [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then die "Using Podman-Compose is still currently unsupported";
+  else error "Unknown container runtime: $CONTAINER_RUNTIME"; die "Valid container runtimes are: docker, podman, podman-compose";
+  fi
+}
+
+# Update ENV configuration
+# Reads in `config.txt`, `.env` (if they exist) and merges with an auto-generated defaults
+# configuration.
+# Behavior:
+#   Non-empty values from .env & config.txt are read into a local variable, preference given to .env
+#   The existing, non-empty vars are imported to ensure secrets, etc remain stable
+#   Default configuration is generated, using imported vars where applicable
+#   The new base configuration (including any values set with imported vars) is merged with existing vars
+#   This final result is diffed against the current .env for review
+#   User is prompted to accept or deny the modifications
+function generate_default_config() {
+  info "Generating env config"
+
+  # Read vars from .env & config.txt, skipping empty values
+  # Output unique vars with preference given to .env
+  local existingEnv=`cat ${PLEXTRAC_HOME}/.env 2>/dev/null || echo ""`
+  local configTxt=`cat ${PLEXTRAC_HOME}/config.txt 2>/dev/null || echo ""`
+  existingCfg=$(sort -u -t '=' -k 1,1 \
+    <(echo "$existingEnv" | awk -F= 'length($2)') \
+    <(echo "$configTxt" | awk -F= 'length($2)') \
+    | awk 'NF' -)
+  set -o allexport
+  debug "Loading vars from existing config..."
+  source <(echo "${existingCfg}")
+  set +o allexport
+
+  # NOTE: we need to leave API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE until all cloud-hosted environments are no
+  # longer running code that relies on this variable. It has been replaced by INTERNAL_API_KEY_SHARED for newer versions.
+
+  # Generate base env, using imported vars from above where applicable
+  generatedEnv="
+API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE=${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:-`generateSecret`}
+INTERNAL_API_KEY_SHARED=${INTERNAL_API_KEY_SHARED:-`generateSecret`}
+CORE_API_BASE_URL=http://plextracapi:4350
+CTEM_API_BASE_URL=http://ctem-api:3332
+JWT_KEY=${JWT_KEY:-`generateSecret`}
+MFA_KEY=${MFA_KEY:-`generateSecret`}
+COOKIE_KEY=${COOKIE_KEY:-`generateSecret`}
+PROVIDER_CODE_KEY=${PROVIDER_CODE_KEY:-`generateSecret`}
+PLEXTRAC_HOME=$PLEXTRAC_HOME
+CLIENT_DOMAIN_NAME=${CLIENT_DOMAIN_NAME:-$(hostname -f)}
+DOCKER_HUB_USER=${DOCKER_HUB_USER:-ptcustomers}
+DOCKER_HUB_KEY=${DOCKER_HUB_KEY:-}
+ADMIN_EMAIL=${ADMIN_EMAIL:-}
+LETS_ENCRYPT_EMAIL=${LETS_ENCRYPT_EMAIL:-}
+USE_CUSTOM_CERT=${USE_CUSTOM_CERT:-false}
+COUCHBASE_URL=${couchbaseComposeService}
+REDIS_PASSWORD=${REDIS_PASSWORD:-`generateSecret`}
+REDIS_CONNECTION_STRING=redis
+RUNAS_APPUSER=True
+PLEXTRAC_PARSER_URL=https://plextracparser:4443
+UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-"stable"}
+PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
+CKEDITOR_ENVIRONMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-`generateSecret`}
+CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}
+CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-"docker"}
+LOCK_UPDATES=${LOCK_UPDATES:-"false"}
+LOCK_VERSION=${LOCK_VERSION:-}
+MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-`generateSecret`}
+MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:-`generateSecret`}
+CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:-`generateSecret 20`}
+CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:-`generateSecret`}
+
+
+`generate_default_couchbase_env | setDefaultSecrets`
+`generate_default_postgres_env | setDefaultSecrets`
+"
+
+  # Merge the generated env with the local vars
+  # Preference is given to the generated data so we can force new
+  # values as needed (eg, rotating SENTRY_DSN)
+  mergedEnv=$(echo "${generatedEnv}" | sort -u -t '=' -k 1,1 - <(echo "$existingCfg") | awk 'NF' -)
+
+  if test -f "${PLEXTRAC_HOME}/.env"; then
+    if [ $(echo "$mergedEnv" | md5sum | awk '{print $1}') = $(md5sum "${PLEXTRAC_HOME}/.env" | awk '{print $1}') ]; then
+      log "No change required";
+    else
+      os_check
+      envDiff="`diff -Nurb "$color_always" "${PLEXTRAC_HOME}/.env" <(echo "$mergedEnv") || true`"
+      info "Detected pending changes to ${PLEXTRAC_HOME}/.env:"
+      log "${envDiff}"
+      if get_user_approval; then
+        event__log_activity "config:update-env" "$envDiff"
+        echo "$mergedEnv" > "${PLEXTRAC_HOME}/.env"
+      else
+        die "Unable to continue without updating .env"
+      fi
+    fi
+  else
+    info "Writing initial .env"
+    echo "$mergedEnv" > "${PLEXTRAC_HOME}/.env"
+  fi
+
+  mv "${PLEXTRAC_HOME}/config.txt" "${PLEXTRAC_HOME}/config.txt.old" 2>/dev/null || true
+  _load_env
+  log "Done."
+}
+
+function generateSecret() {
+  # replace any non-alphanumeric characters so postgres doesn't choke
+  echo `head -c 64 /dev/urandom | base64 | tr -cd '[:alnum:]._-' | head -c ${1:-32}`
+}
+
+function setDefaultSecrets() {
+  OLDIFS=$IFS
+  export IFS==
+  while read var val; do
+    if [ $val == "<secret>" ]; then
+      val='`generateSecret`'
+    fi
+    eval "echo `printf '%s=${%s:-%s}\n' $var $var $val`"
+    #echo "$var=${var:-$val}"
+  done < "${1:-/dev/stdin}"
+  export IFS=$OLDIFS
+}
+
+function login_dockerhub() {
+  local output
+  local default_registry="docker.io"
+  info "Logging into Image Registry"
+  if [ -z ${DOCKER_HUB_KEY} ]; then
+    die "ERROR: Docker Hub key not found, please set DOCKER_HUB_KEY in the .env and re-run configuration"
+  fi
+  output="`container_client login "$default_registry" -u ${DOCKER_HUB_USER:-plextracusers} --password-stdin 2>&1 <<< "${DOCKER_HUB_KEY}"`" || die "${output}"
+  debug "$output"
+  log "${GREEN}DockerHUB${RESET}: SUCCESS"
+
+  if [ -n "${IMAGE_REGISTRY:-}" ]; then
+    debug "Custom Image Registry Found..."
+    debug "Attempting login"
+    if [ -z "${IMAGE_REGISTRY_USER:-}" ]; then
+      debug "$IMAGE_REGISTRY username not found, continuing..."
+      local image_user=""
+    else
+      local image_user="-u ${IMAGE_REGISTRY_USER:-}"
+    fi
+
+    if [ -z "${IMAGE_REGISTRY_PASS:-}" ]; then
+      debug "$IMAGE_REGISTRY password not found, continuing..."
+      local image_pass=""
+      container_client login ${IMAGE_REGISTRY} $image_user || die "Failed to login to ${IMAGE_REGISTRY}"
+    else
+      container_client login ${IMAGE_REGISTRY} $image_user --password-stdin 2>&1 <<< "${IMAGE_REGISTRY_PASS}" || die "Failed to login to ${IMAGE_REGISTRY}"
+    fi
+    log "${BLUE}$IMAGE_REGISTRY${RESET}: SUCCESS"
+  fi
+
+  if [ -n "${CKE_REGISTRY:-}" ]; then
+    debug "Custom CKE Image Registry Found... Attempting login"
+    if [ -z "${CKE_REGISTRY_USER:-}" ]; then
+      debug "${CKE_REGISTRY:-} username not found, continuing..."
+      local cke_user=""
+    else
+      local cke_user="-u ${CKE_REGISTRY_USER:-}"
+    fi
+
+    if [ -z "${CKE_REGISTRY_PASS:-}" ]; then
+      debug "${CKE_REGISTRY:-} password not found, continuing..."
+      local cke_pass=""
+      container_client login ${CKE_REGISTRY} $cke_user || die "Failed to login to ${CKE_REGISTRY}"
+    else
+      container_client login ${CKE_REGISTRY} $cke_user --password-stdin 2>&1 <<< "${CKE_REGISTRY_PASS}" || die "Failed to login to ${CKE_REGISTRY}"
+    fi
+    log "${ORANGE}$CKE_REGISTRY${RESET}: SUCCESS"
+  fi
+  log "Done."
+}
+
+function updateComposeConfig() {
+  title "Updating Docker Compose Configuration"
+  docker_createInitialComposeOverrideFile
+  targetComposeFile="${PLEXTRAC_HOME}/docker-compose.yml"
+
+  info "Checking $targetComposeFile for changes"
+  decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
+  if ! test -f "$targetComposeFile"; then
+    debug "Creating initial file"
+    echo "$decodedComposeFile" > $targetComposeFile
+  fi
+
+  if grep '# version: '\''3.8'\''' docker-compose.override.yml; then
+    debug "Version already configured"
+  else
+    sed -i 's/version: '\''3.8'\''/# version: '\''3.8'\''/g' ./docker-compose.override.yml
+    echo "Version removed from compose file"
+  fi
+  log "Done."
+
+  composeConfigDiff="`composeConfigNeedsUpdated 2>/dev/null || true`"
+  if composeConfigNeedsUpdated >/dev/null; then
+    log "$composeConfigDiff"
+    if get_user_approval; then
+      echo "$decodedComposeFile" > $targetComposeFile
+      event__log_activity "config:update-dockercompose" "$composeConfigDiff"
+    else
+      error "Unable to continue without updating docker-compose.yml"
+      return 1
+    fi
+  fi
+  log "Done."
+}
+
+function validateComposeConfig() {
+  info "Validating Docker Compose Config"
+  if [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
+    composeConfigCheck=$(compose_client config 2>&1) || configValidationFailed=1
+  elif [ "$CONTAINER_RUNTIME" == "docker" ]; then
+    composeConfigCheck=$(compose_client config -q 2>&1) || configValidationFailed=1
+  fi
+  if [ ${configValidationFailed:-0} -ne 0 ]; then
+    error "Invalid Docker Compose Configuration"
+    log "Please check for valid syntax in override files"
+    debug "$composeConfigCheck"
+    return 1
+  else
+    log "Docker Compose Syntax Valid"
+  fi
+}
+
+function create_volume_directories() {
+  title "Create directories for bind mounts"
+  info "Validating directories for bind mounts"
+  debug "Ensuring directories exist for Volumes..."
+  if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+    debug "`compose_client config --format=json | jq '.volumes[] | .driver_opts.device | select(.)' | xargs -r mkdir -vp`"
+    stat "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/naxsi-waf"; echo '## Custom WAF Rules Below' > "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"
+  else
+    stat "${PLEXTRAC_BACKUP_PATH}/couchbase" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/couchbase"
+    stat "${PLEXTRAC_BACKUP_PATH}/postgres" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/postgres"
+    stat "${PLEXTRAC_BACKUP_PATH}/uploads" &>/dev/null || mkdir -vp "${PLEXTRAC_BACKUP_PATH}/uploads"
+    stat "${PLEXTRAC_HOME}/volumes" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes"
+    stat "${PLEXTRAC_HOME}/volumes/postgres-initdb" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/postgres-initdb"
+    stat "${PLEXTRAC_HOME}/volumes/redis" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/redis"
+    stat "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs"
+    stat "${PLEXTRAC_HOME}/volumes/nginx_logos" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_logos"
+    stat "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/naxsi-waf"; echo '## Custom WAF Rules Below' > "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"
+  fi
+}
+
+function getCKEditorRTCConfig() {
+  declare -A serviceValues
+  PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  serviceValues[api-image]="${PODMAN_API_IMAGE}"
+
+  if [ "${CKEDITOR_MIGRATE:-false}" = true ]; then
+    debug "---"
+    debug "Running CKEditor migration"
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      CKEDITOR_MIGRATE_OUTPUT=$(podman run --rm -it --name ckeditor-migration --network=plextrac --replace --env-file ${PLEXTRAC_HOME}/.env "${serviceValues[api-image]}" npm run ckeditor:environment:migration --no-update-notifier --if-present || debug "ERROR: Unable to run ckeditor:environment:migration")
+      podman rm -f ckeditor-migration &>/dev/null
+    else
+      # parses output and saves the result of the json meta data
+      # the last line, which only contains the JSON data, should be used
+      CKEDITOR_MIGRATE_OUTPUT=$(compose_client run --name ckeditor-migration --no-deps  ckeditor-migration || debug "ERROR: Unable to run ckeditor:environment:migration")
+      docker rm -f ckeditor-migration &>/dev/null
+    fi
+
+    ## Split the output so we can send logs out, but keep the key separate
+    CKEDITOR_JSON=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep '^{' || debug "INFO: no JSON found in response")
+    CKEDITOR_LOGS_OUTPUT=$(echo "$CKEDITOR_MIGRATE_OUTPUT" | grep -v '^{' || debug "ERROR: Invalid response from ckeditor-migration; no logs recorded")
+    # for each line in the variable $CKEDITOR_LOGS_OUTPUT send to logs with logger
+    while read -r line; do
+      logger -t ckeditor-migration $line
+    done <<< "$CKEDITOR_LOGS_OUTPUT"
+
+    echo "$CKEDITOR_LOGS_OUTPUT" > "${PLEXTRAC_HOME}/ckeditor-migration.log"
+
+    # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
+    if [ "$(echo "$CKEDITOR_JSON" | jq -e ".[] | any(\".api_secret\")")" ]; then
+      BASE64_CKEDITOR=$(echo "$CKEDITOR_JSON" | base64 -w 0)
+      CKEDITOR_SERVER_CONFIG="$BASE64_CKEDITOR"
+      debug "Setting CKEDITOR_SERVER_CONFIG"
+      sed -i "s/CKEDITOR_SERVER_CONFIG=.*/CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG}/" ${PLEXTRAC_HOME}/.env
+      CKEDITOR_JSON=""
+      CKEDITOR_MIGRATE_OUTPUT=""
+      BASE64_CKEDITOR=""
+    else
+      debug "ERROR: Response did not contain JSON with expected key"
+    fi
+  else
+    debug "CKEditor service not found; migration has not been run"
+  fi
+}
+
+# This will ensure that the two services for CKE are stood up and functional before we run the Environment or the RTC migrations
+function ckeditorNginxConf() {
+  info "Ensuring CKEditor Backend and NGINX Proxy are running"
+  debug "Enabling proxy for CKEditor Backend and NGINX Proxy settings"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    podman rm -f plextracnginx &>/dev/null
+    podman rm -f ckeditor-backend &>/dev/null
+    mod_start # This will recreate NGINX and standup the ckeditor-backend services
+    debug "Waiting 40 seconds for services to start"
+    sleep 40
+  else
+    compose_client up -d ckeditor-backend
+    compose_client up -d plextracnginx --force-recreate
+    debug "Waiting 40 seconds for services to start"
+    sleep 40
+  fi
+}
+# Set a few vars that will be useful elsewhere.
+couchbaseComposeService="plextracdb"
+coreFrontendComposeService="plextracnginx"
+coreBackendComposeService="plextracapi"
+postgresComposeService="postgres"
+
+function compose_client() {
+  flags=($@)
+  compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
+  if [ "$CONTAINER_RUNTIME" == "podman-compose" ] || [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    debug "podman-compose flags: ${flags[@]}"
+    debug "podman-compose configs: ${compose_files}"
+    podman-compose $(echo $compose_files) ${flags[@]}
+  elif [ "$CONTAINER_RUNTIME" == "docker" ]; then
+    debug "docker compose flags: ${flags[@]}"
+    debug "docker compose configs: ${compose_files}"
+    docker compose $(echo $compose_files) ${flags[@]}
+  fi
+}
+
+function container_client() {
+  flags=($@)
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    debug "podman flags: ${flags[@]}"
+    podman ${flags[@]}
+  elif [ "$CONTAINER_RUNTIME" == "docker" ]; then
+    debug "docker flags: ${flags[@]}"
+    docker ${flags[@]}
+  fi
+}
+
+function image_version_check() {
+  die "Deprecated: image_version_check"
+  if [ $IMAGE_PRECHECK == true ]
+    then
+      IMAGE_CHANGED=true
+      IMAGE_PRECHECK=false
+      expected_services=""
+      current_services=""
+      current_image_digests=""
+      # Get list of expected services from the `docker compose config`
+      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+        expected_services="docker.io/plextrac/plextracdb:7.2.0
+docker.io/plextrac/plextracpostgres:stable
+docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}
+docker.io/redis:6.2-alpine
+docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
+      else
+        expected_services=$(compose_client config --format json | jq -r .services[].image | sort -u)
+      fi
+      debug "Expected Services "`echo $expected_services | wc -l`""
+      debug "$expected_services"
+      current_services=$(for i in `docker image ls -q`; do docker image inspect "$i" --format json | jq -r '(.[].RepoTags[])'; done | sort -u)
+      current_image_digests=$(for i in `grep -F -x -f <(echo "$expected_services") <(echo "$current_services")`; do docker image inspect $i --format json | jq -r '.[].Id'; done | sort -u)
+      debug "Current Services"
+      debug "$current_services"
+      debug "Current Images Matching `echo "$current_image_digests" | wc -l`"
+      debug "$current_image_digests"
+      if [ "$(echo "$current_image_digests" | wc -l)" -ne "$(echo "$expected_services" | wc -l)" ]
+        then
+          debug "Number of desired service images does NOT match!"
+          debug "The Image or number of running images has changed. Scaling"
+          IMAGE_CHANGED=true
+        else
+          IMAGE_CHANGED=false
+      fi
+    else
+      if [ $IMAGE_CHANGED == false ]
+        then
+          if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+            local new_services=$(for i in ${expected_services[2]}; do podman image inspect $i --format json | jq -r '(.[].RepoTags[])'; done | sort -u)
+          else
+            local new_services=$(for i in `compose_client images -q`; do docker image inspect $i --format json | jq -r '(.[].RepoTags[])'; done | sort -u)
+          fi
+          local new_image_digests=$(for i in `grep -F -x -f <(echo "$expected_services") <(echo "$new_services")`; do docker image inspect $i --format json | jq -r '.[].Id'; done | sort)
+          debug "New Images Matching `echo "$new_image_digests" | wc -l`"
+          debug "$new_image_digests"
+          if [ "$new_image_digests" = "$current_image_digests" ]
+            then
+              IMAGE_CHANGED=false
+            else
+              IMAGE_CHANGED=true
+          fi
+      fi
+  fi
+}
+
+function pull_docker_images() {
+  info "Pulling updated docker images"
+  IMAGE_PRECHECK=true
+  if tty -s; then
+    ARGS=''
+  else
+    ARGS='-q'
+  fi
+  compose_client pull ${ARGS:-}
+  log "Done."
+}
+
+function composeConfigNeedsUpdated() {
+  info "Checking for pending changes to docker-compose.yml"
+  decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
+  targetComposeFile="${PLEXTRAC_HOME}/docker-compose.yml"
+  if [ $(echo "$decodedComposeFile" | md5sum | awk '{print $1}') == $(md5sum $targetComposeFile | awk '{print $1}') ]; then
+    debug "docker-compose.yml content matches"; return 1;
+  fi
+  os_check
+  diff -N --unified=2 $color_always --label existing --label "updated" $targetComposeFile <(echo "$decodedComposeFile") || return 0
+  return 1
+}
+
+function docker_createInitialComposeOverrideFile() {
+  local targetOverrideFile="${PLEXTRAC_HOME}/docker-compose.override.yml"
+
+  info "Checking for existing $targetOverrideFile"
+  if ! test -f "$targetOverrideFile"; then
+    info "Creating initial $targetOverrideFile"
+    echo "$DOCKER_COMPOSE_OVERRIDE_ENCODED" | base64 -d > "$targetOverrideFile"
+  fi
+  log "Done."
+}
+# Provides information about the running PlexTrac instance
+#
+# Usage:
+#  plextrac info
+#  plextrac info --summary # print just the summary
+
+function mod_info() {
+  title "PlexTrac Instance Summary"
+  info "Public URL: ${UNDERLINE}https://${CLIENT_DOMAIN_NAME}${RESET}"
+  echo >&2 ""
+  info "TLS Certificate:"
+  msg "    %b\n" "`info_TLSCertificateDetails`"
+  echo >&2 ""
+  info "Services:"
+  msg "    %s\n" "`releaseDetails`"
+  echo >&2 ""
+  info "Upgrade Strategy: ${UPGRADE_STRATEGY:-stable}"
+
+  title "Docker Compose"
+
+  info "Active Container Images"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    images=$(container_client images)
+  else
+    images=$(compose_client images)
+  fi
+  msg "    %s\n" "$images"
+  echo >&2 ""
+
+  info "Active Services"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    active=$(container_client ps)
+  else
+    active=$(compose_client ps)
+  fi
+  msg "    %s\n" "$active"
+  echo >&2 ""
+
+  #Check for Maintenance Mode
+  check_for_maintenance_mode
+
+  title "Host Details"
+  info "Disk Statistics"
+  msg "$(check_disk_capacity)"
+  msg "$(info_backupDiskUsage)"
+
+}
+
+function info_TLSCertificateDetails() {
+  local certInfo opensslOutput
+  local issuer expires subject
+  if opensslOutput="`echo | openssl s_client -servername localhost -connect 127.0.0.1:443 2>/dev/null || true`"; then
+    certInfo="`echo "$opensslOutput" | openssl x509 -noout -dates -checkend 6048000 -subject -issuer || true`"
+    debug "$certInfo"
+    echo "Issuer: \t`awk -F'=' '/issuer/ { $1=""; $2=""; print }' <<<"$certInfo" | sed 's/ //g'`"
+    echo "Expires: \t`awk -F'=' '/notAfter/ { print $2}' <<<"$certInfo"`"
+  else
+    error "Certificate Information Unavailable" 2>&1
+  fi
+}
+
+function releaseDetails() {
+  summary=("Name Image Version")
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local cmd='podman ps --format "{{.Names}}"'
+  else
+    local cmd='compose_client ps --services'
+  fi
+  for service in `$cmd | xargs -n1 echo`; do
+    image=`_getServiceContainerImageRepo $service || echo "unknown"`
+    version=`_getServiceContainerVersion $service || echo "unknown"`
+    summary+=("$service $image $version")
+  done
+
+  printf "%s\n" "${summary[@]}" | column -t
+
+  #for line in "${summary[@]}"; do echo "$line" | awk '{ printf "%-%ss  %25-s %s\n", $1, $4, $2, $3 }'; done
+}
+
+function _getImageForService() {
+  service=$1
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    imageId=$(container_client container inspect $service --format '{{.Image}}' 2>/dev/null)
+  else
+    imageId=$(compose_client images -q $service 2>/dev/null)
+  fi
+  if [ "$imageId" == "" ]; then echo "unknown"; else echo "$imageId"; fi
+}
+
+function _getServiceContainerImageRepo() {
+  service=$1
+  imageId=`_getImageForService $service`
+  local runtime=docker
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local runtime=podman
+  fi
+  imageRepo=$($runtime image inspect $imageId --format='{{ index .RepoTags 0 }}' 2>/dev/null | awk -F ':' '{print $1}' 2>/dev/null || echo '')
+  echo $imageRepo
+}
+
+function _getServiceContainerVersion() {
+  service=$1
+  imageId=`_getImageForService $service`
+  local runtime=docker
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local runtime=podman
+  fi
+  version=`$runtime image inspect $imageId --format='{{ index .Config.Labels "org.opencontainers.image.version" }}' 2>/dev/null || echo ''`
+  if [ "$version" == "20.04" ]; then
+    version="7.2.0"
+  fi
+  if [ "$version" == "" ]; then
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      local cmd='podman exec'
+    else
+      local cmd='compose_client exec -T'
+    fi
+    case $service in
+      "$coreBackendComposeService")
+        version=`$cmd $coreBackendComposeService cat package.json | jq -r '.version'`
+        ;;
+      "$couchbaseComposeService")
+        version=`$cmd $couchbaseComposeService couchbase-cli --version`
+        ;;
+      "$postgresComposeService")
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          version=$(podman image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}' 2>/dev/null || echo '')
+        else
+          version=$(docker image inspect $imageId --format '{{range $index, $value := .Config.Env}}{{$value}}{{"\n"}}{{end}}' | grep PG_VERSION | cut -d '=' -f2 || echo '')
+        fi
+        ;;
+      "redis")
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          version=$(podman image inspect $imageId --format '{{ index .Annotations "org.opencontainers.image.version" }}')
+        else
+          version=$(docker image inspect $imageId --format '{{range $index, $value := .Config.Env}}{{$value}}{{"\n"}}{{end}}' | grep REDIS_VERSION | cut -d '=' -f2 || echo '')
+        fi
+        ;;
+      *)
+        local runtime=docker
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          local runtime=podman
+        fi
+        version=$($runtime images $imageId | awk 'NR != 1 {print $3}')
+        ;;
+    esac
+  fi
+  echo "$version"
+}
+function create_user() {
+  if ! id -u "${PLEXTRAC_USER_NAME:-plextrac}" >/dev/null 2>&1
+  then
+    info "Adding plextrac user..."
+    local user_id="-u 1337"
+    if [ "${PLEXTRAC_USER_ID:-}" ]; then
+      local user_id="-u ${PLEXTRAC_USER_ID}"
+    fi
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      useradd --shell /bin/bash $user_id \
+              --create-home --home "${PLEXTRAC_HOME}" \
+              ${PLEXTRAC_USER_NAME:-plextrac}
+    else
+      useradd $user_id --groups docker \
+              --shell /bin/bash \
+              --create-home --home "${PLEXTRAC_HOME}" \
+              ${PLEXTRAC_USER_NAME:-plextrac}
+    fi
+    if ! id -g "plextrac" >/dev/null 2>&1
+    then
+      groupadd -g $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) ${PLEXTRAC_USER_NAME:-plextrac} -f
+    fi
+    usermod -g ${PLEXTRAC_USER_NAME:-plextrac} ${PLEXTRAC_USER_NAME:-plextrac}
+    log "Done."
+  fi
+}
+
+function configure_user_environment() {
+  info "Configuring plextrac user environment..."
+    PROFILES=("/etc/skel/.profile" "/etc/skel/.bash_profile" "/etc/skel/.bashrc")
+    for profile in "${PROFILES[@]}"; do
+      if [ -f "${profile}" ]; then
+        debug "Copying ${profile} to ${PLEXTRAC_HOME}"
+        cp "${profile}" "${PLEXTRAC_HOME}"
+      else
+        debug "${profile} does not exist, skipping"
+      fi
+    done
+    mkdir -p "${PLEXTRAC_HOME}/.local/bin"
+    sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' "${PLEXTRAC_HOME}/.bashrc"
+    grep -E 'PATH=${HOME}/.local/bin:$PATH' "${PLEXTRAC_HOME}/.bashrc" || echo 'PATH=${HOME}/.local/bin:$PATH' >> "${PLEXTRAC_HOME}/.bashrc"
+    log "Done."
+}
+
+function copy_scripts() {
+  info "Copying plextrac CLI to user PATH..."
+  tmp=`mktemp -p ~/ plextrac-XXX`
+  debug "tmp script location: $tmp"
+  debug "`$0 dist 2>/dev/null > $tmp && cp -uv $tmp "${PLEXTRAC_HOME}/.local/bin/plextrac"`"
+  chmod +x "${PLEXTRAC_HOME}/.local/bin/plextrac"
+  log "Done."
+}
+
+function fix_file_ownership() {
+  info "Fixing file ownership in ${PLEXTRAC_HOME} for plextrac"
+  local user=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+  chown -R $user:$user "${PLEXTRAC_HOME}"
+  log "Done."
+}
+# Access logs of a running instance
+# Usage:
+#   plextrac logs [-s|--service SERVICE]
+
+function mod_logs() {
+  tail_logs
+}
+
+function tail_logs() {
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    container_client logs -f --tail=200 ${LOG_SERVICE-''}
+  else
+    compose_client logs -f --tail=200 ${LOG_SERVICE-''}
+  fi
+}
+## Functions for managing the Couchbase database
+
+couchbaseUsers=('API' 'ADMIN' 'BACKUP')
+
+function generate_default_couchbase_env() {
+  cat <<- ENDCOUCHBASE
+`
+  echo CB_BUCKET=reportMe
+  echo POSTGRES_USER=internalonly
+  echo "POSTGRES_PASSWORD=<secret>"
+  echo BACKUP_DIR=/opt/couchbase/backups
+  for user in ${couchbaseUsers[@]}; do
+    echo "CB_${user}_USER=pt${user,,}user"
+    echo "CB_${user}_PASS=<secret>"
+  done
+`
+ENDCOUCHBASE
+}
+
+function manage_api_user() {
+  info "Creating unprivileged user ${CB_API_USER} with access to ${CB_BUCKET}"
+  get_user_approval
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local cruntime="container_client exec"
+  else
+    local cruntime="compose_client exec -T"
+  fi
+  $cruntime $couchbaseComposeService \
+    couchbase-cli user-manage --set -c 127.0.0.1:8091 -u "${CB_ADMIN_USER}" -p "${CB_ADMIN_PASS}" \
+      --rbac-username "${CB_API_USER}" --rbac-password "${CB_API_PASS}" --rbac-name='PlexTrac-API-User' \
+      --roles bucket_full_access[${CB_BUCKET}] --auth-domain local
+}
+
+function manage_backup_user() {
+  info "Creating backup user ${CB_BACKUP_USER} with access to ${CB_BUCKET}"
+  get_user_approval
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local cruntime="container_client exec"
+  else
+    local cruntime="compose_client exec -T"
+  fi
+  $cruntime $couchbaseComposeService \
+    couchbase-cli user-manage --set -c 127.0.0.1:8091 -u "${CB_ADMIN_USER}" -p "${CB_ADMIN_PASS}" \
+      --rbac-username "${CB_BACKUP_USER}" --rbac-password "${CB_BACKUP_PASS}" --rbac-name='PlexTrac-Backup-User' \
+      --roles bucket_full_access[${CB_BUCKET}] --auth-domain local
+}
+
+function test_couchbase_access() {
+  user=$1
+  pass=$2
+  bucket=${3:-reportMe}
+  info "Checking user $user can access couchbase"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    local cruntime="container_client exec"
+  else
+    local cruntime="compose_client exec -T"
+  fi
+  bucketList=$($cruntime -- $couchbaseComposeService \
+                 couchbase-cli bucket-list -c 127.0.0.1:8091 -u $user -p $pass -o json || echo "noaccess")
+  if [ "$bucketList" != "noaccess" ]; then
+    bucketList=$(jq '.[].name' <<<$bucketList -r 2>/dev/null)
+    debug ".. $user found '$bucketList'"
+    grep $bucket <<<"$bucketList" >/dev/null && debug ".. $user is configured correctly" && return
+  fi
+  error "$user not configured correctly"
+  if [ ${VALIDATION_ONLY:-0} -eq 0 ]; then
+    return 1
+  fi
+}
+
+function configure_couchbase_users() {
+  title "Checking Couchbase User Accounts"
+  test_couchbase_access $CB_ADMIN_USER $CB_ADMIN_PASS || die "The admin user is broken or misconfigured - please contact support!"
+  test_couchbase_access $CB_API_USER $CB_API_PASS "reportMe" || manage_api_user
+  test_couchbase_access $CB_BACKUP_USER $CB_BACKUP_PASS "reportMe" || manage_backup_user
+}
+## Functions for managing the Postgres Database
+
+postgresDatabases=('CORE' 'RUNBOOKS' 'CKEDITOR')
+postgresUsers=('ADMIN' 'RW' 'RO')
+
+function generate_default_postgres_env() {
+  cat <<- ENDPOSTGRES
+`
+  echo PG_HOST=postgres
+  echo POSTGRES_USER=internalonly
+  echo "POSTGRES_PASSWORD=<secret>"
+  for db in ${postgresDatabases[@]}; do
+    echo "PG_${db}_DB=${db,,}"
+    for user in ${postgresUsers[@]}; do
+      echo "PG_${db}_${user}_USER=${db,,}_${user,,}"
+      echo "PG_${db}_${user}_PASSWORD=<secret>"
+    done
+  done
+`
+ENDPOSTGRES
+}
+
+function deploy_volume_contents_postgres() {
+  debug "Adding postgres initdb scripts to volume mount"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    targetDir="${PLEXTRAC_HOME}/volumes/postgres-initdb"
+  else
+    targetDir=`compose_client config --format=json | jq -r \
+      '.volumes[] | select(.name | test("postgres-initdb")) |
+        .driver_opts.device'`
+  fi
+  debug "Adding scripts to $targetDir"
+  cat > "$targetDir/bootstrap-template.sql.txt" <<- "EOBOOTSTRAPTEMPLATE"
+-- Add Service Roles
+--
+-- Service Admin
+CREATE USER $PG_PLACEHOLDER_ADMIN_USER WITH PASSWORD '$PG_PLACEHOLDER_ADMIN_PASSWORD';
+-- Service Read-Only User
+CREATE USER $PG_PLACEHOLDER_RO_USER WITH PASSWORD '$PG_PLACEHOLDER_RO_PASSWORD';
+-- Service Read-Write User
+CREATE USER $PG_PLACEHOLDER_RW_USER WITH PASSWORD '$PG_PLACEHOLDER_RW_PASSWORD';
+
+-- Role memberships
+-- Each role inherits from the role below
+GRANT $PG_PLACEHOLDER_RO_USER TO $PG_PLACEHOLDER_RW_USER;
+GRANT $PG_PLACEHOLDER_RW_USER TO $PG_PLACEHOLDER_ADMIN_USER;
+
+-- Create Service Database $PG_PLACEHOLDER_DB
+CREATE DATABASE $PG_PLACEHOLDER_DB;
+REVOKE ALL ON DATABASE $PG_PLACEHOLDER_DB FROM public;
+GRANT CONNECT ON DATABASE $PG_PLACEHOLDER_DB TO $PG_PLACEHOLDER_RO_USER;
+
+-- switch to the new database.
+\connect $PG_PLACEHOLDER_DB;
+
+-- Schema level grants within $PG_PLACEHOLDER_DB db
+--
+-- Service Read-Only user needs basic access
+GRANT USAGE ON SCHEMA public TO $PG_PLACEHOLDER_RO_USER;
+
+-- Only the admin account should ever create new resources
+-- This also marks Service Admin account as owner of new resources
+GRANT CREATE ON SCHEMA public TO $PG_PLACEHOLDER_ADMIN_USER;
+
+-- Enable read access to all new tables for Service Read-Only
+ALTER DEFAULT PRIVILEGES FOR ROLE $PG_PLACEHOLDER_ADMIN_USER
+    GRANT SELECT ON TABLES TO $PG_PLACEHOLDER_RO_USER;
+
+-- Enable read-write access to all new tables for Service Read-Write
+ALTER DEFAULT PRIVILEGES FOR ROLE $PG_PLACEHOLDER_ADMIN_USER
+    GRANT INSERT,DELETE,TRUNCATE,UPDATE ON TABLES TO $PG_PLACEHOLDER_RW_USER;
+
+-- Need to enable usage on sequences for Service Read-Write
+-- to enable auto-incrementing ids
+ALTER DEFAULT PRIVILEGES FOR ROLE $PG_PLACEHOLDER_ADMIN_USER
+    GRANT USAGE ON SEQUENCES TO $PG_PLACEHOLDER_RW_USER;
+EOBOOTSTRAPTEMPLATE
+  cat > "$targetDir/initdb.sh" <<- "EOINITDBSCRIPT"
+#!/bin/bash
+
+PGPASSWORD="$POSTGRES_PASSWORD"
+PGDATABASES=('core' 'runbooks' 'ckeditor')
+
+tmpl=`cat /docker-entrypoint-initdb.d/bootstrap-template.sql.txt`
+
+for db in ${PGDATABASES[@]}; do
+  # Ugh this is ugly. Thanks Bash
+  eval "echo "'"'"`echo "$tmpl" | sed "s/PLACEHOLDER/${db^^}/g" -`"'"'"" |
+    psql -a -v ON_ERROR_STOP=1 --username $POSTGRES_USER -d $POSTGRES_USER
+done
+EOINITDBSCRIPT
+  # postgres container does not have a uid 1337, most reliable way to bootstrap
+  # without adding failure points is just allow other users to read the (not secret)
+  # bootstrapping scripts
+  debug "`chmod -Rc a+r $targetDir`"
+  log "Done."
+}
+
+function postgres_metrics_validation() {
+  if [ "${PG_METRICS_USER:-}" != "" ]; then
+    info "Checking user $PG_METRICS_USER can access postgres metrics"
+    if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+      local container_runtime="compose_client exec -T -u 1337"
+    else
+      local container_runtime="container_client exec"
+    fi
+    debug "`$container_runtime -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+        psql -a -v -U internalonly -d core 2>&1 <<- EOF
+CREATE OR REPLACE FUNCTION __tmp_create_user() returns void as \\$\\$
+BEGIN
+  IF NOT EXISTS (
+          SELECT                       -- SELECT list can stay empty for this
+          FROM   pg_catalog.pg_user
+          WHERE  usename = '$PG_METRICS_USER') THEN
+    CREATE USER $PG_METRICS_USER;
+  END IF;
+END;
+\\$\\$ language plpgsql;
+
+SELECT __tmp_create_user();
+DROP FUNCTION __tmp_create_user();
+
+ALTER USER $PG_METRICS_USER WITH PASSWORD '$PG_METRICS_PASSWORD';
+ALTER USER $PG_METRICS_USER SET SEARCH_PATH TO $PG_METRICS_USER,pg_catalog;
+
+GRANT pg_monitor to $PG_METRICS_USER;
+EOF
+`"
+fi
+
+  # Stand up PlexTrac in Vagrant --
+  # Query inside container with compose_client passing in user / pass and then query
+  # Review _backup.sh for a postgres query / access example
+
+  # This function should be run when? Run on update or arbitrarily -- _check.sh line 21
+  # /vagrant/src/plextrac autofix
+
+}
+
+function mod_autofix() {
+  title "Fixing Auto-Correctable Issues"
+  configure_couchbase_users
+  # Add postgres configuration monitor here
+  postgres_metrics_validation
+}
+
+function mod_check_etl_status() {
+  local migration_exited="running"
+  title "Checking Data Migration Status"
+  info "Checking Migration Status"
+  secs=300
+  endTime=$(( $(date +%s) + secs ))
+  if [[ $(container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}') != "" ]]; then
+    migration_exited="running"
+  else
+    migration_exited="exited"
+    debug "Migration container not found"
+  fi
+  while [ "$migration_exited" == "running" ]; do
+    # Check if the migration container has exited, e.g., migrations have completed or failed
+    local migration_exited=$(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'` || migration_exited="exited")
+    if [ $(date +%s) -gt $endTime ]; then
+      error "Migration container has been running for over 5 minutes or is still running. Please ensure they complete or fail before taking further action with the PlexTrac Manager Utility. You can check on the logs by running 'docker compose logs -f couchbase-migrations'"
+      die "Exiting PlexTrac Manager Utility."
+    fi
+    for s in / - \\ \|; do printf "\r\033[K$s $(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'`) -- $(container_client logs `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'` 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+  done
+  printf "\r\033[K"
+  info "Migrations complete"
+
+  if [ "${IGNORE_ETL_STATUS:-false}" == "false" ]; then
+   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      local etl_running_backend_version="$(for i in $(podman ps -a -q --filter name=plextracapi); do podman inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+    else
+      local etl_running_backend_version="$(for i in $(compose_client ps plextracapi -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+    fi
+    if [[ $etl_running_backend_version != "" ]]; then
+      debug "Running Version: $etl_running_backend_version"
+      # Get the major and minor version from the running containers
+      local etl_maj_ver=$(echo "$etl_running_backend_version" | cut -d '.' -f1)
+      local etl_min_ver=$(echo "$etl_running_backend_version" | cut -d '.' -f2)
+      local etl_running_ver=$(echo $etl_running_backend_version | awk -F. '{print $1"."$2}')
+      local etl_running_ver="$etl_maj_ver.$etl_min_ver"
+    else
+      debug "ETL RunVer: plextracapi is NOT running"
+      die "plextracapi service isn't running. Please run 'plextrac start' and re-run the update"
+    fi
+    local etl_breaking_ver=${etl_breaking_ver:-"2.0"}
+    debug "Running Version: $etl_running_ver, Breaking Version: $etl_breaking_ver"
+    if (( $(echo "$etl_breaking_ver <= $etl_running_ver" | bc -l) )); then
+      title "Checking Data ETL Status"
+      debug "Checking ETL health and status..."
+      ETL_OUTPUT=${ETL_OUTPUT:-true}
+      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+        local api_running=$(podman container inspect --format '{{.State.Status}}' "plextracapi" | wc -l)
+      else
+        local api_running=$(compose_client ps -q plextracapi | wc -l)
+      fi
+      if [ $api_running -gt 0 ]; then
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          RAW_OUTPUT=$(podman exec plextracapi npm run pg:etl:status --no-update-notifier --if-present)
+        else
+          RAW_OUTPUT=$(compose_client exec plextracapi npm run pg:etl:status --no-update-notifier --if-present)
+        fi
+        if [ "$RAW_OUTPUT" == "" ]; then
+          debug "No ETL status output found or it failed to run."
+          return
+        fi
+        # Find the json content by looking for the first line that starts
+        # with an opening brace and the first line that starts with a closing brace.
+        JSON_OUTPUT=$(echo "$RAW_OUTPUT" | sed '/^{/,/^}/!d')
+
+        # Find the summary content by finding the first line that starts
+        # with a closing brace and selecting all remaining lines after that one.
+        SUMMARY_OUTPUT=$(echo "$RAW_OUTPUT" | sed '1,/^}/d')
+        ETLS_COMBINED_STATUS=$(echo $JSON_OUTPUT | jq -r .etlsCombinedStatus)
+        if [ "${ETL_OUTPUT:-true}" == "true" ]; then
+          msg "$SUMMARY_OUTPUT\n"
+          debug "$JSON_OUTPUT\n"
+        fi
+
+        if [[ "$ETLS_COMBINED_STATUS" == "HEALTHY" ]]; then
+            info "All ETLs are in a healthy status."
+          else
+            etl_failure
+        fi
+      else
+        info "PlexTrac API container not running, skipping ETL status check"
+      fi
+    else
+      info "Skipping ETL Check; Version prior to 2.0 detected: $running_ver"
+    fi
+  else
+    error "Skipping ETL status check"
+  fi
+}
+
+function etl_failure() {
+  error "One or more ETLs are in an unhealthy status."
+  LOCK_UPDATES=true
+  LOCK_VERSION=${running_ver:-"failed"}
+  sed -i "/^LOCK_VERSION/s/=.*$/=${LOCK_VERSION}/" "${PLEXTRAC_HOME}/.env"
+  sed -i '/^LOCK_UPDATES/s/=.*$/=true/' "${PLEXTRAC_HOME}/.env"
+  sed -i '/^UPGRADE_STRATEGY/s/=.*$/=NULL/' "${PLEXTRAC_HOME}/.env"
+
+  die "Updates are locked due to a failed data migration. Version Lock: $LOCK_VERSION. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
+}
+# Manage migrating existing instances
+#
+# Simply outputs the difference between the upstream docker-compose.yml
+# and the local docker-compose.yml/docker-database.yml configs. Optionally
+# create the docker-compose.override.yml and prompt user to make necessary edits
+#
+# Calls `plextrac configure` and `plextrac check`, enabling the admin
+# to validate the migration prior to calling `plextrac update` (a manual step)
+#
+# Archives the existing docker-compose.yml & docker-database.yml (and env)
+# files into the backups directory.
+#
+# Usage:
+#   plextrac migrate [-y] [--plextrac-home ...]
+
+function deprecated_migrate() {
+  die "This module is deprecated and is no longer functional"
+  title "Migrating Existing Instance"
+  docker_createInitialComposeOverrideFile
+
+  local legacyScriptPackVersion
+  if test -f "${PLEXTRAC_HOME}/docker-compose.yml"; then
+    legacyScriptPackVersion=1
+    info "Found existing installation in ${PLEXTRAC_HOME}, assuming v1 legacy script pack"
+  elif test -f "${PLEXTRAC_HOME}/compose-files/docker-compose.yml"; then
+    legacyScriptPackVersion=2
+    info "Found existing installation in ${PLEXTRAC_HOME}/compose-files, assuming v2 legacy script pack"
+  else
+    die "Could not find existing installation in ${PLEXTRAC_HOME}"
+  fi
+
+  pendingChanges="`checkExistingConfigForOverrides $legacyScriptPackVersion`" || true
+  if [ "$pendingChanges" != "" ]; then
+    event__log_activity "migrate:pending-changes" "$pendingChanges"
+    error "There are pending changes to your Docker-Compose configuration."
+    log "Do you wish to review the changes?"
+    if get_user_approval; then
+      error "Any output in RED indicates configuration that will be REMOVED"
+      log "If you have any customizations such as a custom log or TLS certificate,"
+      log "please set those in the '${PLEXTRAC_HOME}/docker-compose.override.yml' file."
+      echo "$pendingChanges" >&2
+    fi
+    info "Do you wish to continue?"
+    if ! get_user_approval; then
+      die "Migration cannot continue without resolving local customizations"
+    fi
+    else
+      info "No local customizations detected"
+  fi
+
+  info "Continuing..."
+
+  info "Migrating existing Couchbase credentials"
+  migrate_getCouchbaseCredentials >> "${PLEXTRAC_HOME}/.env"
+
+  info "Migrating existing DockerHub credentials"
+  migrate_getDockerHubCredentials >> "${PLEXTRAC_HOME}/.env"
+
+  info "Migrating backups"
+  migrate_backupDir
+
+  info "Cleaning up legacy files"
+  migrate_archiveLegacyComposeFiles
+  migrate_archiveLegacyScripts
+
+  info "Finished archiving legacy files"
+  mod_configure
+
+  if [ $legacyScriptPackVersion -eq 2 ]; then
+    title "Final Steps (MANUAL DATA MIGRATION)"
+    error "Manual data migration required"
+    log "The legacy 'v2 script pack' placed certain data volumes in custom directories"
+    log "To ensure data is still available post-migration, we recommend manually"
+    log "performing the following steps:"
+    log ""
+    info "  1. Stop all running Docker containers"
+    info "  2. Create new services and associated data volumes without starting any containers"
+    info "  3. Copy existing data to newly available volumes"
+    info "  4. Finalize installation"
+    log ""
+    log ""
+    info "Example Commands:"
+    log ""
+    log "  # docker stop"
+    log "  # docker-compose create"
+    log "  # cp -aR /var/lib/docker/volumes/compose-files_dbdata/_data/. /var/lib/docker/volumes/plextrac_dbdata/_data/"
+    log "  # cp -aR ${PLEXTRAC_HOME}/uploads/. /var/lib/docker/volumes/plextrac_uploads/_data/"
+    log "  # plextrac install"
+  else
+    title "Migration complete"
+    info "Please run 'plextrac install --ignore-existing' to complete your installation"
+  fi
+}
+
+function migrate_getCouchbaseCredentials() {
+  info "Retrieving Couchbase Credentials"
+  activeCouchbaseContainer="`docker ps | grep plextracdb 2>/dev/null | awk '{print $1}' || echo ""`"
+  cbEnv="`docker exec -it $activeCouchbaseContainer env | grep CB_ADMIN`" || info "CB_ADMIN credentials unset, will assume defaults"
+  echo "CB_ADMIN_PASS=`echo "$cbEnv" | awk -F= '/PASS/ {print $2}' | grep . || echo "Plextrac"`"
+  echo "CB_ADMIN_USER=`echo "$cbEnv" | awk -F= '/USER/ {print $2}' | grep . || echo "Administrator"`"
+}
+
+function migrate_getDockerHubCredentials() {
+  info "Checking for existing DockerHub credentials"
+  legacyDockerLoginScript="${PLEXTRAC_HOME}/connection_setup.sh"
+  if test -f "$legacyDockerLoginScript"; then
+    debug "`bash ${legacyDockerLoginScript} || true`"
+  fi
+  local credentials="`jq '.auths."https://index.docker.io/v1/".auth' ~/.docker/config.json -r \
+    2>/dev/null | base64 -d | \
+    awk -F':' '{printf "DOCKER_HUB_USER=%s\nDOCKER_HUB_KEY=%s\n", $1, $2}'`"
+  if [ "$credentials" == "" ]; then
+    error "Please add your DOCKER_HUB_USER & DOCKER_HUB_KEY credentials to ${PLEXTRAC_HOME}/.env"
+  fi
+  echo "$credentials"
+}
+
+function migrate_backupDir() {
+  export PLEXTRAC_BACKUP_PATH="${PLEXTRAC_BACKUP_PATH:-$PLEXTRAC_HOME/backups}"
+  log "Using PLEXTRAC_BACKUP_PATH=$PLEXTRAC_BACKUP_PATH"
+  backup_ensureBackupDirectory
+}
+
+function migrate_archiveLegacyScripts() {
+  info "Archiving Legacy Scripts"
+  debug "`tar --remove-files -cvf ${PLEXTRAC_BACKUP_PATH}/legacy_scripts.tar ${PLEXTRAC_HOME}/{**/,}*.sh 2>/dev/null || true`"
+}
+
+function migrate_archiveLegacyComposeFiles() {
+  info "Archiving Legacy Compose Files"
+  debug "`tar --remove-files -cvf ${PLEXTRAC_BACKUP_PATH}/legacy_composefiles.tar ${PLEXTRAC_HOME}/{**/,}docker-{compose,database}.yml 2>/dev/null || true`"
+}
+
+function checkExistingConfigForOverrides() {
+  info "Checking for overrides to the legacy docker-compose configuration"
+  composeOverrideFile="${PLEXTRAC_HOME}/docker-compose.override.yml"
+  case ${1:-1} in
+    1)
+      legacyComposeFile="${PLEXTRAC_HOME}/docker-compose.yml"
+      legacyDatabaseFile="${PLEXTRAC_HOME}/docker-database.yml"
+      ;;
+    2)
+      legacyComposeFile="${PLEXTRAC_HOME}/compose-files/docker-compose.yml"
+      legacyDatabaseFile="${PLEXTRAC_HOME}/compose-files/docker-database.yml"
+      ;;
+    *)
+      die "Invalid script pack version";;
+  esac
+
+  info "Checking legacy configuration"
+  dcCMD="docker compose -f $legacyComposeFile -f $legacyDatabaseFile"
+  ${dcCMD} config -q || die "Invalid legacy configuration - please contact support"
+
+  decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
+  #diff -N --unified=2 --color=always --label existing --label "updated" $targetComposeFile <(echo "$decodedComposeFile") || return 0
+  os_check
+  diff --unified "$color_always" --show-function-line='^\s\{2\}\w\+' \
+    <($dcCMD config --no-interpolate) \
+    <(docker compose -f - <<< "${decodedComposeFile}" -f ${composeOverrideFile} config --no-interpolate) || return 0
+  return 1
+  #diff --color=always -y --left-column <($dcCMD config --format=json | jq -S . -r) <(docker-compose -f - <<< "$decodedComposeFile" -f $composeOverrideFile config --format=json | jq -S . -r) | grep -v '^\+'
+}
+function setup_colors() {
+  if [[ -t 2 ]] && [[ -z "${NO_COLOR-}" ]] && [[ "${TERM-}" != "dumb" ]]; then
+    RED='\033[0;31m' GREEN='\033[0;32m' ORANGE='\033[0;33m' BLUE='\033[0;34m' PURPLE='\033[0;35m' CYAN='\033[0;36m' YELLOW='\033[1;33m'
+    BLUE=$(tput setaf 4)
+    BOLD=`tput bold` DIM=`tput dim` UNDERLINE=`tput smul` BLINK=`tput blink` STANDOUT=`tput smso`
+    RESET=`tput sgr0; tput cnorm` NOCURSOR=`tput civis` CLEARLINE=`tput el1`
+
+  else
+    RED='' GREEN='' ORANGE='' BLUE='' PURPLE='' CYAN='' YELLOW=''
+    BLUE=''
+    BOLD='' DIM='' UNDERLINE='' BLINK='' STANDOUT=''
+    RESET='' NOCURSOR='' CLEARLINE=''
+  fi
+}
+
+PRINT_MAX_WIDTH=80
+PRINT_FILL_CHAR="-"
+PRINT_FILL=$(head -c ${PRINT_MAX_WIDTH} /dev/zero | tr '\0' "${PRINT_FILL_CHAR}")
+
+msg() {
+  if [ $# -ge 2 ]; then
+    fmt="${1}"
+    shift
+    in="$@"
+  else
+    in="${1:-}"
+    fmt="%b\n"
+  fi
+  _printf "${fmt}" "${in}"
+}
+
+_printf() {
+  local line msg format=$1
+  #while IFS=$'\n' read -ra line || echo "failed to read $2"; do
+  IFS=$'\n' readarray -c1 -t msg <<< "${2}"
+    for line in "${msg[@]}"; do
+      printf >&2 "${format}" "${line}"
+    done
+  #done <<< "$2\n"
+}
+
+die() {
+  local message=$1
+  local code=${2:-1} # default exit status 1
+  error "$message"
+  exit "$code"
+}
+
+log_func_header() {
+  title "${FUNCNAME[1]}"
+}
+
+title() {
+  TITLE="${1:-${FUNCNAME[1]}}"
+  fill=$(echo "$PRINT_MAX_WIDTH-${#TITLE}-4" | bc)
+  printf >&2 "\n-- %s %.${fill}s\n\n" "${BOLD}${TITLE}${RESET}" "${PRINT_FILL}"
+}
+
+debug() {
+  if [ ${VERBOSE:-false} == true ]; then
+    msg "${DIM}    %b${RESET}\n" "${@}"
+  fi
+}
+
+log() {
+  msg "    %b${RESET}\n" "$1"
+}
+
+info() {
+  msg "${GREEN}[+]${RESET} %b\n" "${@}"
+}
+
+error() {
+  msg "${RED}${BOLD}!!! ${RESET}${BOLD}%b${RESET}\n" "$@"
+}
+function podman_setup() {
+  info "Configuring up PlexTrac with podman"
+  debug "Podman Network Configuration"
+  if container_client network exists plextrac; then
+    debug "Network plextrac already exists"
+  else
+    debug "Creating network plextrac"
+    container_client network create plextrac 1>/dev/null
+  fi
+  create_volume_directories
+  declare -A pt_volumes
+  pt_volumes["postgres-initdb"]="${PLEXTRAC_HOME:-.}/volumes/postgres-initdb"
+  pt_volumes["redis"]="${PLEXTRAC_HOME:-.}/volumes/redis"
+  pt_volumes["couchbase-backups"]="${PLEXTRAC_BACKUP_PATH}/couchbase"
+  pt_volumes["postgres-backups"]="${PLEXTRAC_BACKUP_PATH}/postgres"
+  pt_volumes["nginx_ssl_certs"]="${PLEXTRAC_HOME:-.}/volumes/nginx_ssl_certs"
+  pt_volumes["nginx_logos"]="${PLEXTRAC_HOME:-.}/volumes/nginx_logos"
+  for volume in "${!pt_volumes[@]}"; do
+    if container_client volume exists "$volume"; then
+      debug "-- Volume $volume already exists"
+    else
+      debug "-- Creating volume $volume"
+      container_client volume create "$volume" --driver=local --opt device="${pt_volumes[$volume]}" --opt type=none --opt o="bind" 1>/dev/null
+    fi
+  done
+}
+
+function plextrac_install_podman() {
+  var=$(declare -p "$1")
+  eval "declare -A serviceValues="${var#*=}
+  PODMAN_CB_IMAGE="${PODMAN_CB_IMAGE:-docker.io/plextrac/plextracdb:7.2.0}"
+  PODMAN_PG_IMAGE="${PODMAN_PG_IMAGE:-docker.io/plextrac/plextracpostgres:stable}"
+  PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
+  PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke.cke-cs.com/cs:4.17.1}"
+
+  serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
+  serviceValues[cb-image]="${PODMAN_CB_IMAGE}"
+  serviceValues[pg-image]="${PODMAN_PG_IMAGE}"
+  serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
+  serviceValues[api-image]="${PODMAN_API_IMAGE}"
+  serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
+  serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
+
+  serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
+  serviceValues[redis-entrypoint]=$(printf '%s' "--entrypoint=" "[" "\"redis-server\"" "," "\"--requirepass\"" "," "\"${REDIS_PASSWORD}\"" "]")
+  serviceValues[cb-healthcheck]='--health-cmd=["wget","--user='$CB_ADMIN_USER'","--password='$CB_ADMIN_PASS'","-qO-","http://plextracdb:8091/pools/default/buckets/reportMe"]'
+  if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
+    serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
+  else
+    serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
+  fi
+  serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e CKEDITOR_MIGRATE=${CKEDITOR_MIGRATE:-} -e CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}"
+  serviceValues[ckeditor-backend-env_vars]="-e DATABASE_DATABASE=${PG_CKEDITOR_DB:?err} -e DATABASE_DRIVER=postgres -e DATABASE_HOST=postgres -e DATABASE_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e DATABASE_POOL_CONNECTION_LIMIT=10 -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e DATABASE_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false} -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e LOG_LEVEL=${CKEDITOR_LOG_LEVEL:-60} -e REDIS_CONNECTION_STRING=redis://redis:6379 -e REDIS_HOST=redis -e REDIS_PASSWORD=${REDIS_PASSWORD:?err}"
+
+  title "Installing PlexTrac Instance"
+  requires_user_plextrac
+  mod_configure
+  info "Starting Databases before other services"
+  # Check if DB running first, then start it.
+  debug "Handling Databases..."
+  for database in "${databaseNames[@]}"; do
+    info "Checking $database"
+    if container_client container exists "$database"; then
+      debug "$database already exists"
+      # if database exists but isn't running
+      if [ "$(container_client container inspect --format '{{.State.Status}}' "$database")" != "running" ]; then
+        info "Starting $database"
+        container_client start "$database" 1>/dev/null
+      else
+        info "$database is already running"
+      fi
+    else
+      info "Container doesn't exist. Creating $database"
+      if [ "$database" == "plextracdb" ]; then
+        local volumes=${serviceValues[cb-volumes]}
+        local ports="${serviceValues[cb-ports]}"
+        local healthcheck="${serviceValues[cb-healthcheck]}"
+        local image="${serviceValues[cb-image]}"
+        local env_vars=""
+      elif [ "$database" == "postgres" ]; then
+        local volumes="${serviceValues[pg-volumes]}"
+        local ports="${serviceValues[pg-ports]}"
+        local healthcheck="${serviceValues[pg-healthcheck]}"
+        local image="${serviceValues[pg-image]}"
+        local env_vars="${serviceValues[pg-env-vars]}"
+      fi
+      container_client run "${serviceValues[env-file]}" "$env_vars" --restart=always "$healthcheck" \
+        "$volumes" --name="${database}" "${serviceValues[network]}" "$ports" -d "$image" 1>/dev/null
+      info "Sleeping to give $database a chance to start up"
+      local progressBar
+      for i in `seq 1 10`; do
+        progressBar=`printf ".%.0s%s"  {1..$i} "${progressBar:-}"`
+        msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
+        sleep 2
+      done
+      >&2 echo -n "${RESET}"
+      log "Done"
+    fi
+  done
+  mod_autofix
+  if [ ${RESTOREONINSTALL:-0} -eq 1 ]; then
+    info "Restoring from backups"
+    log "Restoring databases first"
+    RESTORETARGET="couchbase" mod_restore
+    if [ -n "$(ls -A -- ${PLEXTRAC_BACKUP_PATH}/postgres/)" ]; then
+      RESTORETARGET="postgres" mod_restore
+    else
+      debug "No postgres backups to restore"
+    fi
+    debug "Checking for uploads to restore"
+    if [ -n "$(ls -A -- ${PLEXTRAC_BACKUP_PATH}/uploads/)" ]; then
+      log "Starting API to prepare for uploads restore"
+      if container_client container exists plextracapi; then
+        if [ "$(container_client container inspect --format '{{.State.Status}}' plextracapi)" != "running" ]; then
+          container_client start plextracapi 1>/dev/null
+        else
+          log "plextracapi is already running"
+        fi
+      else
+        debug "Creating plextracapi"
+        container_client run "${serviceValues[env-file]}" --restart=always "$healthcheck" \
+        "$volumes" --name="plextracapi" "${serviceValues[network]}" -d "${serviceValues[api-image]}" 1>/dev/null
+      fi
+      log "Restoring uploads"
+      RESTORETARGET="uploads" mod_restore
+    else
+      debug "No uploads to restore"
+    fi
+  fi
+
+  mod_start # allow up to 10 or specified minutes for startup on install, due to migrations
+  run_cb_migrations 600
+  if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
+    ckeditorNginxConf
+    getCKEditorRTCConfig
+    podman rm -f plextracapi
+    mod_start # this doesn't re-run migrations
+    run_cb_migrations
+  fi
+
+  mod_info
+  info "Post installation note:"
+  log "If you wish to have access to historical logs, you can configure docker to send logs to journald."
+  log "Please see the config steps at"
+  log "https://docs.plextrac.com/plextrac-documentation/product-documentation-1/on-premise-management/setting-up-historical-logs"
+}
+
+function plextrac_start_podman() {
+  var=$(declare -p "$1")
+  eval "declare -A serviceValues="${var#*=}
+  serviceValues[redis-entrypoint]=$(printf '%s' "--entrypoint=" "[" "\"redis-server\"" "," "\"--requirepass\"" "," "\"${REDIS_PASSWORD}\"" "]")
+  serviceValues[cb-healthcheck]='--health-cmd=["wget","--user='$CB_ADMIN_USER'","--password='$CB_ADMIN_PASS'","-qO-","http://plextracdb:8091/pools/default/buckets/reportMe"]'
+  PODMAN_CB_IMAGE="${PODMAN_CB_IMAGE:-docker.io/plextrac/plextracdb:7.2.0}"
+  PODMAN_PG_IMAGE="${PODMAN_PG_IMAGE:-docker.io/plextrac/plextracpostgres:stable}"
+  PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
+  PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke.cke-cs.com/cs:4.17.1}"
+
+  serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
+  serviceValues[cb-image]="${PODMAN_CB_IMAGE}"
+  serviceValues[pg-image]="${PODMAN_PG_IMAGE}"
+  serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
+  serviceValues[api-image]="${PODMAN_API_IMAGE}"
+  serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
+  serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
+  if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
+    serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
+  else
+    serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
+  fi
+  serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e CKEDITOR_MIGRATE=${CKEDITOR_MIGRATE:-} -e CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}"
+  serviceValues[ckeditor-backend-env_vars]="-e DATABASE_DATABASE=${PG_CKEDITOR_DB:?err} -e DATABASE_DRIVER=postgres -e DATABASE_HOST=postgres -e DATABASE_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e DATABASE_POOL_CONNECTION_LIMIT=10 -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e DATABASE_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false} -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e LOG_LEVEL=${CKEDITOR_LOG_LEVEL:-} -e REDIS_CONNECTION_STRING=redis://redis:6379 -e REDIS_HOST=redis -e REDIS_PASSWORD=${REDIS_PASSWORD:?err}"
+
+  if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
+    serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
+  fi
+  serviceValues[notification-env_vars]="-e API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE=${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
+  serviceValues[notification-env_vars]="-e INTERNAL_API_KEY_SHARED=${INTERNAL_API_KEY_SHARED:?err}"
+
+  title "Starting PlexTrac..."
+  requires_user_plextrac
+
+  for service in "${serviceNames[@]}"; do
+    if [ "$service" == "migrations" ]; then
+        # Skip the migration service, as it will be started separately
+        continue
+    fi
+    debug "Checking $service"
+    local volumes=""
+    local ports=""
+    local healthcheck=""
+    local image="${serviceValues[api-image]}"
+    local restart_policy="--restart=always"
+    local entrypoint=""
+    local deploy=""
+    local env_vars=""
+    local alias=""
+    local init=""
+    if container_client container exists "$service"; then
+      if [ "$(container_client container inspect --format '{{.State.Status}}' "$service")" != "running" ]; then
+        info "Starting $service"
+        container_client start "$service" 1>/dev/null
+      else
+        info "$service is already running"
+      fi
+    else
+      if [ "$service" == "plextracdb" ]; then
+        local volumes="${serviceValues[cb-volumes]}"
+        local ports="${serviceValues[cb-ports]}"
+        local healthcheck="${serviceValues[cb-healthcheck]}"
+        local image="${serviceValues[cb-image]}"
+      elif [ "$service" == "postgres" ]; then
+        local volumes="${serviceValues[pg-volumes]}"
+        local ports="${serviceValues[pg-ports]}"
+        local healthcheck="${serviceValues[pg-healthcheck]}"
+        local image="${serviceValues[pg-image]}"
+        local env_vars="${serviceValues[pg-env-vars]}"
+      elif [ "$service" == "plextracapi" ]; then
+        local volumes="${serviceValues[api-volumes]}"
+        local healthcheck="${serviceValues[api-healthcheck]}"
+        local image="${serviceValues[api-image]}"
+      elif [ "$service" == "redis" ]; then
+        local volumes="${serviceValues[redis-volumes]}"
+        local image="${serviceValues[redis-image]}"
+        local entrypoint="${serviceValues[redis-entrypoint]}"
+        local healthcheck="${serviceValues[redis-healthcheck]}"
+      elif [ "$service" == "notification-engine" ]; then
+        local entrypoint="${serviceValues[notification-engine-entrypoint]}"
+        local healthcheck="${serviceValues[notification-engine-healthcheck]}"
+        local env_vars="${serviceValues[notification-env_vars]}"
+        local init="--init"
+      elif [ "$service" == "notification-sender" ]; then
+        local entrypoint="${serviceValues[notification-sender-entrypoint]}"
+        local healthcheck="${serviceValues[notification-sender-healthcheck]}"
+        local env_vars="${serviceValues[notification-env_vars]}"
+        local init="--init"
+      elif [ "$service" == "contextual-scoring-service" ]; then
+        local entrypoint="${serviceValues[contextual-scoring-service-entrypoint]}"
+        local healthcheck="${serviceValues[contextual-scoring-service-healthcheck]}"
+        local deploy="" # update this
+      elif [ "$service" == "migrations" ]; then
+        local volumes="${serviceValues[migrations-volumes]}"
+        local env_vars="${serviceValues[migrations-env_vars]}"
+      elif [ "$service" == "plextracnginx" ]; then
+        local volumes="${serviceValues[plextracnginx-volumes]}"
+        local ports="${serviceValues[plextracnginx-ports]}"
+        local image="${serviceValues[plextracnginx-image]}"
+        local healthcheck="${serviceValues[plextracnginx-healthcheck]}"
+        local alias="${serviceValues[plextracnginx-alias]}"
+      elif [ "$service" == "ckeditor-backend" ]; then
+        local image="${serviceValues[ckeditor-backend-image]}"
+        local env_vars="${serviceValues[ckeditor-backend-env_vars]}"
+      fi
+      info "Creating $service"
+      # This specific if loop is because Bash escaping and the specific need for the podman flag --entrypoint were being a massive pain in figuring out. After hours of effort, simply making an if statement here and calling podman directly fixes the escaping issues
+      container_client run ${serviceValues[env-file]} $env_vars $init $alias $entrypoint $restart_policy $healthcheck \
+        $volumes --name=${service} $deploy ${serviceValues[network]} $ports -d $image 1>/dev/null
+    fi
+  done
+}
+
+function podman_run_cb_migrations() {
+  var=$(declare -p "$1")
+  eval "declare -A serviceValues="${var#*=}
+  serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
+  serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e CKEDITOR_MIGRATE=${CKEDITOR_MIGRATE:-} -e CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}"
+  PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  serviceValues[api-image]="${PODMAN_API_IMAGE}"
+  local env_vars="${serviceValues[migrations-env_vars]}"
+  local volumes="${serviceValues[migrations-volumes]}"
+  local image="${serviceValues[api-image]}"
+
+  debug "Running migrations"
+  podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:superuser:bootstrap --if-present && npm run pg:migrate && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no \
+  $volumes:z --replace --name="migrations" ${serviceValues[network]} -d $image 1>/dev/null
+}
+
+function podman_pull_images() {
+
+  declare -A service_images
+  PODMAN_CB_IMAGE="${PODMAN_CB_IMAGE:-docker.io/plextrac/plextracdb:7.2.0}"
+  PODMAN_PG_IMAGE="${PODMAN_PG_IMAGE:-docker.io/plextrac/plextracpostgres:stable}"
+  PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
+  PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
+
+  service_images[cb-image]="${PODMAN_CB_IMAGE}"
+  service_images[pg-image]="${PODMAN_PG_IMAGE}"
+  service_images[redis-image]="${PODMAN_REDIS_IMAGE}"
+  service_images[api-image]="${PODMAN_API_IMAGE}"
+  service_images[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
+
+  info "Pulling updated container images"
+  for image in "${service_images[@]}"; do
+    debug "Pulling $image"
+    podman pull $image 1>/dev/null
+  done
+  log "Done."
+}
+
+function podman_remove() {
+  for service in "${serviceNames[@]}"; do
+    if [ "$service" != "plextracdb" ] && [ "$service" != "postgres" ]; then
+      if podman container exists "$service"; then
+        podman stop "$service" 1>/dev/null
+        podman rm -f "$service" 1>/dev/null
+        podman image prune -f 1>/dev/null
+      fi
+    fi
+  done
+}
+# Build functionality for certificate renewal / injection into NGINX
+
+function mod_reload-cert() {
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    die "Not yet implemented in Podman"
+  fi
+  # var=$(declare -p "$1")
+  # eval "declare -A serviceValues="${var#*=}
+  # if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
+  #   serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
+  # else
+  #   serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
+  # fi
+
+  title "PlexTrac SSL Certificate Renewal"
+  # Check if using LETS_ENCRYPT
+  LETS_ENCRYPT_EMAIL=${LETS_ENCRYPT_EMAIL:-}
+  USE_CUSTOM_CERT=${USE_CUSTOM_CERT:-false}
+  if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
+    # IF LETS_ENCRYPT = TRUE
+    # ASK TO REMOVE pem/key
+    info "Let's Encrypt certificate detected!"
+    info "Would you like to reload the SSL Certificates? This will recreate the NGINX container"
+    if get_user_approval; then
+      info "Recreating plextrac-plextracnginx-1"
+      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+        die "Not yet implemented in Podman"
+        # podman rm -f plextracnginx; podman volume rm letsencrypt
+        # podman run ${serviceValues[env-file]} --restart=always \
+        # ${serviceValues[plextracnginx-volumes]} --name=plextracnginx --network=plextrac ${serviceValues[plextracnginx-ports]} -d ${serviceValues[plextracnginx-image]} 1>/dev/null
+      else
+        compose_client up -d --force-recreate plextracnginx
+      fi
+    else
+      die "No changes made!"
+    fi
+  else
+    # IF LETS_ENCRYPT = FALSE
+    # Assume custom_certificate key/pem has been replaced and simply re-inject via NGINX recreate
+    info "Custom or Self-signed certificate detected!"
+    info "Would you like to reload your custom or self-signed SSL certificates? This will recreate the NGINX container"
+    if get_user_approval; then
+      info "Reloading certificates..."
+      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+        die "Not yet implemented in Podman"
+        # podman rm -f plextracnginx; podman volume rm letsencrypt
+        # podman run ${serviceValues[env-file]} --restart=always \
+        # ${serviceValues[plextracnginx-volumes]} --name=plextracnginx --network=plextrac ${serviceValues[plextracnginx-ports]} -d ${serviceValues[plextracnginx-image]} 1>/dev/null
+      else
+        compose_client up -d --force-recreate plextracnginx
+      fi
+    else
+      die "No changes made!"
+    fi
+  fi
+}
+# Simple restore of backups
+#
+# Usage:
+#   plextrac restore
+
+function mod_restore() {
+  restoreTargets=(restore_doPostgresRestore restore_doCouchbaseRestore restore_doUploadsRestore)
+  currentTarget=`tr [:upper:] [:lower:] <<< "${RESTORETARGET:-ALL}"`
+  for target in "${restoreTargets[@]}"; do
+    debug "Checking if $target matches $currentTarget"
+    if [[ $currentTarget == "all" || ${target,,} =~ "restore_do${currentTarget}restore" ]]; then
+      $target
+    fi
+  done
+}
+
+function restore_doUploadsRestore() {
+  title "Restoring uploads from backup"
+  latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/uploads/* | head -n1`"
+  info "Latest backup: $latestBackup"
+
+  error "This is a potentially destructive process, are you sure?"
+  info "Please confirm before continuing the restore"
+
+  if get_user_approval; then
+    log "Restoring from $latestBackup"
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      cat $latestBackup | podman cp - plextracapi:/usr/src/plextrac-api
+    else
+      debug "`cat $latestBackup | compose_client run -T --workdir /usr/src/plextrac-api --rm --entrypoint='' \
+      $coreBackendComposeService tar -xzf -`"
+    fi
+    log "Done"
+  fi
+}
+
+function restore_doCouchbaseRestore() {
+  title "Restoring Couchbase from backup"
+  debug "Fixing permissions"
+  local user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+  if [ "$CONTAINER_RUNTIME" == "docker" ]; then
+    debug "`compose_client exec -T $couchbaseComposeService \
+      chown -R $user_id:$user_id /backups 2>&1`"
+  fi
+  latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`"
+  backupFile=`basename $latestBackup`
+  info "Latest backup: $latestBackup"
+
+  error "This is a potentially destructive process, are you sure?"
+  info "Please confirm before continuing the restore"
+
+  if get_user_approval; then
+    log "Restoring from $backupFile"
+    log "Extracting backup files"
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      podman exec --workdir /backups $couchbaseComposeService tar -xzvf /backups/$backupFile
+    else
+      debug "`compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) --workdir /backups $couchbaseComposeService \
+        tar -xzvf /backups/$backupFile 2>&1`"
+    fi
+
+    log "Running database restore"
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      podman exec $couchbaseComposeService cbrestore /backups http://127.0.0.1:8091 \
+        -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
+    else
+      # We have the TTY enabled by default so the output from cbrestore is intelligible
+      tty -s || { debug "Disabling TTY allocation for Couchbase restore due to non-interactive invocation"; ttyFlag="-T"; }
+      compose_client exec ${ttyFlag:-} $couchbaseComposeService cbrestore /backups http://127.0.0.1:8091 \
+        -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
+    fi
+
+    log "Cleaning up extracted backup files"
+    dirName=`basename -s .tar.gz $backupFile`
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      podman exec --workdir /backups $couchbaseComposeService rm -rf /backups/$dirName
+    else
+      debug "`compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) --workdir /backups $couchbaseComposeService \
+        rm -rf /backups/$dirName 2>&1`"
+    fi
+    log "Done"
+  fi
+}
+
+function restore_doPostgresRestore() {
+  title "Restoring Postgres from backup"
+  latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/postgres/* | head -n1`"
+  backupFile=`basename $latestBackup`
+  info "Latest backup: $latestBackup"
+
+  error "This is a potentially destructive process, are you sure?"
+  info "Please confirm before continuing the restore"
+
+  if get_user_approval; then
+    databaseBackups=$(basename -s .psql `tar -tf $latestBackup | awk '/.psql/{print $1}'`)
+    log "Restoring from $backupFile"
+    log "Databases to restore:\n$databaseBackups"
+    local cmd="compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac})"
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      local cmd='podman exec'
+    fi
+      debug "`$cmd $postgresComposeService \
+        tar -tf /backups/$backupFile 2>&1`"
+    local cmd='compose_client exec -T'
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      local cmd='podman exec'
+    fi
+    for db in $databaseBackups; do
+      log "Extracting backup for $db"
+      debug "`$cmd $postgresComposeService\
+        tar -xvzf /backups/$backupFile ./$db.psql 2>&1`"
+      dbAdminEnvvar="PG_${db^^}_ADMIN_USER"
+      dbAdminRole=$(eval echo "\$$dbAdminEnvvar")
+      log "Restoring $db with role:${dbAdminRole}"
+      dbRestoreFlags="-d $db --clean --if-exists --no-privileges --no-owner --role=$dbAdminRole  --disable-triggers --verbose"
+      debug "`$cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+        pg_restore -U $POSTGRES_USER $dbRestoreFlags ./$db.psql 2>&1`"
+      debug "`$cmd $postgresComposeService \
+        rm ./$db.psql 2>&1`"
+    done
+  fi
+}
+# Credits
+# "SchemaVersion": "0.1.0",
+# "Vendor": "Karol Musur",
+# "Version": "v0.5",
+# "ShortDescription": "Rollout new Compose service version"
+# "Adapted by": "Michael Burke"
+
+# Defaults
+HEALTHCHECK_TIMEOUT=60
+NO_HEALTHCHECK_TIMEOUT=10
+
+healthcheck() {
+  local container_id="$1"
+
+  if docker inspect --format='{{json .State.Health.Status}}' "$container_id" | grep -v "unhealthy" | grep -q "healthy"; then
+    return 0
+  fi
+
+  return 1
+}
+
+scale() {
+  local service="$1"
+  local replicas="$2"
+  compose_client up --detach --scale $service=$replicas --no-recreate "$service"
+}
+
+deprecated_rollout() {
+  die "Deprecated: mod_rollout"
+  # Added removal of the couchbase-migrations container due to this not getting attached to the new network scaled
+  if [ `compose_client ps -a --format json | jq -r '.Name' | grep couchbase-migrations` ]
+    then
+      debug "Removing 'couchbase-migrations' container"
+      docker rm -f `compose_client ps -a --format json | jq -r '.Name' | grep couchbase-migrations` > /dev/null 2>&1
+  fi
+  # Get list of services from Docker Compose Config
+  service_list=(
+    "datalake-maintainer"
+    "notification-engine"
+    "notification-sender"
+    "plextracapi"
+    "contextual-scoring-service"
+  )
+
+  debug "$service_list"
+  for s in ${service_list[@]}
+    do
+      debug "Stabilizing Service: $s"
+      debug "`compose_client up -d --no-recreate $s > /dev/null 2>&1`"
+  done
+  for s in ${service_list[@]}
+    do
+      SERVICE=$s
+      SCALE=$(compose_client config --format json | jq -r --arg v "$SERVICE" '.services | .[$v].deploy.replicas | select(. != null)')
+      if [ $SCALE == 0 ]
+        then
+          debug "$SERVICE show $SCALE replicas; skipping"
+          continue
+      fi
+      if [[ "$(compose_client ps --quiet "$SERVICE")" == "" ]]
+        then
+          debug "Service '$SERVICE' is not running. Starting the service."
+          compose_client up --detach --no-recreate "$SERVICE"
+          debug "$SERVICE created"
+          continue
+      fi
+      if [[ $s == "datalake-maintainer" ]]; then
+        #If this is the datalake maintainer, then abort the scaling
+        debug "Datalake Maintainer detected; skipping"
+        continue
+      fi
+
+      OLD_CONTAINER_IDS_STRING=$(compose_client ps --quiet "$SERVICE")
+      readarray -t OLD_CONTAINER_IDS <<<"$OLD_CONTAINER_IDS_STRING"
+
+      if [ $SCALE != "0" ]
+        then
+          SCALE_TIMES_TWO=$((SCALE * 2))
+        else
+          SCALE_TIMES_TWO=0
+          break
+      fi
+      debug "Scaling '$SERVICE' to '$SCALE_TIMES_TWO'"
+      scale "$SERVICE" $SCALE_TIMES_TWO
+
+      # create a variable that contains the IDs of the new containers, but not the old ones
+      NEW_CONTAINER_IDS_STRING=$(compose_client ps --quiet "$SERVICE" | grep --invert-match --file <(echo "$OLD_CONTAINER_IDS_STRING"))
+      readarray -t NEW_CONTAINER_IDS <<<"$NEW_CONTAINER_IDS_STRING"
+
+      # check if first container has healthcheck
+      if docker inspect --format='{{json .State.Health}}' "${OLD_CONTAINER_IDS[0]}" | grep --quiet "Status"
+        then
+          debug "Waiting for new containers to be healthy (timeout: $HEALTHCHECK_TIMEOUT seconds)"
+          for _ in $(seq 1 "$HEALTHCHECK_TIMEOUT"); do
+            SUCCESS=0
+
+            for NEW_CONTAINER_ID in "${NEW_CONTAINER_IDS[@]}"; do
+              if healthcheck "$NEW_CONTAINER_ID"; then
+                SUCCESS=$((SUCCESS + 1))
+              fi
+            done
+
+            if [[ "$SUCCESS" == "$SCALE" ]]; then
+              break
+            fi
+
+            sleep 1
+          done
+
+          SUCCESS=0
+
+          for NEW_CONTAINER_ID in "${NEW_CONTAINER_IDS[@]}"; do
+            if healthcheck "$NEW_CONTAINER_ID"; then
+              SUCCESS=$((SUCCESS + 1))
+            fi
+          done
+
+          if [[ "$SUCCESS" != "$SCALE" ]]; then
+            error "New containers are not healthy. Rolling back."
+
+            for NEW_CONTAINER_ID in "${NEW_CONTAINER_IDS[@]}"; do
+              docker stop "$NEW_CONTAINER_ID" > /dev/null 2>&1
+              docker rm "$NEW_CONTAINER_ID" > /dev/null 2>&1
+            done
+
+            exit 1
+          fi
+        else
+          debug "Waiting for new containers to be ready ($NO_HEALTHCHECK_TIMEOUT seconds)"
+          sleep "$NO_HEALTHCHECK_TIMEOUT"
+      fi
+      for OLD_CONTAINER_ID in "${OLD_CONTAINER_IDS[@]}"; do
+        docker stop "$OLD_CONTAINER_ID" > /dev/null 2>&1
+        docker rm "$OLD_CONTAINER_ID" > /dev/null 2>&1
+      done
+      counter=1
+      for NEW_CONTAINER_ID in "${NEW_CONTAINER_IDS[@]}"; do
+        # I want to check if the plextracapi containers are the current NEW_CONTAINER_ID
+        if [[ "$(docker inspect --format='{{json .Name}}' "$NEW_CONTAINER_ID" | grep -o 'plextracapi')" == "plextracapi" ]]; then
+          debug "Renaming container $NEW_CONTAINER_ID to plextrac-plextracapi-$counter"
+          docker rename "$NEW_CONTAINER_ID" "plextrac-plextracapi-$counter" > /dev/null 2>&1
+          (( counter++ ))
+          continue
+        elif [[ "$(docker inspect --format='{{json .Name}}' "$NEW_CONTAINER_ID" | grep -o 'notification-engine')" == "notification-engine" ]]; then
+          debug "Renaming container $NEW_CONTAINER_ID to plextrac-notification-engine-1"
+          docker rename "$NEW_CONTAINER_ID" "plextrac-notification-engine-1" > /dev/null 2>&1
+          continue
+        elif [[ "$(docker inspect --format='{{json .Name}}' "$NEW_CONTAINER_ID" | grep -o 'notification-sender')" == "notification-sender" ]]; then
+          debug "Renaming container $NEW_CONTAINER_ID to plextrac-notification-sender-1"
+          docker rename "$NEW_CONTAINER_ID" "plextrac-notification-sender-1" > /dev/null 2>&1
+          continue
+        elif [[ "$(docker inspect --format='{{json .Name}}' "$NEW_CONTAINER_ID" | grep -o 'datalake-maintainer')" == "datalake-maintainer" ]]; then
+          debug "Renaming container $NEW_CONTAINER_ID to plextrac-datalake-maintainer-1"
+          docker rename "$NEW_CONTAINER_ID" "plextrac-datalake-maintainer-1" > /dev/null 2>&1
+          continue
+        elif [[ "$(docker inspect --format='{{json .Name}}' "$NEW_CONTAINER_ID" | grep -o 'contextual-scoring-service')" == "contextual-scoring-service" ]]; then
+          debug "Renaming container $NEW_CONTAINER_ID to plextrac-contextual-scoring-service-1"
+          docker rename "$NEW_CONTAINER_ID" "plextrac-contextual-scoring-service-1" > /dev/null 2>&1
+          continue
+        fi
+      done
+    done
+    info "Done!"
+}
+function systemPackageManager() {
+  if command -v apt-get >/dev/null 2>&1; then echo "apt"; return; fi
+  if command -v yum >/dev/null 2>&1; then echo "yum"; return; fi
+}
+
+function system_packages__refresh_package_lists() {
+  debug "Refreshing OS package lists"
+  case `systemPackageManager` in
+    "apt")
+      _system_cmd_with_debug_and_fail "apt-get update 2>&1"
+      ;;
+    "yum")
+      _system_cmd_with_debug_and_fail "yum check-update 2>&1 || true" # hide exit code for successful check and pending upgrades"
+      ;;
+  esac
+}
+
+function system_packages__do_system_upgrade() {
+  info "Updating OS packages, this make take some time!"
+  nobest="--nobest"
+  os_check
+  if grep -q 'CentOS' <(echo "$OS_NAME"); then
+    nobest=""
+  elif grep -q 'Hat' <(echo "$OS_NAME"); then
+    if grep -vq '7.' <(echo "$OS_VERSION"); then
+      if [ "$CONTAINER_RUNTIME" == "docker" ]; then
+        nobest="--nobest"
+      fi
+    else
+      nobest=""
+    fi
+  fi
+  debug "$(grep '^NAME' /etc/os-release | cut -d '=' -f2 | tr -d '"')"
+  system_packages__refresh_package_lists
+  debug "Running system upgrade"
+  case `systemPackageManager` in
+    "apt")
+      out=`export DEBIAN_FRONTEND=noninteractive ; apt-get upgrade -y -o DPkg::Options::=--force-confold -o DPkg::Options::=--force-confdef  2>&1 && apt-get autoremove -y 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
+      debug "$out"
+      ;;
+    "yum")
+      out=`yum upgrade -y $nobest 2>&1` || { error "Failed to upgrade system packages"; debug "$out"; return 1; }
+      debug "$out"
+      ;;
+    *)
+      error "unsupported"
+      exit 1
+      ;;
+  esac
+  log "Done."
+}
+
+function system_packages__install_system_dependencies() {
+  info "Installing/updating required packages..."
+  system_packages__refresh_package_lists
+  debug "Installing system dependencies"
+  case `systemPackageManager` in
+    "apt")
+      out=`apt-get install -y \
+        apt-transport-https \
+        ca-certificates \
+        wget \
+        gnupg-agent \
+        software-properties-common \
+        jq \
+        unzip \
+        bc \
+        2>&1` || { error "Failed to install system dependencies"; debug "$out"; return 1; }
+      debug "$out"
+      ;;
+    "yum")
+      out=`yum install -q -y \
+        ca-certificates \
+        wget \
+        jq \
+        unzip \
+        bc \
+        2>&1` || { error "Failed to install system dependencies"; debug "$out"; return 1; }
+      debug "$out"
+      ;;
+    *)
+      error "unsupported"
+      exit 1
+      ;;
+  esac
+  log "Done."
+}
+
+function install_docker() {
+  if ! command -v docker &> /dev/null || [ "${1:-}" == "force" ]; then
+    case `systemPackageManager` in
+      "apt")
+        info "installing docker, this might take some time..."
+        _system_cmd_with_debug_and_fail "mkdir -p /etc/apt/keyrings; \
+          wget -O - -q https://download.docker.com/linux/$(grep -E '^ID=' /etc/os-release | cut -d '=' -f2)/gpg | \
+          sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
+        _system_cmd_with_debug_and_fail 'echo "deb [arch=$(dpkg --print-architecture)
+          signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(grep -E '^ID=' /etc/os-release | cut -d '=' -f2)
+          $(cat /etc/os-release | grep VERSION_CODENAME | cut -d '=' -f2) stable" | sudo tee /etc/apt/sources.list.d/docker.list'
+        system_packages__refresh_package_lists
+        _system_cmd_with_debug_and_fail "apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>&1"
+        _system_cmd_with_debug_and_fail "systemctl enable docker 2>&1"
+        event__log_activity "install:docker" `docker --version`
+        debug `docker --version`
+        ;;
+      "yum")
+        info "installing docker, this might take some time..."
+        _system_cmd_with_debug_and_fail "yum install -q -y yum-utils"
+        # RHEL Docker repo has been deprecated, so only CentOS repo is used
+        _system_cmd_with_debug_and_fail "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo"
+        system_packages__refresh_package_lists
+        _system_cmd_with_debug_and_fail "yum install -q -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>&1"
+        _system_cmd_with_debug_and_fail "systemctl enable docker 2>&1"
+        debug "restarting docker service"
+        _system_cmd_with_debug_and_fail "/bin/systemctl restart docker.service"
+        event__log_activity "install:docker" `docker --version`
+        debug `docker --version`
+        ;;
+      *)
+        error "unsupported"
+        exit 1
+        ;;
+    esac
+    log "Done."
+  else
+    info "docker already installed, version: `docker --version`"
+  fi
+}
+
+function install_docker_compose() {
+  if ! command -v docker compose &> /dev/null || [ "${1:-}" == "force" ]; then
+    case `systemPackageManager` in
+      "apt")
+        info "Installing docker compose..."
+        system_packages__refresh_package_lists
+              _system_cmd_with_debug_and_fail "apt install -y docker-compose-plugin 2>&1"
+        docker_compose_version=$(docker compose version)
+        event__log_activity "install:docker-compose" `docker compose version`
+        info "docker compose installed, version: `docker compose version`"
+        ;;
+      "yum")
+        info "Installing docker compose..."
+        system_packages__refresh_package_lists
+        _system_cmd_with_debug_and_fail "yum install -q -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>&1"
+        event__log_activity "install:docker-compose" `docker compose version`
+        info "docker compose installed, version: `docker compose version`"
+        ;;
+      *)
+        error "unsupported"
+        exit 1
+        ;;
+    esac
+    log "Done."
+  else
+    info "docker compose already installed, version: `docker compose version`"
+  fi
+}
+
+function _system_cmd_with_debug_and_fail() {
+  cmd=$1
+  fail_msg=${2:-"Command failed: '$cmd'"}
+  out=`eval $cmd` || { error "$fail_msg"; debug "$out"; return 1; }
+  debug "$out"
+}
+
+function install_podman() {
+  if ! command -v podman &> /dev/null || [ "${1:-}" == "force" ]; then
+    case `systemPackageManager` in
+      "yum")
+        info "installing podman, this might take some time..."
+        if grep -q "Red Hat" <(echo "$OS_NAME"); then
+          if grep -q "8." <(echo "$OS_VERSION"); then
+            _system_cmd_with_debug_and_fail "yum module enable -y container-tools:rhel8"
+          elif grep -q "9." <(echo "$OS_VERSION"); then
+            _system_cmd_with_debug_and_fail "yum install -y container-tools"
+          fi
+        fi
+        _system_cmd_with_debug_and_fail "yum install -q -y podman podman-plugins"
+        event__log_activity "install:podman" $(podman --version)
+        ;;
+      *)
+        error "unsupported"
+        exit 1
+        ;;
+    esac
+    log "Done."
+  else
+    info "podman already installed, version: $(podman --version | grep -o -E '.\..\..')"
+  fi
+}
+
+function install_podman_compose() {
+  if ! command -v podman-compose &> /dev/null || [ "${1:-}" == "force" ]; then
+    case `systemPackageManager` in
+      "yum")
+        info "installing podman-compose, this might take some time..."
+        os_check
+        # If its RHEL
+        if echo "$OS_NAME" | grep -q "Red"; then
+          arch="$(arch)"
+          debug "$arch"
+          os_ver=$(echo "$OS_VERSION" | cut -d '.' -f1)
+          debug "$os_ver"
+            _system_cmd_with_debug_and_fail "subscription-manager repos --enable codeready-builder-for-rhel-$os_ver-$arch-rpms"
+            _system_cmd_with_debug_and_fail "yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$os_ver.noarch.rpm"
+        fi
+
+        # If its CentOS or Rocky Linux
+        if echo "$OS_NAME" | grep -q "CentOS" || echo "$OS_NAME" | grep -q "Rocky"; then
+          if echo "$OS_VERSION" | grep -q "9."; then
+            _system_cmd_with_debug_and_fail "yum config-manager --set-enabled crb 2>&1"
+          elif echo "$OS_VERSION" | grep -q "8."; then
+            _system_cmd_with_debug_and_fail "yum config-manager --set-enabled powertools 2>&1"
+          fi
+        fi
+        if echo "$OS_NAME" | grep -q "CentOS"; then
+          _system_cmd_with_debug_and_fail "yum install -y epel-release epel-next-release 2>&1"
+        elif echo "$OS_NAME" | grep -q "Rocky"; then
+          _system_cmd_with_debug_and_fail "yum install -y epel-release 2>&1"
+        fi
+        _system_cmd_with_debug_and_fail "yum install -q -y podman-compose 2>&1"
+        event__log_activity "install:podman-compose" $(podman-compose --version 2>1)
+        ;;
+      *)
+        error "unsupported"
+        exit 1
+        ;;
+    esac
+    log "Done."
+  else
+    info "podman-compose already installed, version: $(podman-compose --version 2>1 | grep compose | grep -o -E '.\..\..')"
+  fi
+}
+# Provides a method using our utility to safely stop the PlexTrac Application
+#
+# Usage:
+#  plextrac stop
+
+function mod_stop() {
+  title "Attempting to gracefully stop PlexTrac..."
+  debug "Stopping API Services..."
+  for service in $(container_client ps --format '{{.Names}}' | grep -Eo 'plextracapi|plextracnginx|notification-engine|notification-sender|contextual-scoring-service'); do
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      container_client stop $service
+    else
+      compose_client stop $service
+    fi
+  done
+  sleep 2
+  debug "Done."
+  debug "Stopping Couchbase, Postres, and Redis"
+  for service in $(docker ps --format '{{.Names}}' | grep -Eo 'couchbase|postgres|redis'); do
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      container_client stop $service
+    else
+      compose_client stop $service
+    fi
+  done
+  sleep 2
+  debug "Ensuring all services are stopped"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    container_client stop -a
+  else
+    compose_client stop
+  fi
+  info "-----"
+  info "PlexTrac stopped. It's now safe to update the OS and restart"
+}
+# Instance & Utility Update Management
+#
+# Usage: plextrac update
+
+# subcommand function, this is the entrypoint eg `plextrac update`
+function mod_update() {
+  if [ "${LOCK_UPDATES:-false}" == "true" ]; then
+    die "Updates are locked due to a failed data migration. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
+  fi
+
+  # if [ "${UPGRADE_STRATEGY}" == "stable" ] && [ -z "${PLEXTRAC_MANAGED:-}" ]; then
+  #   sed -i 's/UPGRADE_STRATEGY=stable/UPGRADE_STRATEGY=2.10/g' .env
+  #   info "Set Upgrade Startegy to 2.10 for stable release cycle. Please do not remove this version pin unless instructed to do so by PlexTrac Support."
+  # else
+  #   info "Cloud hosted customer - no modification of UPGRADE_STRATEGY necessary"
+  # fi
+
+  title "Updating PlexTrac"
+  # I'm comparing an int :shrug:
+  # shellcheck disable=SC2086
+  if [ "${AIRGAPPED:-false}" == "false" ]; then
+    if [ ${SKIP_SELF_UPGRADE:-0} -eq 0 ]; then
+      if [ ${UTIL_UPDATED:-0} -eq 0 ]; then
+        info "Checking for updates to the PlexTrac Management Utility"
+        if selfupdate_checkForNewRelease; then
+          event__log_activity "update:upgrade-utility" "${releaseInfo}"
+          selfupdate_doUpgrade
+          die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
+          exit 1 # just in case, previous line should already exit
+        fi
+      fi
+    else
+      info "Skipping self upgrade"
+      error "PlexTrac began/will begin doing contiguous updates to the PlexTrac application starting with the v2.0 release. From that point forward, all releases will need to be updated with minor version increments. Skipping updating the PlexTrac Manager Util can have adverse affects on the application if a minor version update is skipped. Are you sure you want to continue skipping updates to this utility?"
+      get_user_approval
+    fi
+  else
+    info "AIRGAPPED mode enabled, skipping utility update"
+  fi
+  info "Updating PlexTrac instance to latest release..."
+  # Check upstream tags avaialble to download
+  mod_configure
+  if [ "${AIRGAPPED:-false}" == "false" ]; then
+    version_check
+  else
+    info "AIRGAPPED mode enabled, skipping version check and using pinned version."
+    contiguous_update=false
+  fi
+  if [ "${MIGRATE_CKE:-false}" == "true" ]; then
+    debug "Enabling Environment and RTC Migration"
+    ckeditorNginxConf
+  fi
+  if $contiguous_update
+    then
+      debug "Proceeding with contiguous update"
+      upgrade_time_estimate
+      for i in ${upgrade_path[@]}
+        do
+          if [ "$i" != "$running_ver" ]; then
+            info "Starting Update..."
+            debug "Upgrading to $i"
+            getCKEditorRTCConfig
+            mod_configure
+            UPGRADE_STRATEGY="$i"
+            debug "Upgrade Strategy is $UPGRADE_STRATEGY"
+            # ETL Check before an update
+            ETL_OUTPUT=false
+            mod_check_etl_status "${ETL_OUTPUT-}"
+            if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+              title "Pulling latest container images"
+              podman_remove
+              podman_pull_images
+            else
+              title "Pulling latest container images"
+              pull_docker_images
+            fi
+
+            mod_start || sleep 20
+            run_cb_migrations
+            if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+              unhealthy_services=$(for service in $(podman ps -a --format json | jq -r .[].Names | grep '"' | cut -d '"' -f2); do podman inspect $service --format json | jq -r '.[] | select(.State.Health.Status == "unhealthy" or (.State.Status != "running" and .State.ExitCode != 0) or .State.Status == "created") | .Name' | xargs -r printf "%s;"; done)
+            else
+              unhealthy_services=$(compose_client ps -a --format json | jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | xargs -r printf "%s;")
+            fi
+            if [[ "${unhealthy_services}" != "" ]]; then
+              info "Detected unhealthy services: ${unhealthy_services}"
+              error "One or more containers are in a failed state, please contact support!"
+            fi
+          fi
+      done
+      mod_check
+      # ETL check AFTER an update
+      ETL_OUTPUT=false
+      mod_check_etl_status "${ETL_OUTPUT-}"
+      title "Update complete"
+  else
+      info "Starting Update..."
+      debug "Proceeding with normal update"
+      getCKEditorRTCConfig
+      mod_configure
+      # ETL Check before an update
+      ETL_OUTPUT=false
+      mod_check_etl_status "${ETL_OUTPUT-}"
+      if [ "${AIRGAPPED:-false}" == "false" ]; then
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          title "Pulling latest container images"
+          podman_remove
+          podman_pull_images
+        else
+          title "Pulling latest container images"
+          pull_docker_images
+        fi
+      else
+        info "AIRGAPPED mode enabled, skipping image pull"
+        # podman needs to remove containers before attempting to start with updated containers
+        if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+          title "Removing old podman containers"
+          podman_remove
+        fi
+      fi
+
+      mod_start || sleep 20
+      run_cb_migrations
+      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+        unhealthy_services=$(for service in $(podman ps -a --format json | jq -r .[].Names | grep '"' | cut -d '"' -f2); do podman inspect $service --format json | jq -r '.[] | select(.State.Health.Status == "unhealthy" or (.State.Status != "running" and .State.ExitCode != 0) or .State.Status == "created") | .Name' | xargs -r printf "%s;"; done)
+      else
+        unhealthy_services=$(compose_client ps -a --format json | jq -r '. | select(.Health == "unhealthy" or (.State != "running" and .ExitCode != 0) or .State == "created" ) | .Service' | xargs -r printf "%s;")
+      fi
+      if [[ "${unhealthy_services}" != "" ]]; then
+        info "Detected unhealthy services: ${unhealthy_services}"
+        error "One or more containers are in a failed state, please contact support!"
+      fi
+      mod_check
+      ETL_OUTPUT=false
+      mod_check_etl_status "${ETL_OUTPUT-}"
+      title "Update complete"
+  fi
+}
+
+function _selfupdate_refreshReleaseInfo() {
+  releaseApiUrl='https://api.github.com/repos/PlexTrac/plextrac-manager-util/releases'
+  targetRelease="${PLEXTRAC_UTILITY_VERSION:-latest}"
+  if [ "${targetRelease}" == "latest" ]; then
+    releaseApiUrl="${releaseApiUrl}/${targetRelease}"
+  else
+    releaseApiUrl="${releaseApiUrl}/tags/${targetRelease}"
+  fi
+
+  if test -z ${releaseInfo+x}; then
+    _check_base_required_packages
+    export releaseInfo="`wget -O - -q $releaseApiUrl`"
+    info "$releaseApiUrl"
+    if [ $? -gt 0 ] || [ "$releaseInfo" == "" ]; then die "Failed to get updated release from GitHub"; fi
+    debug "`jq . <<< "$releaseInfo"`"
+  fi
+}
+
+function selfupdate_checkForNewRelease() {
+  #if test -z ${DIST+x}; then
+  #  log "Running in local mode, skipping release check"
+  #  return 1
+  #fi
+  _selfupdate_refreshReleaseInfo
+  releaseTag="`jq '.tag_name' -r <<<"$releaseInfo"`"
+  releaseVersion="`_parseVersion "$releaseTag"`"
+  if [ "$releaseVersion" == "" ]; then die "Unable to parse release version, cannot continue"; fi
+  localVersion="`_parseVersion "$VERSION"`"
+  debug "Current Version: $localVersion"
+  debug "Latest Version: $releaseVersion"
+  if [ "$localVersion" == "$releaseVersion" ]; then
+    info "$localVersion is already up to date"
+    return 1
+  fi
+  info "Updating from $localVersion to $releaseVersion"
+
+  return 0
+}
+
+function _parseVersion() {
+  rawVersion=$1
+  sed -E 's/^v?(.*)$/\1/' <<< $rawVersion
+}
+
+function info_getReleaseDetails() {
+  changeLog=$(jq '.body' <<<$releaseInfo)
+  debug "$changeLog"
+}
+
+function selfupdate_doUpgrade() {
+  info "Starting Self Update"
+  releaseVersion=$(jq '.tag_name' -r <<<$releaseInfo)
+  scriptAsset="`jq '.assets[] | select(.name=="plextrac") | .' <<<"$releaseInfo"`"
+  scriptAssetSHA256SUM="`jq '.assets[] | select(.name=="sha256sum-plextrac.txt") | .' <<<"$releaseInfo"`"
+  if [ "$scriptAsset" == "" ]; then die "Failed to find release asset for ${releaseVersion}"; fi
+
+  debug "Downloading updated script from $scriptAsset"
+  tempDir=`mktemp -d -t plextrac-$releaseVersion-XXX`
+  debug "Tempdir: $tempDir"
+  target="${PLEXTRAC_HOME}/.local/bin/plextrac"
+
+  debug "`wget $releaseApiUrl -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
+  debug "`wget -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAsset) 2>&1 || error "Release download failed"`"
+  debug "`wget -O $tempDir/$(jq -r '.name, " ", .browser_download_url' <<<$scriptAssetSHA256SUM) 2>&1 || error "Checksum download failed"`"
+  checksumoutput=`pushd $tempDir >/dev/null && sha256sum -c sha256sum-plextrac.txt 2>&1` || die "checksum failed: $checksumoutput"
+  debug "$checksumoutput"
+  tempScript="$tempDir/plextrac"
+  chmod a+x $tempScript && debug "`$tempScript help 2>&1 | grep -i "plextrac management utility" 2>&1`" || die "Invalid script $tempScript"
+
+  info "Successfully downloaded & tested update"
+  log "Backing up previous release & installing $releaseVersion"
+  debug "Moving $tempScript to $target"
+  debug "`cp -vb --suffix=.bak $tempScript "$target" 2>&1`"
+  debug `chmod -v a-x "${target}.bak" || true`
+  debug `chmod -v a+x $target`
+  info "Upgrade complete"
+
+  debug "Initially called '$ProgName' w/ args '$_INITIAL_CMD_ARGS'"
+  debug "Script Backup: `sha256sum ${target}.bak`"
+  debug "Script Update: `sha256sum $target`"
+
+  if [ "${SKIP_APP_UPDATE:-false}" == "true" ]; then
+    exit 0
+  fi
+  eval "UTIL_UPDATED=1 $ProgName $_INITIAL_CMD_ARGS"
+  exit $?
+}
+
+
+function mod_util-update() {
+  if [ "${AIRGAPPED:-false}" == "true" ]; then
+    info "AIRGAPPED mode enabled, skipping utility update"
+    return 0
+  fi
+  info "Checking for updates to the PlexTrac Management Utility"
+  SKIP_APP_UPDATE=true
+  if selfupdate_checkForNewRelease; then
+    event__log_activity "update:upgrade-utility" "${releaseInfo}"
+    selfupdate_doUpgrade
+    die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
+    exit 1 # just in case, previous line should already exit
+  fi
+}
+# Need this as a global variable
+upgrade_path=()
+
+function upgrade_time_estimate() {
+  debug "upgrade_time_estimate function running"
+  if (( ${#upgrade_path[@]} >= 1 ))
+    then
+      time_estimate=$(echo "${#upgrade_path[@]} * 15" | bc -l)
+      error "Detected ${#upgrade_path[@]} upgrade(s). Each upgrade can take up to 15 minutes to pull the new version, and update the running application. Given the number of upgrades, the projected upgade time is $time_estimate minutes. Are you sure you want to continue?"
+      get_user_approval
+  fi
+}
+
+function upgrade_warning() {
+  debug "upgrade_warning function running"
+  error "Its been detected that you're on a pinned version of PlexTrac other than stable. Beginning with version 2.0, PlexTrac is going to require contiguous updates to ensure code migrations are successful and enable us to continue to move forward with improving the platform. We recommend updating to the next minor version available compared to the running version $running_backend_version"
+  error "Are you sure you want to update to $UPGRADE_STRATEGY?"
+  get_user_approval
+}
+
+function version_check() {
+  #######################
+  ### -- Running Version
+  #######################
+  ## LOGIC: RunVer
+  debug "Running Version"
+  # Get running version of Backend
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    running_backend_version="$(for i in $(podman ps -a -q --filter name=plextracapi); do podman inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+  else
+    running_backend_version="$(for i in $(compose_client ps plextracapi -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+  fi
+
+  # CONDITION: plextracapi IS/NOT RUNNING
+  # Validate that the app is running and returning a version
+  if [[ $running_backend_version != "" ]]; then
+    debug "RunVer: plextracapi is running and is version $running_backend_version"
+    # Get the major and minor version from the running containers
+    maj_ver=$(echo "$running_backend_version" | cut -d '.' -f1)
+    min_ver=$(echo "$running_backend_version" | cut -d '.' -f2)
+    running_ver=$(echo $running_backend_version | awk -F. '{print $1"."$2}')
+    running_ver="$maj_ver.$min_ver"
+  else
+    debug "RunVer: plextracapi is NOT running"
+    die "plextracapi service isn't running. Please run 'plextrac start' and re-run the update"
+  fi
+
+  #######################
+  ### -- Pinned Version
+  #######################
+  ## LOGIC: PinVer
+  debug "Pinned Version"
+  # Check what the pinned version (UPGRADE_STRATEGY) is and see if a contiguous update will apply
+  ## IF STABLE
+  if [[ "$UPGRADE_STRATEGY" == "stable" ]]; then
+    debug "PinVer: Running Stable!"
+
+    #######################
+    ### -- Latest Stable Version
+    #######################
+
+    # Set vars
+    breaking_ver="2.0"
+    latest_ver=""
+    page=1
+
+    # Set the needed JWT Token to interact with the DockerHUB API
+    JWT_TOKEN=$(wget --header="Content-Type: application/json" --post-data='{"username": "'$DOCKER_HUB_USER'", "password": "'$DOCKER_HUB_KEY'"}' -O - https://hub.docker.com/v2/users/login/ -q | jq -r .token)
+    if [[ -n "$JWT_TOKEN" ]]; then
+        # Get latest from DockerHUB and assign to array
+        while [ $page -lt 600 ]; do
+          latest_ver=($(wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true))
+          page=$(($page + 1))
+          debug "Latest_Stable Version: ${latest_ver[0]}"
+          if [ -n "$latest_ver" ]; then break; fi
+        done
+        # Set latest_ver to first index item which should be the "latest"
+        latest_ver="${latest_ver[0]}"
+
+        ## LOGIC: LATEST_STABLE
+        # IF LATEST_STABLE <= 2.0
+        #if (( $(echo "$latest_ver <= $breaking_ver" | bc -l) ))
+        if [ $(printf "%03d%03d%03d%03d" $(echo "${latest_ver}" | tr '.' ' ')) -le $(printf "%03d%03d%03d%03d" $(echo "${breaking_ver}" | tr '.' ' ')) ]
+          then
+            debug "Updating normally to $latest_ver without warning"
+            contiguous_update=false
+
+          # IF LATEST_STABLE > 2.0
+          else
+            debug "Stable version is greater than $breaking_ver. Running contiguous update"
+            contiguous_update=true
+        fi
+      # If the JWT token is empty for on-prem envs
+      else
+        contiguous_update=false
+        error "Unable to validate versioned images from DockerHub. Likely On-prem or Air-gapped"
+        msg "-------"
+        error "Beginning with version 2.0, PlexTrac is going to require contiguous updates to ensure code migrations are successful and enable us to continue to move forward with improving the platform. We recommend updating to the next minor version available compared to the running version $running_backend_version"
+        error "Are you sure you want to update to $UPGRADE_STRATEGY? (y/n)"
+        get_user_approval
+    fi
+
+    upstream_tags=()
+    page=1
+    if [ "$contiguous_update" = true ]
+      then
+        # Get upstream tag list
+        debug "Looking for Running version $running_ver or Breaking version $breaking_ver"
+        while [ $page -lt 600 ]
+          do
+            upstream_tags+=(`wget --header="Authorization: JWT "${JWT_TOKEN} -O - "https://hub.docker.com/v2/repositories/plextrac/plextracapi/tags/?page=$page&page_size=1000" -q | jq -r .results[].name | grep -E '(^[0-9]\.[0-9]*$)' || true`)
+            # Get the available versions from DockerHub and save to array
+            if [[ $(echo "${upstream_tags[@]}" | grep "$running_ver" || true) ]]
+              then
+                  debug "Found running version $running_backend_version"; break;
+            elif [[ $(echo "${upstream_tags[@]}" | grep "$breaking_ver" || true) ]]
+              then
+                  debug "Found breaking version $breaking_ver"; break;
+            fi
+            page=$[$page+1]
+        done
+
+        # Remove the running version from the Upgrade path
+        for i in "${!upstream_tags[@]}"
+          do
+            #if (( $(echo "${upstream_tags[i]} <= $running_ver" | bc -l) ))
+            if [ $(printf "%03d%03d%03d%03d" $(echo "${upstream_tags[i]}" | tr '.' ' ')) -le $(printf "%03d%03d%03d%03d" $(echo "${running_ver}" | tr '.' ' ')) ]
+              then
+                debug "correcting upstream_tags to remove running version and versions prior"
+                unset 'upstream_tags[i]'
+            fi
+        done
+        new_array=("")
+        for i in "${!upstream_tags[@]}"; do
+            new_array+=( "${upstream_tags[i]}" )
+        done
+        if [ "${#new_array[@]}" -gt 0 ]; then
+                upstream_tags=("${new_array[@]}")
+                unset new_array
+        else
+                upstream_tags=("")
+        fi
+        # This grabs the first element in the version sorted list which should always be the highest version available on DockerHub; this should match stable's version"
+        if [[ -n "${upstream_tags[*]}" ]]; then
+          debug "Setting latest upstream version var to array first index"
+          # Sorting the tags to ensure we grab the latest and remove empty objects from the previous unset commands
+          sorted_upstream_tags=($(sort -V <<<"${upstream_tags[*]}"))
+          latest_ver="${sorted_upstream_tags[0]}"
+        else
+          debug "Setting latest to running version"
+          latest_ver=$running_ver
+          # Set Contiguous updates to false here to ensure that since the app is on latest version, it still attempts to pull patch version updates
+          contiguous_update=false
+        fi
+        if [[ "${upstream_tags[@]}" != "" ]]; then
+                # Sort the upstream tags weve chosen as the upgrade path
+                IFS=$'\n' upgrade_path=($(sort -V <<<"${upstream_tags[*]}"))
+                # Reset IFS to default value
+                IFS=$' \t\n'
+        else
+                upgrade_path=("")
+        fi
+
+        debug "------------"
+        debug "Listing version information"
+        debug "------------"
+        debug "Upgrade Strategy: $UPGRADE_STRATEGY"
+        debug "Running Version: $running_ver"
+        debug "Breaking Version: $breaking_ver"
+        debug "Upstream Versions: [${upstream_tags[*]}]"
+        debug "Latest Version: $latest_ver"
+        debug "Upgrade path: [${upgrade_path[*]}]"
+        debug "Number of upgrades: ${#upgrade_path[@]}"
+    fi
+  ## IF NOT STABLE
+  else
+    # Running Pinned Version; Normal update with warning
+    debug "PinVer: Running as a non-stable, pinned version -- proceed with warning and update"
+    contiguous_update=false
+    upgrade_warning
+  fi
+}
+function z_end_of_plextrac() {
+  echo ""
+}
+
+DIST=true
+DOCKER_COMPOSE_ENCODED=c2VydmljZXM6CiAgcGxleHRyYWNhcGk6CiAgICBkZXBsb3k6CiAgICAgIHJlcGxpY2FzOiAzCiAgICAgIHVwZGF0ZV9jb25maWc6CiAgICAgICAgcGFyYWxsZWxpc206IDEKICAgIGRlcGVuZHNfb246CiAgICAtIHBsZXh0cmFjZGIKICAgIC0gcmVkaXMKICAgIC0gcG9zdGdyZXMKICAgIGVudmlyb25tZW50OgogICAgICBTVEFSVFVQX01PREU6IEFQSV9PTkxZCiAgICAgIENMT1VEX1NUT1JBR0VfRU5EUE9JTlQ6ICR7Q0xPVURfU1RPUkFHRV9FTkRQT0lOVDotbWluaW99CiAgICAgIENMT1VEX1NUT1JBR0VfU1NMOiAke0NMT1VEX1NUT1JBR0VfU1NMOi1mYWxzZX0KICAgIGVudl9maWxlOgogICAgLSAuZW52CiAgICBpbWFnZTogInBsZXh0cmFjL3BsZXh0cmFjYXBpOiR7VVBHUkFERV9TVFJBVEVHWTotc3RhYmxlfSIKICAgIHJlc3RhcnQ6IGFsd2F5cwogICAgdm9sdW1lczoKICAgIC0gdXBsb2FkczovdXNyL3NyYy9wbGV4dHJhYy1hcGkvdXBsb2FkczpydwogICAgLSBkYXRhbGFrZS1tYWludGFpbmVyLWtleXM6L3Vzci9zcmMvcGxleHRyYWMtYXBpL2tleXMvZ2NwOnIKICAgIC0gbG9jYWxlc092ZXJyaWRlOi91c3Ivc3JjL3BsZXh0cmFjLWFwaS9sb2NhbGVzT3ZlcnJpZGU6cncKICAgIGhlYWx0aGNoZWNrOgogICAgICB0ZXN0OgogICAgICAjIEhhbmRsZSBjVVJMIGJlaW5nIHJlbW92ZWQgZHVlIHRvIHVwc3RyZWFtIHZ1bG4KICAgICAgLSAnQ01ELVNIRUxMJwogICAgICAtICdweXRob24zIC0gPDwgRU9GJwogICAgICAtICdpbXBvcnQgcmVxdWVzdHMnCiAgICAgIC0gJ3ByaW50KHJlcXVlc3RzLmdldCgiaHR0cDovLzEyNy4wLjAuMTo0MzUwL2FwaS92Mi9oZWFsdGgvbGl2ZSIpLmpzb24oKSknCiAgICAgIC0gJ0VPRicKCgogIGNvdWNoYmFzZS1taWdyYXRpb25zOgogICAgcHJvZmlsZXM6CiAgICAtICJkYXRhYmFzZS1taWdyYXRpb25zIgogICAgZGVwZW5kc19vbjoKICAgIC0gcGxleHRyYWNkYgogICAgLSByZWRpcwogICAgLSBwb3N0Z3JlcwogICAgaW1hZ2U6ICJwbGV4dHJhYy9wbGV4dHJhY2FwaToke1VQR1JBREVfU1RSQVRFR1k6LXN0YWJsZX0iCiAgICB2b2x1bWVzOgogICAgLSB1cGxvYWRzOi91c3Ivc3JjL3BsZXh0cmFjLWFwaS91cGxvYWRzOnJ3CiAgICBlbnRyeXBvaW50OiAiIgogICAgY29tbWFuZDogfAogICAgICBzaCAtYwogICAgICAgICJucG0gcnVuIG1haW50ZW5hbmNlOmVuYWJsZSAmJgogICAgICAgICBucG0gcnVuIHBnOnN1cGVydXNlcjpib290c3RyYXAgLS1pZi1wcmVzZW50ICYmCiAgICAgICAgIG5wbSBydW4gcGc6bWlncmF0ZSAmJgogICAgICAgICBucG0gcnVuIGRiOm1pZ3JhdGUgJiYKICAgICAgICAgbnBtIHJ1biBwZzpldGwgdXAgYWxsICYmCiAgICAgICAgIG5wbSBydW4gbWFpbnRlbmFuY2U6ZGlzYWJsZSIKICAgIGVudmlyb25tZW50OgogICAgICBDT1VDSEJBU0VfVVJMOiAke0NPVUNIQkFTRV9VUkw6LWh0dHA6Ly9wbGV4dHJhY2RifQogICAgICBDQl9BUElfUEFTUzogJHtDQl9BUElfUEFTU30KICAgICAgQ0JfQVBJX1VTRVI6ICR7Q0JfQVBJX1VTRVJ9CiAgICAgIFJFRElTX0NPTk5FQ1RJT05fU1RSSU5HOiAke1JFRElTX0NPTk5FQ1RJT05fU1RSSU5HOi1yZWRpc30KICAgICAgUkVESVNfUEFTU1dPUkQ6ICR7UkVESVNfUEFTU1dPUkQ6P2Vycn0KICAgICAgUEdfSE9TVDogJHtQR19IT1NUOi1wb3N0Z3Jlc30KICAgICAgUEdfTUlHUkFURV9QQVRIOiAvdXNyL3NyYy9wbGV4dHJhYy1hcGkKICAgICAgUEdfU1VQRVJfVVNFUjogJHtQT1NUR1JFU19VU0VSOj9lcnJ9CiAgICAgIFBHX1NVUEVSX1BBU1NXT1JEOiAke1BPU1RHUkVTX1BBU1NXT1JEOj9lcnJ9CiAgICAgIFBHX0NPUkVfQURNSU5fUEFTU1dPUkQ6ICR7UEdfQ09SRV9BRE1JTl9QQVNTV09SRDo/ZXJyfQogICAgICBQR19DT1JFX0FETUlOX1VTRVI6ICR7UEdfQ09SRV9BRE1JTl9VU0VSOj9lcnJ9CiAgICAgIFBHX0NPUkVfREI6ICR7UEdfQ09SRV9EQjo/ZXJyfQogICAgICBQR19SVU5CT09LU19BRE1JTl9QQVNTV09SRDogJHtQR19SVU5CT09LU19BRE1JTl9QQVNTV09SRDo/ZXJyfQogICAgICBQR19SVU5CT09LU19BRE1JTl9VU0VSOiAke1BHX1JVTkJPT0tTX0FETUlOX1VTRVI6P2Vycn0KICAgICAgUEdfUlVOQk9PS1NfUldfUEFTU1dPUkQ6ICR7UEdfUlVOQk9PS1NfUldfUEFTU1dPUkQ6P2Vycn0KICAgICAgUEdfUlVOQk9PS1NfUldfVVNFUjogJHtQR19SVU5CT09LU19SV19VU0VSOj9lcnJ9CiAgICAgIFBHX1JVTkJPT0tTX0RCOiAke1BHX1JVTkJPT0tTX0RCOj9lcnJ9CiAgICAgIFBHX0NLRURJVE9SX0FETUlOX1BBU1NXT1JEOiAke1BHX0NLRURJVE9SX0FETUlOX1BBU1NXT1JEOj9lcnJ9CiAgICAgIFBHX0NLRURJVE9SX0FETUlOX1VTRVI6ICR7UEdfQ0tFRElUT1JfQURNSU5fVVNFUjo/ZXJyfQogICAgICBQR19DS0VESVRPUl9EQjogJHtQR19DS0VESVRPUl9EQjo/ZXJyfQogICAgICBQR19DS0VESVRPUl9ST19QQVNTV09SRDogJHtQR19DS0VESVRPUl9ST19QQVNTV09SRDo/ZXJyfQogICAgICBQR19DS0VESVRPUl9ST19VU0VSOiAke1BHX0NLRURJVE9SX1JPX1VTRVI6P2Vycn0KICAgICAgUEdfQ0tFRElUT1JfUldfUEFTU1dPUkQ6ICR7UEdfQ0tFRElUT1JfUldfUEFTU1dPUkQ6P2Vycn0KICAgICAgUEdfQ0tFRElUT1JfUldfVVNFUjogJHtQR19DS0VESVRPUl9SV19VU0VSOj9lcnJ9CiAgICAgIFBHX1RFTkFOVFNfV1JJVEVfTU9ERTogJHtQR19URU5BTlRTX1dSSVRFX01PREU6LWNvdWNoYmFzZV9vbmx5fQogICAgICBQR19URU5BTlRTX1JFQURfTU9ERTogJHtQR19URU5BTlRTX1JFQURfTU9ERTotY291Y2hiYXNlX29ubHl9CiAgICAgIENLRURJVE9SX01JR1JBVEU6ICR7Q0tFRElUT1JfTUlHUkFURTotfQogICAgICBDS0VESVRPUl9TRVJWRVJfQ09ORklHOiAke0NLRURJVE9SX1NFUlZFUl9DT05GSUc6LX0KICAgICAgUEdfQ09SRV9ST19QQVNTV09SRDogJHtQR19DT1JFX1JPX1BBU1NXT1JEOj9lcnJ9CiAgICAgIFBHX0NPUkVfUk9fVVNFUjogJHtQR19DT1JFX1JPX1VTRVI6P2Vycn0KICAgICAgUEdfQ09SRV9SV19QQVNTV09SRDogJHtQR19DT1JFX1JXX1BBU1NXT1JEOj9lcnJ9CiAgICAgIFBHX0NPUkVfUldfVVNFUjogJHtQR19DT1JFX1JXX1VTRVI6P2Vycn0KCiAgcGxleHRyYWNkYjoKICAgIGVudmlyb25tZW50OgogICAgICBBRE1JTl9FTUFJTDogIiR7QURNSU5fRU1BSUw6LX0iCiAgICAgIEJBQ0tVUF9ESVI6ICIke0JBQ0tVUF9ESVItfSIKICAgICAgQ0JfQURNSU5fUEFTUzogIiR7Q0JfQURNSU5fUEFTUzo/ZXJyfSIKICAgICAgQ0JfQURNSU5fVVNFUjogIiR7Q0JfQURNSU5fVVNFUjo/ZXJyfSIKICAgICAgQ0JfQVBJX1BBU1M6ICIke0NCX0FQSV9QQVNTOj9lcnJ9IgogICAgICBDQl9BUElfVVNFUjogIiR7Q0JfQVBJX1VTRVI6P2Vycn0iCiAgICAgIENCX0JBQ0tVUF9QQVNTOiAiJHtDQl9CQUNLVVBfUEFTUzo/ZXJyfSIKICAgICAgQ0JfQkFDS1VQX1VTRVI6ICIke0NCX0JBQ0tVUF9VU0VSOj9lcnJ9IgogICAgICBDQl9CVUNLRVQ6ICIke0NCX0JVQ0tFVC19IgogICAgICBidWNrZXQ6ICIke2J1Y2tldC19IgogICAgaW1hZ2U6IHBsZXh0cmFjL3BsZXh0cmFjZGI6Ni41LjEKICAgIHBvcnRzOgogICAgLSAxMjcuMC4wLjE6ODA5MTo4MDkxL3RjcAogICAgLSAxMjcuMC4wLjE6ODA5Mjo4MDkyL3RjcAogICAgLSAxMjcuMC4wLjE6ODA5Mzo4MDkzL3RjcAogICAgLSAxMjcuMC4wLjE6ODA5NDo4MDk0L3RjcAogICAgcmVzdGFydDogYWx3YXlzCiAgICB2b2x1bWVzOgogICAgLSBkYmRhdGE6L29wdC9jb3VjaGJhc2UvdmFyOnJ3CiAgICAtIGNvdWNoYmFzZS1iYWNrdXBzOi9iYWNrdXBzOnJ3CiAgICBoZWFsdGhjaGVjazoKICAgICAgdGVzdDoKICAgICAgLSAiQ01ELVNIRUxMIgogICAgICAtICJjdXJsIC0taGVhZCAtLWZhaWwgLVggR0VUIC11ICRDQl9BRE1JTl9VU0VSOiRDQl9BRE1JTl9QQVNTIC1IICdDb250ZW50LVR5cGU6IGFwcGxpY2F0aW9uL2pzb24nIGh0dHA6Ly9sb2NhbGhvc3Q6ODA5MS9wb29scy9kZWZhdWx0L2J1Y2tldHMvcmVwb3J0TWUgfHwgZXhpdCAxIgogICAgICBpbnRlcnZhbDogMTBzCiAgICAgIHJldHJpZXM6IDYKICAgICAgc3RhcnRfcGVyaW9kOiAzMHMKCiAgcGxleHRyYWNuZ2lueDoKICAgIGltYWdlOiAicGxleHRyYWMvcGxleHRyYWNuZ2lueDoke1VQR1JBREVfU1RSQVRFR1k6LXN0YWJsZX0iCiAgICBlbnZpcm9ubWVudDoKICAgICAgQ0xJRU5UX0RPTUFJTl9OQU1FOiAiJHtDTElFTlRfRE9NQUlOX05BTUU6P2Vycn0iCiAgICAgIEVOQUJMRV9IU1RTOiAiJHtFTkFCTEVfSFNUUzotfSIKICAgICAgSElERV9DT1BZUklHSFQ6ICIke0hJREVfQ09QWVJJR0hULX0iCiAgICAgIEhJREVfUEFHRV9USVRMRTogIiR7SElERV9QQUdFX1RJVExFLX0iCiAgICAgIExFVFNfRU5DUllQVF9FTUFJTDogIiR7TEVUU19FTkNSWVBUX0VNQUlMOi19IgogICAgICBPVkVSUklERV9TRU5UUllfRlJPTlRFTkRfRU5BQkxFRDogIiR7T1ZFUlJJREVfU0VOVFJZX0ZST05URU5EX0VOQUJMRUQtfSIKICAgICAgVVNFX0NVU1RPTV9DRVJUOiAiJHtVU0VfQ1VTVE9NX0NFUlQtfSIKICAgICAgQ0tFRElUT1JfTUlHUkFURTogIiR7Q0tFRElUT1JfTUlHUkFURTotfSIKICAgICAgV0FGX0VOQUJMRUQ6ICIke1dBRl9FTkFCTEVEOi10cnVlfSIKICAgICAgVVBTVFJFQU1fQ0xPVURfQlVDS0VUOiAke1VQU1RSRUFNX0NMT1VEX0JVQ0tFVDotY2xvdWR9CiAgICAgIFVQU1RSRUFNX0NMT1VEX1BSRUZJWDogJHtVUFNUUkVBTV9DTE9VRF9QUkVGSVg6LXVwbG9hZHN9CiAgICAgIE1JTklPX0VOQUJMRUQgOiAke01JTklPX0VOQUJMRUQ6LXRydWV9CiAgICAgIFVQU1RSRUFNX0NMT1VEX0hPU1Q6ICR7VVBTVFJFQU1fQ0xPVURfSE9TVDotbWluaW99CiAgICBwb3J0czoKICAgIC0gMC4wLjAuMDo4MDo4MC90Y3AKICAgIC0gMC4wLjAuMDo0NDM6NDQzL3RjcAogICAgcmVzdGFydDogYWx3YXlzCiAgICB2b2x1bWVzOgogICAgLSBsZXRzZW5jcnlwdDovZXRjL2xldHNlbmNyeXB0OnJ3CiAgICAtICR7UExFWFRSQUNfSE9NRX0vdm9sdW1lcy9uYXhzaS13YWYvY3VzdG9tZXJfY3VyYXRlZC5ydWxlczovZXRjL25naW54L2NvbmYuZC9jdXN0b21lcl9jdXJhdGVkLnJ1bGVzOloKICAgIGhlYWx0aGNoZWNrOgogICAgICB0ZXN0OgogICAgICAgIC0gIkNNRC1TSEVMTCIKICAgICAgICAtICdlY2hvICJHRVQgLyIgfCBvcGVuc3NsIHNfY2xpZW50IC1xdWlldCAtY29ubmVjdCAxMjcuMC4wLjE6NDQzJwogICAgICBpbnRlcnZhbDogNXMKICAgICAgcmV0cmllczogOAogICAgICBzdGFydF9wZXJpb2Q6IDVzCiAgICBuZXR3b3JrczoKICAgICAgZGVmYXVsdDoKICAgICAgICBhbGlhc2VzOgogICAgICAgICAgLSBja2VkaXRvcgoKICBub3RpZmljYXRpb24tZW5naW5lOgogICAgaW1hZ2U6ICJwbGV4dHJhYy9wbGV4dHJhY2FwaToke1VQR1JBREVfU1RSQVRFR1k6LXN0YWJsZX0iCiAgICBkZXBsb3k6CiAgICAgIHJlcGxpY2FzOiAxCiAgICBkZXBlbmRzX29uOgogICAgLSBwbGV4dHJhY2RiCiAgICAtIHJlZGlzCiAgICByZXN0YXJ0OiBhbHdheXMKICAgIGluaXQ6IFRydWUKICAgIGVudmlyb25tZW50OgogICAgICBDQl9BUElfUEFTUzogIiR7Q0JfQVBJX1BBU1M6P2Vycn0iCiAgICAgIENCX0FQSV9VU0VSOiAiJHtDQl9BUElfVVNFUjo/ZXJyfSIKICAgICAgQ09VQ0hCQVNFX1VSTDogImh0dHA6Ly9wbGV4dHJhY2RiIgogICAgICBMT0dfTEVWRUw6ICIke0xPR19MRVZFTDotaW5mb30iCiAgICAgIFJFRElTX0NPTk5FQ1RJT05fU1RSSU5HOiAiJHtSRURJU19DT05ORUNUSU9OX1NUUklORzotcmVkaXN9IgogICAgICBSRURJU19QQVNTV09SRDogIiR7UkVESVNfUEFTU1dPUkQ6P2Vycn0iCiAgICAgIEFQSV9JTlRFR1JBVElPTl9BVVRIX0NPTkZJR19OT1RJRklDQVRJT05fU0VSVklDRTogIiR7QVBJX0lOVEVHUkFUSU9OX0FVVEhfQ09ORklHX05PVElGSUNBVElPTl9TRVJWSUNFOj9lcnJ9IgogICAgICBJTlRFUk5BTF9BUElfS0VZX1NIQVJFRDogIiR7SU5URVJOQUxfQVBJX0tFWV9TSEFSRUQ6P2Vycn0iCiAgICAgIENPUkVfQVBJX0JBU0VfVVJMOiAiJHtDT1JFX0FQSV9CQVNFX1VSTDo/ZXJyfSIKICAgICAgQ1RFTV9BUElfQkFTRV9VUkw6ICIke0NURU1fQVBJX0JBU0VfVVJMOj9lcnJ9IgogICAgaGVhbHRoY2hlY2s6CiAgICAgIHRlc3Q6CiAgICAgIC0gIkNNRCIKICAgICAgLSAibnBtIgogICAgICAtICJydW4iCiAgICAgIC0gImhlYWx0aGNoZWNrOm5vdGlmaWNhdGlvbi1lbmdpbmUiCiAgICAgIC0gInJlYWRpbmVzcyIKICAgICAgLSAiMTAiCiAgICAgIC0gIi0tIgogICAgICAtICItLW5vLXVwZGF0ZS1ub3RpZmllciIKICAgICAgaW50ZXJ2YWw6IDVzCiAgICAgIHRpbWVvdXQ6IDVzCiAgICAgIHJldHJpZXM6IDMKICAgICAgc3RhcnRfcGVyaW9kOiA1cwogICAgZW50cnlwb2ludDogbnBtIHJ1bgogICAgY29tbWFuZDogInN0YXJ0Om5vdGlmaWNhdGlvbi1lbmdpbmUiCgogIG5vdGlmaWNhdGlvbi1zZW5kZXI6CiAgICBpbWFnZTogInBsZXh0cmFjL3BsZXh0cmFjYXBpOiR7VVBHUkFERV9TVFJBVEVHWTotc3RhYmxlfSIKICAgIGRlcGxveToKICAgICAgcmVwbGljYXM6IDEKICAgIGRlcGVuZHNfb246CiAgICAtIHBsZXh0cmFjZGIKICAgIC0gcmVkaXMKICAgIHJlc3RhcnQ6IGFsd2F5cwogICAgaW5pdDogVHJ1ZQogICAgZW52aXJvbm1lbnQ6CiAgICAgIENCX0FQSV9QQVNTOiAiJHtDQl9BUElfUEFTUzo/ZXJyfSIKICAgICAgQ0JfQVBJX1VTRVI6ICIke0NCX0FQSV9VU0VSOj9lcnJ9IgogICAgICBDTElFTlRfRE9NQUlOX05BTUU6ICR7Q0xJRU5UX0RPTUFJTl9OQU1FOj9lcnJ9CiAgICAgIENPVUNIQkFTRV9VUkw6ICJodHRwOi8vcGxleHRyYWNkYiIKICAgICAgTE9HX0xFVkVMOiAke0xPR19MRVZFTDotaW5mb30KICAgICAgTUFJTEVSX1NFQ1VSRTogJHtNQUlMRVJfU0VDVVJFOi19CiAgICAgIE5PVElGSUNBVElPTl9EUllfUlVOOiAke05PVElGSUNBVElPTl9EUllfUlVOOi19CiAgICAgIFJFRElTX0NPTk5FQ1RJT05fU1RSSU5HOiAiJHtSRURJU19DT05ORUNUSU9OX1NUUklORzotcmVkaXN9IgogICAgICBSRURJU19QQVNTV09SRDogIiR7UkVESVNfUEFTU1dPUkQ6P2Vycn0iCiAgICAgIHNlcnZpY2VDb25maWc6ICR7c2VydmljZUNvbmZpZzotfQogICAgICBBUElfSU5URUdSQVRJT05fQVVUSF9DT05GSUdfTk9USUZJQ0FUSU9OX1NFUlZJQ0U6ICIke0FQSV9JTlRFR1JBVElPTl9BVVRIX0NPTkZJR19OT1RJRklDQVRJT05fU0VSVklDRTo/ZXJyfSIKICAgICAgSU5URVJOQUxfQVBJX0tFWV9TSEFSRUQ6ICIke0lOVEVSTkFMX0FQSV9LRVlfU0hBUkVEOj9lcnJ9IgogICAgICBDT1JFX0FQSV9CQVNFX1VSTDogIiR7Q09SRV9BUElfQkFTRV9VUkw6P2Vycn0iCiAgICAgIENURU1fQVBJX0JBU0VfVVJMOiAiJHtDVEVNX0FQSV9CQVNFX1VSTDo/ZXJyfSIKICAgIGhlYWx0aGNoZWNrOgogICAgICB0ZXN0OgogICAgICAtICJDTUQiCiAgICAgIC0gIm5wbSIKICAgICAgLSAicnVuIgogICAgICAtICJoZWFsdGhjaGVjazpub3RpZmljYXRpb24tc2VuZGVyIgogICAgICAtICJyZWFkaW5lc3MiCiAgICAgIC0gIi0tIgogICAgICAtICItLW5vLXVwZGF0ZS1ub3RpZmllciIKICAgIGVudHJ5cG9pbnQ6IG5wbSBydW4KICAgIGNvbW1hbmQ6ICJzdGFydDpub3RpZmljYXRpb24tc2VuZGVyIgoKICBkYXRhbGFrZS1tYWludGFpbmVyOgogICAgaW1hZ2U6ICJwbGV4dHJhYy9wbGV4dHJhY2FwaToke1VQR1JBREVfU1RSQVRFR1k6LXN0YWJsZX0iCiAgICBkZXBsb3k6CiAgICAgIHJlcGxpY2FzOiAwCiAgICBkZXBlbmRzX29uOgogICAgLSBwb3N0Z3JlcwogICAgLSBwbGV4dHJhY2RiCiAgICAtIHJlZGlzCiAgICByZXN0YXJ0OiBhbHdheXMKICAgIGVudmlyb25tZW50OgogICAgICBDQl9BUElfUEFTUzogIiR7Q0JfQVBJX1BBU1M6P2Vycn0iCiAgICAgIENCX0FQSV9VU0VSOiAiJHtDQl9BUElfVVNFUjo/ZXJyfSIKICAgICAgQ0xJRU5UX0RPTUFJTl9OQU1FOiAke0NMSUVOVF9ET01BSU5fTkFNRTo/ZXJyfQogICAgICBDT1VDSEJBU0VfVVJMOiAiaHR0cDovL3BsZXh0cmFjZGIiCiAgICAgIEdDUF9EQVRBTEFLRV9TQV9LRVlfUEFUSDogIiR7R0NQX0RBVEFMQUtFX1NBX0tFWV9QQVRIOi0vdXNyL3NyYy9wbGV4dHJhYy1hcGkva2V5cy9nY3AvZ2NwLWRhdGFsYWtlLXNhLWtleS5qc29ufSIKICAgICAgTE9HX0xFVkVMOiAke0xPR19MRVZFTDotaW5mb30KICAgICAgUkVESVNfQ09OTkVDVElPTl9TVFJJTkc6ICIke1JFRElTX0NPTk5FQ1RJT05fU1RSSU5HOi1yZWRpc30iCiAgICAgIFJFRElTX1BBU1NXT1JEOiAiJHtSRURJU19QQVNTV09SRDo/ZXJyfSIKICAgICAgUEdfQ09SRV9EQjogJHtQR19DT1JFX0RCOj9lcnJ9CiAgICAgIFBHX0NPUkVfUk9fUEFTU1dPUkQ6ICR7UEdfQ09SRV9ST19QQVNTV09SRDo/ZXJyfQogICAgICBQR19DT1JFX1JPX1VTRVI6ICR7UEdfQ09SRV9ST19VU0VSOj9lcnJ9CiAgICAgIFBHX0NPUkVfUldfUEFTU1dPUkQ6ICR7UEdfQ09SRV9SV19QQVNTV09SRDo/ZXJyfQogICAgICBQR19DT1JFX1JXX1VTRVI6ICR7UEdfQ09SRV9SV19VU0VSOj9lcnJ9CiAgICBoZWFsdGhjaGVjazoKICAgICAgdGVzdDoKICAgICAgLSAiQ01EIgogICAgICAtICJucG0iCiAgICAgIC0gInJ1biIKICAgICAgLSAiaGVhbHRoY2hlY2s6ZGF0YWxha2UtbWFpbnRhaW5lciIKICAgICAgLSAibGl2ZW5lc3MiCiAgICAgIC0gIi0tIgogICAgICAtICItLW5vLXVwZGF0ZS1ub3RpZmllciIKICAgIGVudHJ5cG9pbnQ6IG5wbSBydW4KICAgIGNvbW1hbmQ6ICJzdGFydDpkYXRhbGFrZS1tYWludGFpbmVyIgogICAgdm9sdW1lczoKICAgIC0gZGF0YWxha2UtbWFpbnRhaW5lci1rZXlzOi91c3Ivc3JjL3BsZXh0cmFjLWFwaS9rZXlzL2djcDpyCgogIHJlZGlzOgogICAgaW1hZ2U6IHJlZGlzOjYuMi1hbHBpbmUKICAgIGNvbW1hbmQ6ICJyZWRpcy1zZXJ2ZXIgLS1yZXF1aXJlcGFzcyAke1JFRElTX1BBU1NXT1JEfSIKICAgIGNvbnRhaW5lcl9uYW1lOiByZWRpcwogICAgdm9sdW1lczoKICAgIC0gcmVkaXM6L2V0Yy9yZWRpczpydwogICAgcmVzdGFydDogYWx3YXlzCiAgICBoZWFsdGhjaGVjazoKICAgICAgdGVzdDoKICAgICAgLSAiQ01EIgogICAgICAtICJyZWRpcy1jbGkiCiAgICAgIC0gIi0tcmF3IgogICAgICAtICJpbmNyIgogICAgICAtICJwaW5nIgogICAgICBpbnRlcnZhbDogMTBzCiAgICAgIHRpbWVvdXQ6IDMwcwoKICBwb3N0Z3JlczoKICAgIGltYWdlOiBwbGV4dHJhYy9wbGV4dHJhY3Bvc3RncmVzOnN0YWJsZQogICAgZW52aXJvbm1lbnQ6CiAgICAgIFBHREFUQTogL3Zhci9saWIvcG9zdGdyZXNxbC9kYXRhL3BnZGF0YQogICAgICBQR19DT1JFX0FETUlOX1BBU1NXT1JEOiAke1BHX0NPUkVfQURNSU5fUEFTU1dPUkQ6P2Vycn0KICAgICAgUEdfQ09SRV9BRE1JTl9VU0VSOiAke1BHX0NPUkVfQURNSU5fVVNFUjo/ZXJyfQogICAgICBQR19DT1JFX0RCOiAke1BHX0NPUkVfREI6P2Vycn0KICAgICAgUEdfQ09SRV9ST19QQVNTV09SRDogJHtQR19DT1JFX1JPX1BBU1NXT1JEOj9lcnJ9CiAgICAgIFBHX0NPUkVfUk9fVVNFUjogJHtQR19DT1JFX1JPX1VTRVI6P2Vycn0KICAgICAgUEdfQ09SRV9SV19QQVNTV09SRDogJHtQR19DT1JFX1JXX1BBU1NXT1JEOj9lcnJ9CiAgICAgIFBHX0NPUkVfUldfVVNFUjogJHtQR19DT1JFX1JXX1VTRVI6P2Vycn0KICAgICAgUEdfUlVOQk9PS1NfQURNSU5fUEFTU1dPUkQ6ICR7UEdfUlVOQk9PS1NfQURNSU5fUEFTU1dPUkQ6P2Vycn0KICAgICAgUEdfUlVOQk9PS1NfQURNSU5fVVNFUjogJHtQR19SVU5CT09LU19BRE1JTl9VU0VSOj9lcnJ9CiAgICAgIFBHX1JVTkJPT0tTX0RCOiAke1BHX1JVTkJPT0tTX0RCOj9lcnJ9CiAgICAgIFBHX1JVTkJPT0tTX1JPX1BBU1NXT1JEOiAke1BHX1JVTkJPT0tTX1JPX1BBU1NXT1JEOj9lcnJ9CiAgICAgIFBHX1JVTkJPT0tTX1JPX1VTRVI6ICR7UEdfUlVOQk9PS1NfUk9fVVNFUjo/ZXJyfQogICAgICBQR19SVU5CT09LU19SV19QQVNTV09SRDogJHtQR19SVU5CT09LU19SV19QQVNTV09SRDo/ZXJyfQogICAgICBQR19SVU5CT09LU19SV19VU0VSOiAke1BHX1JVTkJPT0tTX1JXX1VTRVI6P2Vycn0KICAgICAgUEdfQ0tFRElUT1JfQURNSU5fUEFTU1dPUkQ6ICR7UEdfQ0tFRElUT1JfQURNSU5fUEFTU1dPUkQ6P2Vycn0KICAgICAgUEdfQ0tFRElUT1JfQURNSU5fVVNFUjogJHtQR19DS0VESVRPUl9BRE1JTl9VU0VSOj9lcnJ9CiAgICAgIFBHX0NLRURJVE9SX0RCOiAke1BHX0NLRURJVE9SX0RCOj9lcnJ9CiAgICAgIFBHX0NLRURJVE9SX1JPX1BBU1NXT1JEOiAke1BHX0NLRURJVE9SX1JPX1BBU1NXT1JEOj9lcnJ9CiAgICAgIFBHX0NLRURJVE9SX1JPX1VTRVI6ICR7UEdfQ0tFRElUT1JfUk9fVVNFUjo/ZXJyfQogICAgICBQR19DS0VESVRPUl9SV19QQVNTV09SRDogJHtQR19DS0VESVRPUl9SV19QQVNTV09SRDo/ZXJyfQogICAgICBQR19DS0VESVRPUl9SV19VU0VSOiAke1BHX0NLRURJVE9SX1JXX1VTRVI6P2Vycn0KICAgICAgUE9TVEdSRVNfSE9TVF9BVVRIX01FVEhPRDogc2NyYW0tc2hhLTI1NgogICAgICBQT1NUR1JFU19JTklUREJfQVJHUzogJy0tYXV0aC1sb2NhbD1zY3JhbS1zaGEtMjU2IC0tYXV0aC1ob3N0PXNjcmFtLXNoYS0yNTYnCiAgICAgIFBPU1RHUkVTX1BBU1NXT1JEOiAke1BPU1RHUkVTX1BBU1NXT1JEOj9lcnJ9CiAgICAgIFBPU1RHUkVTX1VTRVI6ICR7UE9TVEdSRVNfVVNFUjo/ZXJyfQogICAgdm9sdW1lczoKICAgICMgdGhpcyBpcyB3aGVyZSB0aGUgaW5pdGRiIHNjcmlwdCAmIFNRTCB0ZW1wbGF0ZSBnbwogICAgLSBwb3N0Z3Jlcy1pbml0ZGI6L2RvY2tlci1lbnRyeXBvaW50LWluaXRkYi5kCiAgICAtIHBvc3RncmVzLWRhdGE6L3Zhci9saWIvcG9zdGdyZXNxbC9kYXRhCiAgICAtIHBvc3RncmVzLWJhY2t1cHM6L2JhY2t1cHMKICAgIHBvcnRzOgogICAgLSAxMjcuMC4wLjE6NTQzMjo1NDMyL3RjcAogICAgcmVzdGFydDogYWx3YXlzCiAgICBoZWFsdGhjaGVjazogIyBEZWZpbmUgaGVhbHRoY2hlY2sgdG8gYmUgYWJsZSB0byB1c2UgdGhlIGBzZXJ2aWNlX2hlYWx0aHlgIGNvbmRpdGlvbi4KICAgICAgdGVzdDogcGdfaXNyZWFkeSAtVSAke1BPU1RHUkVTX1VTRVI6LWludGVybmFsb25seX0KICAgICAgaW50ZXJ2YWw6IDEwcwogICAgICB0aW1lb3V0OiAzMHMKICAgICAgcmV0cmllczogNQoKICBjb250ZXh0dWFsLXNjb3Jpbmctc2VydmljZToKICAgIGltYWdlOiAicGxleHRyYWMvcGxleHRyYWNhcGk6JHtVUEdSQURFX1NUUkFURUdZOi1zdGFibGV9IgogICAgZGVwbG95OgogICAgICByZXBsaWNhczogMQogICAgZGVwZW5kc19vbjoKICAgIC0gcG9zdGdyZXMKICAgIC0gcmVkaXMKICAgIHJlc3RhcnQ6IGFsd2F5cwogICAgZW52aXJvbm1lbnQ6CiAgICAgIENMSUVOVF9ET01BSU5fTkFNRTogJHtDTElFTlRfRE9NQUlOX05BTUU6P2Vycn0KICAgICAgUkVESVNfQ09OTkVDVElPTl9TVFJJTkc6ICIke1JFRElTX0NPTk5FQ1RJT05fU1RSSU5HOi1yZWRpc30iCiAgICAgIFJFRElTX1BBU1NXT1JEOiAiJHtSRURJU19QQVNTV09SRDo/ZXJyfSIKICAgICAgUEdfSE9TVDogJHtQR19IT1NUOj9lcnJ9CiAgICAgIFBHX0NPUkVfREI6ICR7UEdfQ09SRV9EQjo/ZXJyfQogICAgICBQR19DT1JFX1JXX1BBU1NXT1JEOiAke1BHX0NPUkVfUldfUEFTU1dPUkQ6P2Vycn0KICAgICAgUEdfQ09SRV9SV19VU0VSOiAke1BHX0NPUkVfUldfVVNFUjo/ZXJyfQogICAgICBQR19DT1JFX1JPX1VTRVI6ICR7UEdfQ09SRV9ST19VU0VSOj9lcnJ9CiAgICAgIFBHX0NPUkVfUk9fUEFTU1dPUkQ6ICR7UEdfQ09SRV9ST19QQVNTV09SRDo/ZXJyfQogICAgaGVhbHRoY2hlY2s6CiAgICAgIHRlc3Q6CiAgICAgIC0gIkNNRCIKICAgICAgLSAibnBtIgogICAgICAtICJydW4iCiAgICAgIC0gImhlYWx0aGNoZWNrOmNvbnRleHR1YWwtc2NvcmluZy1zZXJ2aWNlIgogICAgICAtICJsaXZlbmVzcyIKICAgICAgLSAiLS0iCiAgICAgIC0gIi0tbm8tdXBkYXRlLW5vdGlmaWVyIgogICAgZW50cnlwb2ludDogbnBtIHJ1bgogICAgY29tbWFuZDogInN0YXJ0OmNvbnRleHR1YWwtc2NvcmluZy1zZXJ2aWNlIgogIAogIG1pbmlvOgogICAgcG9ydHM6CiAgICAgIC0gOTAwMDo5MDAwCiAgICAgIC0gOTAwMTo5MDAxCiAgICBpbWFnZTogY2hhaW5ndWFyZC9taW5pbzpsYXRlc3QKICAgIHJlc3RhcnQ6IGFsd2F5cwogICAgdm9sdW1lczoKICAgICAgLSBtaW5pby1kYXRhOi9kYXRhCiAgICBlbnRyeXBvaW50OiBtaW5pbwogICAgY29tbWFuZDogc2VydmVyIC9kYXRhIC0tY29uc29sZS1hZGRyZXNzICc6OTAwMScgLS1hZGRyZXNzICcwLjAuMC4wOjkwMDAnCiAgICBlbnZpcm9ubWVudDoKICAgICAgTUlOSU9fUk9PVF9VU0VSOiAke01JTklPX1JPT1RfVVNFUjotYWRtaW59CiAgICAgIE1JTklPX1JPT1RfUEFTU1dPUkQ6ICR7TUlOSU9fUk9PVF9QQVNTV09SRDo/ZXJyfQogICAgICBNSU5JT19MT0NBTF9VU0VSOiAke01JTklPX0xPQ0FMX1VTRVI6LWxvY2FsYWRtaW59CiAgICAgIE1JTklPX0xPQ0FMX1BBU1NXT1JEOiAke01JTklPX0xPQ0FMX1BBU1NXT1JEOj9lcnJ9CiAgICAgIENMT1VEX1NUT1JBR0VfRU5EUE9JTlQ6ICR7Q0xPVURfU1RPUkFHRV9FTkRQT0lOVDotMTI3LjAuMC4xfQogICAgICBDTE9VRF9TVE9SQUdFX1BPUlQ6ICR7Q0xPVURfU1RPUkFHRV9QT1JUOi05MDAwfQogICAgICBDTE9VRF9TVE9SQUdFX1NTTDogJHtDTE9VRF9TVE9SQUdFX1NTTDotZmFsc2V9CiAgICAgIENMT1VEX1NUT1JBR0VfQUNDRVNTX0tFWTogJHtDTE9VRF9TVE9SQUdFX0FDQ0VTU19LRVk6P2Vycn0KICAgICAgQ0xPVURfU1RPUkFHRV9TRUNSRVRfS0VZOiAke0NMT1VEX1NUT1JBR0VfU0VDUkVUX0tFWTo/ZXJyfQogIG1pbmlvLWJvb3RzdHJhcDoKICAgIGltYWdlOiBwbGV4dHJhYy9wbGV4dHJhYy1taW5pby1ib290c3RyYXA6c3RhYmxlCiAgICBkZXBlbmRzX29uOgogICAgICAtIG1pbmlvCiAgICBlbnZpcm9ubWVudDoKICAgICAgTUlOSU9fUk9PVF9VU0VSOiAke01JTklPX1JPT1RfVVNFUjotYWRtaW59CiAgICAgIE1JTklPX1JPT1RfUEFTU1dPUkQ6ICR7TUlOSU9fUk9PVF9QQVNTV09SRDo/ZXJyfQogICAgICBNSU5JT19MT0NBTF9VU0VSOiAke01JTklPX0xPQ0FMX1VTRVI6LWxvY2FsYWRtaW59CiAgICAgIE1JTklPX0xPQ0FMX1BBU1NXT1JEOiAke01JTklPX0xPQ0FMX1BBU1NXT1JEOj9lcnJ9CiAgICAgIENMT1VEX1NUT1JBR0VfQUNDRVNTX0tFWTogJHtDTE9VRF9TVE9SQUdFX0FDQ0VTU19LRVk6P2Vycn0KICAgICAgQ0xPVURfU1RPUkFHRV9TRUNSRVRfS0VZOiAke0NMT1VEX1NUT1JBR0VfU0VDUkVUX0tFWTo/ZXJyfQogICAgICBNSU5JT19FTkFCTEVEIDogJHtNSU5JT19FTkFCTEVEOi10cnVlfQogICAgICBVUFNUUkVBTV9DTE9VRF9CVUNLRVQ6ICR7VVBTVFJFQU1fQ0xPVURfQlVDS0VUOi1jbG91ZH0KICAgICAgCgp2b2x1bWVzOgogIGRiZGF0YToge30KICB1cGxvYWRzOiB7fQogIGxldHNlbmNyeXB0OiB7fQogIGxvY2FsZXNPdmVycmlkZToge30KICBtaW5pby1kYXRhOiB7fQogIHBvc3RncmVzLWRhdGE6IHt9CiAgcG9zdGdyZXMtaW5pdGRiOgogICAgZHJpdmVyOiBsb2NhbAogICAgZHJpdmVyX29wdHM6CiAgICAgIHR5cGU6ICJub25lIgogICAgICBvOiAiYmluZCIKICAgICAgZGV2aWNlOiAiJHtQTEVYVFJBQ19IT01FOi0ufS92b2x1bWVzL3Bvc3RncmVzLWluaXRkYiIKICByZWRpczoKICAgIGRyaXZlcjogbG9jYWwKICAgIGRyaXZlcl9vcHRzOgogICAgICB0eXBlOiAibm9uZSIKICAgICAgbzogImJpbmQiCiAgICAgIGRldmljZTogIiR7UExFWFRSQUNfSE9NRTotLn0vdm9sdW1lcy9yZWRpcyIKICBkYXRhbGFrZS1tYWludGFpbmVyLWtleXM6CiAgICBkcml2ZXI6IGxvY2FsCiAgICBkcml2ZXJfb3B0czoKICAgICAgdHlwZTogIm5vbmUiCiAgICAgIG86ICJiaW5kIgogICAgICBkZXZpY2U6ICIke1BMRVhUUkFDX0hPTUU6LS59L3ZvbHVtZXMvZGF0YWxha2UtbWFpbnRhaW5lci1rZXlzIgogIGNvdWNoYmFzZS1iYWNrdXBzOgogICAgZHJpdmVyOiBsb2NhbAogICAgZHJpdmVyX29wdHM6CiAgICAgIHR5cGU6ICJub25lIgogICAgICBvOiAiYmluZCIKICAgICAgZGV2aWNlOiAiJHtQTEVYVFJBQ19CQUNLVVBfUEFUSH0vY291Y2hiYXNlIgogIHBvc3RncmVzLWJhY2t1cHM6CiAgICBkcml2ZXI6IGxvY2FsCiAgICBkcml2ZXJfb3B0czoKICAgICAgdHlwZTogIm5vbmUiCiAgICAgIG86ICJiaW5kIgogICAgICBkZXZpY2U6ICIke1BMRVhUUkFDX0JBQ0tVUF9QQVRIfS9wb3N0Z3JlcyIKCm5ldHdvcmtzOgogIGRlZmF1bHQ6CiAgICBuYW1lOiBwbGV4dHJhYwogICAgZHJpdmVyOiBicmlkZ2UK
+DOCKER_COMPOSE_OVERRIDE_ENCODED=IyB2ZXJzaW9uOiAnMy44JwoKIyBFeGFtcGxlIGNvbmZpZ3VyYXRpb24gZm9yIGFkZGluZyBhIGN1c3RvbSBsb2dvIGFuZC9vciB1c2luZyBjdXN0b20gY2VydGlmaWNhdGVzCiMgc2VydmljZXM6CiMgICBwbGV4dHJhY25naW54OgojICAgICB2b2x1bWVzOgojICAgICAgIC0gPDwgbG9jYWwgZmlsZSBwYXRoIGhlcmUgPj46L3Vzci9zaGFyZS9uZ2lueC9odG1sL2Rpc3QvaW1nL1BsZXhUcmFjX0xvZ28ucG5nCiMgICAgICAgLSA8PCBsb2NhbCBmaWxlIHBhdGggaGVyZSA+PjovdXNyL3NoYXJlL25naW54L2h0bWwvZGlzdC9pbWcvUGxleFRyYWNfTG9nb19kYXJrLnBuZwojICAgICAgIC0gPDwgbG9jYWwga2V5IHBhdGggaGVyZSA+PjovZXRjL3NzbC9hcHAucGxleHRyYWMua2V5CiMgICAgICAgLSA8PCBsb2NhbCBjZXJ0IHBhdGggaGVyZSA+PjovZXRjL3NzbC9hcHBfY2VydF9jaGFpbi5jcnQK
 main "$@"
