@@ -267,9 +267,9 @@ function plextrac_start_podman() {
         local env_vars="${serviceValues[ckeditor-backend-env_vars]}"
       elif [ "$service" == "minio" ]; then
         local image="${serviceValues[minio-image]}"
+        local entrypoint="${serviceValues[minio-entrypoint]}"
       elif [ "$service" == "minio-bootstrap" ]; then
         local image="${serviceValues[minio-bootstrap-image]}"
-        local entrypoint="${serviceValues[minio-entrypoint]}"
         local env_vars="${serviceValues[minio-bootstrap-env_vars]}"
       fi
       info "Creating $service"
