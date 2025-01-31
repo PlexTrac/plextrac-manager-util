@@ -91,7 +91,7 @@ function mod_locales_vol_fix() {
       local dotfile_exist=`compose_client exec plextracapi find localesOverride -type f -name .vol-chown-pt`
       if [ "$user" != "root"  ] && [ "$dotfile_exist" = "" ]; then
         # this uid:gid is hardcoded in the base image and expected by the backend, do NOT change this chown
-        info "Ensuring upload volume ownership is 1337:1337, this may take awhile..."
+        info "Ensuring locales directory ownership is 1337:1337, this may take awhile..."
         compose_client exec -u 0 plextracapi chown -R 1337:1337 localesOverride/
         compose_client exec -u 0 plextracapi chmod 774 -R localesOverride/
         compose_client exec -u 0 plextracapi touch localesOverride/.vol-chown-pt
