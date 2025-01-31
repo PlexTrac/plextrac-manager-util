@@ -8,3 +8,4 @@ backups
 done.txt
 static/nginx_init.sh
 static/nginx.conf
+.idea/
