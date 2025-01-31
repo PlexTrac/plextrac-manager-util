@@ -190,7 +190,7 @@ function plextrac_start_podman() {
   serviceValues[minio-bootstrap-env_vars]="-e MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin} -e MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?err} -e MINIO_LOCAL_USER=${MINIO_LOCAL_USER:-localadmin} -e MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:?err} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err} -e MINIO_ENABLED=${MINIO_ENABLED:-true} -e UPSTREAM_CLOUD_BUCKET=${UPSTREAM_CLOUD_BUCKET:-cloud}"
 
   if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
-    serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx" "minio" "minio_bootstrap")
+    serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx" "minio" "minio-bootstrap")
   fi
   serviceValues[notification-env_vars]="-e API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE=${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
   serviceValues[notification-env_vars]="-e INTERNAL_API_KEY_SHARED=${INTERNAL_API_KEY_SHARED:?err}"
