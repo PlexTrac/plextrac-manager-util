@@ -23,6 +23,7 @@ function mod_check() {
     fi
     mod_etl_fix
     mod_uploads_vol_fix
+    mod_locales_vol_fix
     VALIDATION_ONLY=1 configure_couchbase_users
     postgres_metrics_validation
     check_for_maintenance_mode
@@ -78,6 +79,24 @@ function mod_uploads_vol_fix() {
       compose_client exec plextracapi touch uploads/.vol-chown-pt
     fi
   fi
+}
+
+function mod_locales_vol_fix() {
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      error "localesOverride volume ownership checks are not supported with Podman. Skipping"
+      return
+    else
+      info "Checking localesOverride volume ownership"
+      local user=`compose_client exec plextracapi whoami`
+      local dotfile_exist=`compose_client exec plextracapi find localesOverride -type f -name .vol-chown-pt`
+      if [ "$user" != "root"  ] && [ "$dotfile_exist" = "" ]; then
+        # this uid:gid is hardcoded in the base image and expected by the backend, do NOT change this chown
+        info "Ensuring locales directory ownership is 1337:1337, this may take awhile..."
+        compose_client exec -u 0 plextracapi chown -R 1337:1337 localesOverride/
+        compose_client exec -u 0 plextracapi chmod 774 -R localesOverride/
+        compose_client exec plextracapi touch localesOverride/.vol-chown-pt
+      fi
+    fi
 }
 
 # Check for an existing installation
