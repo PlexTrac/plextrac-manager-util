@@ -94,7 +94,7 @@ function mod_locales_vol_fix() {
         info "Ensuring locales directory ownership is 1337:1337, this may take awhile..."
         compose_client exec -u 0 plextracapi chown -R 1337:1337 localesOverride/
         compose_client exec -u 0 plextracapi chmod 774 -R localesOverride/
-        compose_client exec -u 0 plextracapi touch localesOverride/.vol-chown-pt
+        compose_client exec plextracapi touch localesOverride/.vol-chown-pt
       fi
     fi
 }
