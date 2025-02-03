@@ -20,9 +20,9 @@ docker pull plextrac/plextracnginx:<NEXT_VERSION>
 # The plextracdb shouldn't ever get updated so this will be a one time pull and can be omited from process / automation
 docker pull plextrac/plextracdb:7.2.0
 docker pull redis:6.2-alpine
-docker pull postgres:14-alpine
+docker pull plextrac/plextracpostgres:stable
 # Save the images into a TAR(s)
-docker save -o plextrac_images.tar plextrac/plextracapi:<NEXT_VERSION> plextrac/plextracnginx:<NEXT_VERSION> plextrac/plextracdb:7.2.0 redis:6.2-alpine postgres:14-alpine
+docker save -o plextrac_images.tar plextrac/plextracapi:<NEXT_VERSION> plextrac/plextracnginx:<NEXT_VERSION> plextrac/plextracdb:7.2.0 redis:6.2-alpine  plextrac/plextracpostgres:stable
 ```
 
 > Note you'll want to specify the image's platform if there are differences between where you're pulling the image (e.g., linux/arm64) and the VM (linux/x86_64)

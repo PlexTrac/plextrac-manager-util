@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.7.12
+VERSION=0.7.16
 
 ## Podman Global Declaration Variable
 declare -A svcValues
@@ -40,6 +40,8 @@ svcValues[migrations-volumes]="--volumes-from=plextracapi"
 svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw -v nginx_ssl_certs:/etc/ssl/:Z,U -v nginx_logos:/usr/share/nginx/html/dist/img/:Z,U"
 svcValues[plextracnginx-healthcheck]='--health-cmd=["echo","GET","/","|","openssl","s_client","-quiet","-connect","127.0.0.1:443"]'
 svcValues[plextracnginx-alias]="--network-alias=ckeditor"
+#Minio
+svcValues[minio-volumes]="-v minio-data:/data:rw"
 
 
 trap 'cleanup $?' SIGINT ERR EXIT
@@ -126,8 +128,8 @@ function mod_help() {
   log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
   log "reload-cert                          ${DIM}reload PlexTrac SSL certificates${RESET}"
   log "restore                              ${DIM}restore instance from backups${RESET}"
-  log "start                                ${DIM}start a PlexTrac instance${RESET}"
-  log "stop                                 ${DIM}stop PlexTrac${RESET}"
+  log "start                                ${DIM}manually start a PlexTrac instance if normal processes did not succeed${RESET}"
+  log "stop                                 ${DIM}manually stops the PlexTrac instance. Not a part of normal maintenance${RESET}"
   log "update                               ${DIM}updates the management utility & applies any configuration or application updates${RESET}"
   log ""
   info "Available flags to modify command behavior:"
@@ -481,7 +483,7 @@ function run_cb_migrations() {
     fi
     for s in / - \\ \|; do
         local log=""
-        local container=""  
+        local container=""
         container="$(container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}')"
         log="$(container_client logs $container 2> /dev/null | tail -n 1 -q || true)"
         printf "\r\033[K%s %s -- %s" "$s" "$container" "$log"
