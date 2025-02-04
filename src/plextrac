@@ -442,6 +442,35 @@ function mod_start() {
   fi
 }
 
+function mod_recreate() {
+  mod_stop
+  mod_start
+  title "Database Starting"
+  local progressBar
+  for i in `seq 1 30`; do
+    progressBar=`printf ".%.0s%s"  {1..$i} "${progressBar:-}"`
+    msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
+    sleep 2
+  done
+  >&2 echo -n "${RESET}"
+  log "Done!" 
+}
+
+function mod_restart() {
+  title "Restarting Containers"
+  requires_user_plextrac
+  compose_client restart
+  title "Database Starting"
+  local progressBar
+  for i in `seq 1 30`; do
+    progressBar=`printf ".%.0s%s"  {1..$i} "${progressBar:-}"`
+    msg "\r%b" "${GREEN}[+]${RESET} ${NOCURSOR}${progressBar}"
+    sleep 2
+  done
+  >&2 echo -n "${RESET}"
+  log "Done!"
+}
+
 function run_cb_migrations() {
   info "Running Database Migrations"
   secs=${1:-300}
