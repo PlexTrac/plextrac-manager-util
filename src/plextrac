@@ -137,9 +137,10 @@ function mod_help() {
   log " -d | --debug                        ${DIM}enables debug output VERY NOISY${RESET}"
   log " -v | --verbose                      ${DIM}enables verbose output, helpful for troubleshooting errors${RESET}"
   log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
-  log " -uid | --user-id                   ${DIM}during initialization, assign a specific user ID on 'plextrac' user creation${RESET}"
+  log " -uid | --user-id                    ${DIM}during initialization, assign a specific user ID on 'plextrac' user creation${RESET}"
   log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
   log " --install-timeout NUM               ${DIM}seconds to wait for install migrations to complete. The default is 600 (10 mins)${RESET}"
+  log " --skip-system-updates               ${DIM}skip the system updates during the inititalization step${RESET}"
 }
 
 
@@ -243,6 +244,10 @@ function main() {
         AIRGAPPED="true"
         shift
         ;;
+      "--skip-system-updates")
+        SKIP_SYSTEM_UPDATE="true"
+        shift
+        ;;
       *)
         if declare -f mod_$1 >/dev/null 2>&1; then
           # enable event logging for sub commands
@@ -316,10 +321,10 @@ function mod_initialize() {
   requires_user_root
   if [ "${AIRGAPPED:-false}" == "false" ]; then
     info "Setting up system packages"
-    if [ "${SKIP_SYSTEM_UPGRADE:-false}" == "false" ]; then
+    if [ "${SKIP_SYSTEM_UPDATE:-false}" == "false" ]; then
       system_packages__do_system_upgrade
     else
-      info "SKIP_SYSTEM_UPGRADE is set to true. Skipping system upgrades."
+      info "SKIP_SYSTEM_UPDATE is set to true. Skipping system updates."
     fi
     system_packages__install_system_dependencies
     if [ "$CONTAINER_RUNTIME" == "docker" ]; then
