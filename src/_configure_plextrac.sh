@@ -29,7 +29,7 @@ function generate_default_config() {
   if [ ${PLEXTRAC_HOME} != ${HOME} ]; then
     info "It appears you are trying to install plextrac to a different directory than default. Would you like to install to the same directory as the plextrac user home?"
     info "Install directory [${HOME}]"
-    info "If this is not correct, please reinitialize with the flag --install-dir"
+    info "If this is not correct, please change the home directory of the plextrac user and try to install plextrac again"
     if get_user_approval; then
       export PLEXTRAC_HOME=${HOME}
     else
