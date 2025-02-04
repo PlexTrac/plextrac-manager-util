@@ -61,6 +61,8 @@ MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-`generateSecret`}
 MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:-`generateSecret`}
 CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:-`generateSecret 20`}
 CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:-`generateSecret`}
+CLOUD_STORAGE_ENDPOINT=${CLOUD_STORAGE_ENDPOINT:-"minio"}
+CLOUD_STORAGE_SSL=${CLOUD_STORAGE_SSL:-"false"}
 
 
 `generate_default_couchbase_env | setDefaultSecrets`
@@ -263,7 +265,7 @@ function getCKEditorRTCConfig() {
     while read -r line; do
       logger -t ckeditor-migration $line
     done <<< "$CKEDITOR_LOGS_OUTPUT"
-  
+
     echo "$CKEDITOR_LOGS_OUTPUT" > "${PLEXTRAC_HOME}/ckeditor-migration.log"
 
     # check the result to confirm it contains the expected element in the JSON, then base64 encode if it does
