@@ -316,7 +316,11 @@ function mod_initialize() {
   requires_user_root
   if [ "${AIRGAPPED:-false}" == "false" ]; then
     info "Setting up system packages"
-    system_packages__do_system_upgrade
+    if [ "${SKIP_SYSTEM_UPGRADE:-false}" == "false" ]; then
+      system_packages__do_system_upgrade
+    else
+      info "SKIP_SYSTEM_UPGRADE is set to true. Skipping system upgrades."
+    fi
     system_packages__install_system_dependencies
     if [ "$CONTAINER_RUNTIME" == "docker" ]; then
       install_docker "${FORCEUPGRADE-}"
