@@ -139,7 +139,7 @@ function mod_help() {
   log " -uid | --user-id                    ${DIM}during initialization, assign a specific user ID on 'plextrac' user creation${RESET}"
   log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}. Must be used during initialization."
   log " --install-timeout NUM               ${DIM}seconds to wait for install migrations to complete. The default is 600 (10 mins)${RESET}"
-  log " --skip-system-updates               ${DIM}skip the system updates during the inititalization step${RESET}"
+  log " --skip-system-updates               ${DIM}skip system updates during the initialization step${RESET}"
 }
 
 
