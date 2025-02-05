@@ -25,6 +25,18 @@ function generate_default_config() {
   source <(echo "${existingCfg}")
   set +o allexport
 
+  # Check if the PLEXTRAC_HOME matches the HOME of current plextrac user
+  if [ ${PLEXTRAC_HOME} != ${HOME} ]; then
+    info "It appears you are trying to install plextrac to a different directory than default. Would you like to install to the same directory as the plextrac user home?"
+    info "Install directory [${HOME}]"
+    info "If this is not correct, please change the home directory of the plextrac user and try to install plextrac again"
+    if get_user_approval; then
+      export PLEXTRAC_HOME=${HOME}
+    else
+      die "Unable to install to a different directory than the home of the plextrac user"
+    fi
+  fi
+
   # NOTE: we need to leave API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE until all cloud-hosted environments are no
   # longer running code that relies on this variable. It has been replaced by INTERNAL_API_KEY_SHARED for newer versions.
 

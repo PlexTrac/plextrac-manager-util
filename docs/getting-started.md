@@ -21,18 +21,15 @@ title: Getting Started
 The latest release can be retrieved from GitHub:
 
 ```console
-$ curl -Ls `curl -Ls https://api.github.com/repos/PlexTrac/plextrac-manager-util/releases/latest \
-    | jq -r '.assets[].browser_download_url'` \
-    > /tmp/plextrac
-$ chmod a+x /tmp/plextrac; sudo /tmp/plextrac initialize
+$ wget -O /tmp/plextrac -q https://github.com/PlexTrac/plextrac-manager-util/releases/latest/download/plextrac; chmod a+x /tmp/plextrac; sudo bash /tmp/plextrac initialize -v
 
-______ _         _____              
-| ___ \ |       |_   _|             
-| |_/ / | _____  _| |_ __ __ _  ___ 
+______ _         _____
+| ___ \ |       |_   _|
+| |_/ / | _____  _| |_ __ __ _  ___
 |  __/| |/ _ \ \/ / | '__/ _\ |/ __|
-| |   | |  __/>  <| | | | (_| | (__ 
+| |   | |  __/>  <| | | | (_| | (__
 \_|   |_|\___/_/\_\_/_|  \__,_|\___|
-                                    
+
 
 Instance Management Utility v0.1.2
 
