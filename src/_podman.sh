@@ -151,7 +151,7 @@ function plextrac_install_podman() {
   info "Post installation note:"
   log "If you wish to have access to historical logs, you can configure docker to send logs to journald."
   log "Please see the config steps at"
-  log "https://docs.plextrac.com/plextrac-documentation/product-documentation-1/on-premise-management/setting-up-historical-logs"
+  log "https://helpcenter.plextrac.com/s/article/Setting-Up-Historical-Logs"
 }
 
 function plextrac_start_podman() {

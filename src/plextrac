@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.7.16
+VERSION=0.7.17
 
 ## Podman Global Declaration Variable
 declare -A svcValues
@@ -125,7 +125,6 @@ function mod_help() {
   log "info                                 ${DIM}display information about the current PlexTrac Instance${RESET}"
   log "install                              ${DIM}install PlexTrac (assumes previously initialized system)${RESET}"
   log "logs                                 ${DIM}display logs from PlexTrac services. Usage: ${GREEN}plextrac logs [-s|--service plextracapi|plextracnginx|plextracdb|etc]${RESET}"
-  log "migrate                              ${DIM}migrate current instance from legacy management scripts${RESET}"
   log "reload-cert                          ${DIM}reload PlexTrac SSL certificates${RESET}"
   log "restore                              ${DIM}restore instance from backups${RESET}"
   log "start                                ${DIM}manually start a PlexTrac instance if normal processes did not succeed${RESET}"
@@ -137,9 +136,10 @@ function mod_help() {
   log " -d | --debug                        ${DIM}enables debug output VERY NOISY${RESET}"
   log " -v | --verbose                      ${DIM}enables verbose output, helpful for troubleshooting errors${RESET}"
   log " -y | --assume-yes                   ${DIM}assumes yes to all questions in script${RESET}"
-  log " -uid | --user-id                   ${DIM}during initialization, assign a specific user ID on 'plextrac' user creation${RESET}"
-  log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}"
+  log " -uid | --user-id                    ${DIM}during initialization, assign a specific user ID on 'plextrac' user creation${RESET}"
+  log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}. Must be used during initialization."
   log " --install-timeout NUM               ${DIM}seconds to wait for install migrations to complete. The default is 600 (10 mins)${RESET}"
+  log " --skip-system-updates               ${DIM}skip system updates during the initialization step${RESET}"
 }
 
 
@@ -243,6 +243,10 @@ function main() {
         AIRGAPPED="true"
         shift
         ;;
+      "--skip-system-updates")
+        SKIP_SYSTEM_UPDATE="true"
+        shift
+        ;;
       *)
         if declare -f mod_$1 >/dev/null 2>&1; then
           # enable event logging for sub commands
@@ -316,7 +320,11 @@ function mod_initialize() {
   requires_user_root
   if [ "${AIRGAPPED:-false}" == "false" ]; then
     info "Setting up system packages"
-    system_packages__do_system_upgrade
+    if [ "${SKIP_SYSTEM_UPDATE:-false}" == "false" ]; then
+      system_packages__do_system_upgrade
+    else
+      info "SKIP_SYSTEM_UPDATE is set to true. Skipping system updates."
+    fi
     system_packages__install_system_dependencies
     if [ "$CONTAINER_RUNTIME" == "docker" ]; then
       install_docker "${FORCEUPGRADE-}"
@@ -392,7 +400,7 @@ function mod_install() {
     info "Post installation note:"
     log "If you wish to have access to historical logs, you can configure docker to send logs to journald."
     log "Please see the config steps at"
-    log "https://docs.plextrac.com/plextrac-documentation/product-documentation-1/on-premise-management/setting-up-historical-logs"
+    log "https://helpcenter.plextrac.com/s/article/Setting-Up-Historical-Logs"
   else
     plextrac_install_podman "svcValues"
   fi
