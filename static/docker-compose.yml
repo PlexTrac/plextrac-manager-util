@@ -277,6 +277,7 @@ services:
 
   postgres:
     image: plextrac/plextracpostgres:stable
+    shm_size: 128MB
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata
       PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
