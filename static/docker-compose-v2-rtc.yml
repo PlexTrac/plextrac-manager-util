@@ -1,0 +1,472 @@
+services:
+  plextracapi:
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+    depends_on:
+    - plextracdb
+    - redis
+    - postgres
+    environment:
+      STARTUP_MODE: API_ONLY
+      CLOUD_STORAGE_ENDPOINT: ${CLOUD_STORAGE_ENDPOINT:-minio}
+      CLOUD_STORAGE_SSL: ${CLOUD_STORAGE_SSL:-false}
+    env_file:
+    - .env
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    restart: always
+    volumes:
+    - uploads:/usr/src/plextrac-api/uploads:rw
+    - datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp:r
+    - localesOverride:/usr/src/plextrac-api/localesOverride:rw
+    healthcheck:
+      test:
+      # Handle cURL being removed due to upstream vuln
+      - 'CMD-SHELL'
+      - 'python3 - << EOF'
+      - 'import requests'
+      - 'print(requests.get("http://127.0.0.1:4350/api/v2/health/live").json())'
+      - 'EOF'
+
+
+  couchbase-migrations:
+    profiles:
+    - "database-migrations"
+    depends_on:
+    - plextracdb
+    - redis
+    - postgres
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    volumes:
+    - uploads:/usr/src/plextrac-api/uploads:rw
+    entrypoint: ""
+    command: |
+      sh -c
+        "npm run maintenance:enable &&
+         npm run pg:superuser:bootstrap --if-present &&
+         npm run pg:migrate &&
+         npm run db:migrate &&
+         npm run pg:etl up all &&
+         npm run maintenance:disable"
+    environment:
+      COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
+      CB_API_PASS: ${CB_API_PASS}
+      CB_API_USER: ${CB_API_USER}
+      REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING:-redis}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
+      PG_HOST: ${PG_HOST:-postgres}
+      PG_MIGRATE_PATH: /usr/src/plextrac-api
+      PG_SUPER_USER: ${POSTGRES_USER:?err}
+      PG_SUPER_PASSWORD: ${POSTGRES_PASSWORD:?err}
+      PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
+      PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
+      PG_CORE_DB: ${PG_CORE_DB:?err}
+      PG_RUNBOOKS_ADMIN_PASSWORD: ${PG_RUNBOOKS_ADMIN_PASSWORD:?err}
+      PG_RUNBOOKS_ADMIN_USER: ${PG_RUNBOOKS_ADMIN_USER:?err}
+      PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:?err}
+      PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:?err}
+      PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:?err}
+      PG_CKEDITOR_ADMIN_PASSWORD: ${PG_CKEDITOR_ADMIN_PASSWORD:?err}
+      PG_CKEDITOR_ADMIN_USER: ${PG_CKEDITOR_ADMIN_USER:?err}
+      PG_CKEDITOR_DB: ${PG_CKEDITOR_DB:?err}
+      PG_CKEDITOR_RO_PASSWORD: ${PG_CKEDITOR_RO_PASSWORD:?err}
+      PG_CKEDITOR_RO_USER: ${PG_CKEDITOR_RO_USER:?err}
+      PG_CKEDITOR_RW_PASSWORD: ${PG_CKEDITOR_RW_PASSWORD:?err}
+      PG_CKEDITOR_RW_USER: ${PG_CKEDITOR_RW_USER:?err}
+      PG_TENANTS_WRITE_MODE: ${PG_TENANTS_WRITE_MODE:-couchbase_only}
+      PG_TENANTS_READ_MODE: ${PG_TENANTS_READ_MODE:-couchbase_only}
+      CKEDITOR_MIGRATE: ${CKEDITOR_MIGRATE:-}
+      CKEDITOR_SERVER_CONFIG: ${CKEDITOR_SERVER_CONFIG:-}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+
+  plextracdb:
+    environment:
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-}"
+      BACKUP_DIR: "${BACKUP_DIR-}"
+      CB_ADMIN_PASS: "${CB_ADMIN_PASS:?err}"
+      CB_ADMIN_USER: "${CB_ADMIN_USER:?err}"
+      CB_API_PASS: "${CB_API_PASS:?err}"
+      CB_API_USER: "${CB_API_USER:?err}"
+      CB_BACKUP_PASS: "${CB_BACKUP_PASS:?err}"
+      CB_BACKUP_USER: "${CB_BACKUP_USER:?err}"
+      CB_BUCKET: "${CB_BUCKET-}"
+      bucket: "${bucket-}"
+    image: plextrac/plextracdb:7.2
+    ports:
+    - 127.0.0.1:8091:8091/tcp
+    - 127.0.0.1:8092:8092/tcp
+    - 127.0.0.1:8093:8093/tcp
+    - 127.0.0.1:8094:8094/tcp
+    restart: always
+    volumes:
+    - dbdata:/opt/couchbase/var:rw
+    - couchbase-backups:/backups:rw
+    healthcheck:
+      test:
+      - "CMD-SHELL"
+      - "curl --head --fail -X GET -u $CB_ADMIN_USER:$CB_ADMIN_PASS -H 'Content-Type: application/json' http://localhost:8091/pools/default/buckets/reportMe || exit 1"
+      interval: 10s
+      retries: 6
+      start_period: 30s
+
+  plextracnginx:
+    image: "plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
+    environment:
+      CLIENT_DOMAIN_NAME: "${CLIENT_DOMAIN_NAME:?err}"
+      ENABLE_HSTS: "${ENABLE_HSTS:-}"
+      HIDE_COPYRIGHT: "${HIDE_COPYRIGHT-}"
+      HIDE_PAGE_TITLE: "${HIDE_PAGE_TITLE-}"
+      LETS_ENCRYPT_EMAIL: "${LETS_ENCRYPT_EMAIL:-}"
+      OVERRIDE_SENTRY_FRONTEND_ENABLED: "${OVERRIDE_SENTRY_FRONTEND_ENABLED-}"
+      USE_CUSTOM_CERT: "${USE_CUSTOM_CERT-}"
+      CKEDITOR_MIGRATE: "${CKEDITOR_MIGRATE:-}"
+      WAF_ENABLED: "${WAF_ENABLED:-true}"
+      UPSTREAM_CLOUD_BUCKET: ${UPSTREAM_CLOUD_BUCKET:-cloud}
+      UPSTREAM_CLOUD_PREFIX: ${UPSTREAM_CLOUD_PREFIX:-uploads}
+      MINIO_ENABLED : ${MINIO_ENABLED:-true}
+      UPSTREAM_CLOUD_HOST: ${UPSTREAM_CLOUD_HOST:-minio}
+    ports:
+    - 0.0.0.0:80:80/tcp
+    - 0.0.0.0:443:443/tcp
+    restart: always
+    volumes:
+    - letsencrypt:/etc/letsencrypt:rw
+    - ${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules:/etc/nginx/conf.d/customer_curated.rules:Z
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'echo "GET /" | openssl s_client -quiet -connect 127.0.0.1:443'
+      interval: 5s
+      retries: 8
+      start_period: 5s
+    networks:
+      default:
+        aliases:
+          - ckeditor
+
+  notification-engine:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 1
+    depends_on:
+    - plextracdb
+    - redis
+    restart: always
+    init: True
+    environment:
+      CB_API_PASS: "${CB_API_PASS:?err}"
+      CB_API_USER: "${CB_API_USER:?err}"
+      COUCHBASE_URL: "http://plextracdb"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+      API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE: "${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
+      INTERNAL_API_KEY_SHARED: "${INTERNAL_API_KEY_SHARED:?err}"
+      CORE_API_BASE_URL: "${CORE_API_BASE_URL:?err}"
+      CTEM_API_BASE_URL: "${CTEM_API_BASE_URL:?err}"
+    healthcheck:
+      test:
+      - "CMD"
+      - "npm"
+      - "run"
+      - "healthcheck:notification-engine"
+      - "readiness"
+      - "10"
+      - "--"
+      - "--no-update-notifier"
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    entrypoint: npm run
+    command: "start:notification-engine"
+
+  notification-sender:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 1
+    depends_on:
+    - plextracdb
+    - redis
+    restart: always
+    init: True
+    environment:
+      CB_API_PASS: "${CB_API_PASS:?err}"
+      CB_API_USER: "${CB_API_USER:?err}"
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      COUCHBASE_URL: "http://plextracdb"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      MAILER_SECURE: ${MAILER_SECURE:-}
+      NOTIFICATION_DRY_RUN: ${NOTIFICATION_DRY_RUN:-}
+      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+      serviceConfig: ${serviceConfig:-}
+      API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE: "${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
+      INTERNAL_API_KEY_SHARED: "${INTERNAL_API_KEY_SHARED:?err}"
+      CORE_API_BASE_URL: "${CORE_API_BASE_URL:?err}"
+      CTEM_API_BASE_URL: "${CTEM_API_BASE_URL:?err}"
+    healthcheck:
+      test:
+      - "CMD"
+      - "npm"
+      - "run"
+      - "healthcheck:notification-sender"
+      - "readiness"
+      - "--"
+      - "--no-update-notifier"
+    entrypoint: npm run
+    command: "start:notification-sender"
+
+  datalake-maintainer:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 0
+    depends_on:
+    - postgres
+    - plextracdb
+    - redis
+    restart: always
+    environment:
+      CB_API_PASS: "${CB_API_PASS:?err}"
+      CB_API_USER: "${CB_API_USER:?err}"
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      COUCHBASE_URL: "http://plextracdb"
+      GCP_DATALAKE_SA_KEY_PATH: "${GCP_DATALAKE_SA_KEY_PATH:-/usr/src/plextrac-api/keys/gcp/gcp-datalake-sa-key.json}"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+      PG_CORE_DB: ${PG_CORE_DB:?err}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+    healthcheck:
+      test:
+      - "CMD"
+      - "npm"
+      - "run"
+      - "healthcheck:datalake-maintainer"
+      - "liveness"
+      - "--"
+      - "--no-update-notifier"
+    entrypoint: npm run
+    command: "start:datalake-maintainer"
+    volumes:
+    - datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp:r
+
+  redis:
+    image: redis:6.2-alpine
+    command: "redis-server --requirepass ${REDIS_PASSWORD}"
+    container_name: redis
+    volumes:
+    - redis:/etc/redis:rw
+    restart: always
+    healthcheck:
+      test:
+      - "CMD"
+      - "redis-cli"
+      - "--raw"
+      - "incr"
+      - "ping"
+      interval: 10s
+      timeout: 30s
+
+  postgres:
+    image: plextrac/plextracpostgres:stable
+    shm_size: 128MB
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      PG_CORE_ADMIN_PASSWORD: ${PG_CORE_ADMIN_PASSWORD:?err}
+      PG_CORE_ADMIN_USER: ${PG_CORE_ADMIN_USER:?err}
+      PG_CORE_DB: ${PG_CORE_DB:?err}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+      PG_RUNBOOKS_ADMIN_PASSWORD: ${PG_RUNBOOKS_ADMIN_PASSWORD:?err}
+      PG_RUNBOOKS_ADMIN_USER: ${PG_RUNBOOKS_ADMIN_USER:?err}
+      PG_RUNBOOKS_DB: ${PG_RUNBOOKS_DB:?err}
+      PG_RUNBOOKS_RO_PASSWORD: ${PG_RUNBOOKS_RO_PASSWORD:?err}
+      PG_RUNBOOKS_RO_USER: ${PG_RUNBOOKS_RO_USER:?err}
+      PG_RUNBOOKS_RW_PASSWORD: ${PG_RUNBOOKS_RW_PASSWORD:?err}
+      PG_RUNBOOKS_RW_USER: ${PG_RUNBOOKS_RW_USER:?err}
+      PG_CKEDITOR_ADMIN_PASSWORD: ${PG_CKEDITOR_ADMIN_PASSWORD:?err}
+      PG_CKEDITOR_ADMIN_USER: ${PG_CKEDITOR_ADMIN_USER:?err}
+      PG_CKEDITOR_DB: ${PG_CKEDITOR_DB:?err}
+      PG_CKEDITOR_RO_PASSWORD: ${PG_CKEDITOR_RO_PASSWORD:?err}
+      PG_CKEDITOR_RO_USER: ${PG_CKEDITOR_RO_USER:?err}
+      PG_CKEDITOR_RW_PASSWORD: ${PG_CKEDITOR_RW_PASSWORD:?err}
+      PG_CKEDITOR_RW_USER: ${PG_CKEDITOR_RW_USER:?err}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: '--auth-local=scram-sha-256 --auth-host=scram-sha-256'
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?err}
+      POSTGRES_USER: ${POSTGRES_USER:?err}
+    volumes:
+    # this is where the initdb script & SQL template go
+    - postgres-initdb:/docker-entrypoint-initdb.d
+    - postgres-data:/var/lib/postgresql/data
+    - postgres-backups:/backups
+    ports:
+    - 127.0.0.1:5432:5432/tcp
+    restart: always
+    healthcheck: # Define healthcheck to be able to use the `service_healthy` condition.
+      test: pg_isready -U ${POSTGRES_USER:-internalonly}
+      interval: 10s
+      timeout: 30s
+      retries: 5
+
+  contextual-scoring-service:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 1
+    depends_on:
+    - postgres
+    - redis
+    restart: always
+    environment:
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
+      PG_HOST: ${PG_HOST:?err}
+      PG_CORE_DB: ${PG_CORE_DB:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+    healthcheck:
+      test:
+      - "CMD"
+      - "npm"
+      - "run"
+      - "healthcheck:contextual-scoring-service"
+      - "liveness"
+      - "--"
+      - "--no-update-notifier"
+    entrypoint: npm run
+    command: "start:contextual-scoring-service"
+
+  minio:
+    ports:
+      - 127.0.0.1:9000:9000
+      - 127.0.0.1:9001:9001
+    image: chainguard/minio@sha256:92b5ea1641d52262d6f65c95cffff4668663e00d6b2033875774ba1c2212cfa7
+    restart: always
+    volumes:
+      - minio-data:/data
+    entrypoint: minio
+    command: server /data --console-address ':9001' --address '0.0.0.0:9000'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?err}
+      MINIO_LOCAL_USER: ${MINIO_LOCAL_USER:-localadmin}
+      MINIO_LOCAL_PASSWORD: ${MINIO_LOCAL_PASSWORD:?err}
+      CLOUD_STORAGE_ENDPOINT: ${CLOUD_STORAGE_ENDPOINT:-127.0.0.1}
+      CLOUD_STORAGE_PORT: ${CLOUD_STORAGE_PORT:-9000}
+      CLOUD_STORAGE_SSL: ${CLOUD_STORAGE_SSL:-false}
+      CLOUD_STORAGE_ACCESS_KEY: ${CLOUD_STORAGE_ACCESS_KEY:?err}
+      CLOUD_STORAGE_SECRET_KEY: ${CLOUD_STORAGE_SECRET_KEY:?err}
+  minio-bootstrap:
+    image: plextrac/plextrac-minio-bootstrap:stable
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?err}
+      MINIO_LOCAL_USER: ${MINIO_LOCAL_USER:-localadmin}
+      MINIO_LOCAL_PASSWORD: ${MINIO_LOCAL_PASSWORD:?err}
+      CLOUD_STORAGE_ACCESS_KEY: ${CLOUD_STORAGE_ACCESS_KEY:?err}
+      CLOUD_STORAGE_SECRET_KEY: ${CLOUD_STORAGE_SECRET_KEY:?err}
+      MINIO_ENABLED : ${MINIO_ENABLED:-true}
+      UPSTREAM_CLOUD_BUCKET: ${UPSTREAM_CLOUD_BUCKET:-cloud}
+
+  ckeditor-backend:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+    environment:
+      DATABASE_DATABASE: ${PG_CKEDITOR_DB:?err}
+      DATABASE_DRIVER: postgres
+      DATABASE_HOST: postgres
+      DATABASE_PASSWORD: ${PG_CKEDITOR_ADMIN_PASSWORD:?err}
+      DATABASE_POOL_CONNECTION_LIMIT: 10
+      DATABASE_PORT: 5432
+      DATABASE_SCHEMA: public
+      DATABASE_USER: ${PG_CKEDITOR_ADMIN_USER:?err}
+      ENABLE_METRIC_LOGS: ${CKEDITOR_ENABLE_METRIC_LOGS:-false}
+      ENVIRONMENTS_MANAGEMENT_SECRET_KEY: ${CKEDITOR_ENVIRONMENT_SECRET_KEY:-}
+      LICENSE_KEY: ${CKEDITOR_SERVER_LICENSE_KEY:-}
+      LOG_LEVEL: ${CKEDITOR_LOG_LEVEL:-40}
+      REDIS_CONNECTION_STRING: redis://redis:6379 ()
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
+    image: docker.cke-cs.com/cs:4.17.1
+    init: true
+    restart: always
+
+  ckeditor-migration:
+    command: ckeditor:environment:migration --if-present
+    depends_on:
+      ckeditor-backend:
+        condition: service_healthy
+    deploy:
+      replicas: 0
+    entrypoint: npm run
+    env_file:
+      - .env
+    image: plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}
+    logging:
+      driver: none
+
+
+volumes:
+  dbdata: {}
+  uploads: {}
+  letsencrypt: {}
+  localesOverride: {}
+  minio-data: {}
+  postgres-data: {}
+  postgres-initdb:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/volumes/postgres-initdb"
+  redis:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/volumes/redis"
+  datalake-maintainer-keys:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_HOME:-.}/volumes/datalake-maintainer-keys"
+  couchbase-backups:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_BACKUP_PATH}/couchbase"
+  postgres-backups:
+    driver: local
+    driver_opts:
+      type: "none"
+      o: "bind"
+      device: "${PLEXTRAC_BACKUP_PATH}/postgres"
+
+networks:
+  default:
+    name: plextrac
+    driver: bridge

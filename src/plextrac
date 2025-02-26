@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.7.18
+VERSION=0.7.19
 
 ## Podman Global Declaration Variable
 declare -A svcValues
@@ -453,7 +453,7 @@ function mod_recreate() {
     sleep 2
   done
   >&2 echo -n "${RESET}"
-  log "Done!" 
+  log "Done!"
 }
 
 function mod_restart() {
