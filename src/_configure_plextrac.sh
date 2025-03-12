@@ -138,9 +138,9 @@ function setCKEMigrateConfig() {
     echo CKEDITOR_MIGRATE=false
   else
     echo CKEDITOR_MIGRATE=true
-    echo IMAGE_REGISTRY=docker.cke-cs.com
+    echo IMAGE_REGISTRY=${IMAGE_REGISTRY:docker.cke-cs.com}
     echo IMAGE_REGISTRY_PASS=${IMAGE_REGISTRY_PASS:-}
-    echo IMAGE_REGISTRY_USER=cs
+    echo IMAGE_REGISTRY_USER=${IMAGE_REGISTRY_USER:cs}
   fi
 }
 
