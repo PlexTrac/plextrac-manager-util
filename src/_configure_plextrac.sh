@@ -204,10 +204,13 @@ function updateComposeConfig() {
   # If upgrade strategy is stable or greater than 2.0, we should use the newer compose file
   # If we also see the ckeditor RTC license key, we use the compose file with CKE RTC services
   if [ "${UPGRADE_STRATEGY}" == "stable" ] || [ $(printf "%03d%03d%03d%03d" $(echo "${UPGRADE_STRATEGY}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "2.0" | tr '.' ' ')) ]; then
+    debug "version new enough for newer compose file"
     if [ -n "${CKEDITOR_SERVER_LICENSE_KEY:-}" ]; then
       decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED_V2_RTC)
+      debug "ckeditor license key set, so enabling rtc compose file"
     else
       decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED_V2)
+      debug "setting compose v2 file without rtc"
     fi
   else
     decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
