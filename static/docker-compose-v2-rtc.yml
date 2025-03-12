@@ -95,7 +95,7 @@ services:
       CB_BACKUP_USER: "${CB_BACKUP_USER:?err}"
       CB_BUCKET: "${CB_BUCKET-}"
       bucket: "${bucket-}"
-    image: plextrac/plextracdb:7.2
+    image: plextrac/plextracdb:7.2.0
     ports:
     - 127.0.0.1:8091:8091/tcp
     - 127.0.0.1:8092:8092/tcp
