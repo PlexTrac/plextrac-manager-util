@@ -245,3 +245,23 @@ function etl_failure() {
   
   die "Updates are locked due to a failed data migration. Version Lock: $LOCK_VERSION. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
 }
+
+
+function postgres_upgrade() {
+  log "Upgrading Postgres to version 17"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    error "Podman is not supported for this operation"
+  else
+    log "Upgrading Postgres to version 17"
+    wait 5
+    log "Backing up existing Postgres data"
+    backup_fullPostgresBackup()
+
+    log "Stopping PlexTrac services"
+    compose_client down
+    wait 5
+    log "Removing existing Postgres container"
+    compose_client rm -f postgres && compose_client volume rm -f plextracapi
+  fi
+
+}
