@@ -79,6 +79,9 @@ CKEDITOR_SERVER_LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-}
 `setCKEMigrateConfig`
 CKEDITOR_ENABLE_METRIC_LOGS=false
 CKEDITOR_LOG_LEVEL=40
+PG_CORE_AI_SQL_USER=${PG_CORE_AI_SQL_USER:-"ai_sql"}
+PG_CORE_AI_SQL_PASSWORD=${PG_CORE_AI_SQL_PASSWORD:-`generateSecret`}
+
 
 
 `generate_default_couchbase_env | setDefaultSecrets`
