@@ -250,6 +250,7 @@ function create_volume_directories() {
     stat "${PLEXTRAC_HOME}/volumes/redis" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/redis"
     stat "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_ssl_certs"
     stat "${PLEXTRAC_HOME}/volumes/nginx_logos" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_logos"
+    stat "${PLEXTRAC_HOME}/volumes/minio" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/minio"
     stat "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/naxsi-waf"; echo '## Custom WAF Rules Below' > "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"
   fi
 }
