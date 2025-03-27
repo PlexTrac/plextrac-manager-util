@@ -82,6 +82,8 @@ services:
       PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
       PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
       PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+      PG_CORE_AI_SQL_PASSWORD: ${PG_CORE_AI_SQL_PASSWORD:?err}
+      PG_CORE_AI_SQL_USER: ${PG_CORE_AI_SQL_USER:?err}
 
   plextracdb:
     environment:
