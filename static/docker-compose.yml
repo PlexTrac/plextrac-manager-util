@@ -350,7 +350,7 @@ services:
       - "--no-update-notifier"
     entrypoint: npm run
     command: "start:contextual-scoring-service"
-  
+
   minio:
     ports:
       - 127.0.0.1:9000:9000
@@ -384,7 +384,53 @@ services:
       CLOUD_STORAGE_SECRET_KEY: ${CLOUD_STORAGE_SECRET_KEY:?err}
       MINIO_ENABLED : ${MINIO_ENABLED:-true}
       UPSTREAM_CLOUD_BUCKET: ${UPSTREAM_CLOUD_BUCKET:-cloud}
-      
+
+  integration-worker:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 1
+    depends_on:
+      - postgres
+      - redis
+    restart: always
+    ports:
+      - 9100:9100
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-logfmt}
+      NODE_ENV: ${NODE_ENV:-production}
+      SYSTEM_LEVEL: ${SYSTEM_LEVEL:-PRODUCTION}
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      INTEGRATION_WORKER_PORT: ${INTEGRATION_WORKER_PORT:-9100}
+      COUCHBASE_URL: ${COUCHBASE_URL:-plextracdb}
+      CB_API_USER: ${CB_API_USER:?err}
+      CB_API_PASS: ${CB_API_PASS:?err}
+      CB_BUCKET: ${CB_BUCKET:?err}
+      PG_HOST: ${PG_HOST:?err}
+      PG_CORE_DB: ${PG_CORE_DB:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_DEBUG_QUERY_LOGGING: ${PG_DEBUG_QUERY_LOGGING:-true}
+      REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING:-redis}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
+      CLOUD_STORAGE_ENDPOINT: ${CLOUD_STORAGE_ENDPOINT:-minio}
+      CLOUD_STORAGE_PORT: ${CLOUD_STORAGE_PORT:-9000}
+      CLOUD_STORAGE_SSL: ${CLOUD_STORAGE_SSL:-false}
+      CLOUD_STORAGE_ACCESS_KEY: ${CLOUD_STORAGE_ACCESS_KEY:?err}
+      CLOUD_STORAGE_SECRET_KEY: ${CLOUD_STORAGE_SECRET_KEY:?err}
+      CLOUD_STORAGE_BUCKET_NAME: ${CLOUD_STORAGE_BUCKET_NAME:-cloud}
+      CLOUD_STORAGE_KEY_PREFIX: ${CLOUD_STORAGE_KEY_PREFIX:-uploads}
+      LAUNCH_DARKLY_SDK_KEY: ${LAUNCH_DARKLY_SDK_KEY}
+      FEATURE_FLAGS_USE_LD_OVERRIDES: ${FEATURE_FLAGS_USE_LD_OVERRIDES}
+      TELEMETRY_EXPORTERS: ${TELEMETRY_EXPORTERS}
+      JAEGER_ENDPOINT: ${JAEGER_ENDPOINT}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    entrypoint: npm run
+    command: 'start:integration-worker'
+
 
 volumes:
   dbdata: {}
