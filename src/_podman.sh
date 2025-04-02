@@ -167,6 +167,7 @@ function plextrac_start_podman() {
   PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
   PODMAN_MINIO_IMAGE="${PODMAN_MINIO_IMAGE:-docker.io/chainguard/minio@sha256:92b5ea1641d52262d6f65c95cffff4668663e00d6b2033875774ba1c2212cfa7}"
   PODMAN_MINIO_BOOTSTRAP_IMAGE="${PODMAN_MINIO_BOOTSTRAP_IMAGE:-docker.io/plextrac/plextrac-minio-bootstrap:stable}"
+  PODMAN_INTEGRATION_WORKER_IMAGE="${PODMAN_INTEGRATION_WORKER_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
 
   serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
   serviceValues[minio-image]="${PODMAN_MINIO_IMAGE}"
@@ -176,6 +177,7 @@ function plextrac_start_podman() {
   serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
   serviceValues[api-image]="${PODMAN_API_IMAGE}"
   serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
+  serviceValues[integration-worker-image]="${PODMAN_INTEGRATION_IMAGE}"
   serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
   if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
@@ -187,9 +189,10 @@ function plextrac_start_podman() {
   serviceValues[minio-entrypoint]="$(printf '%s' "--entrypoint=" "[" "\"/usr/bin/minio\"" "," "\"server\"" "," "\"/data\"" "]")"
   serviceValues[minio-env_vars]="-e MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin} -e MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?err} -e MINIO_LOCAL_USER=${MINIO_LOCAL_USER:-localadmin} -e MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:?err} -e CLOUD_STORAGE_ENDPOINT=${CLOUD_STORAGE_ENDPOINT:-127.0.0.1} -e CLOUD_STORAGE_PORT=${CLOUD_STORAGE_PORT:-9000} -e CLOUD_STORAGE_SSL=${CLOUD_STORAGE_SSL:-false} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err}"
   serviceValues[minio-bootstrap-env_vars]="-e MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin} -e MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?err} -e MINIO_LOCAL_USER=${MINIO_LOCAL_USER:-localadmin} -e MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:?err} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err} -e MINIO_ENABLED=${MINIO_ENABLED:-true} -e UPSTREAM_CLOUD_BUCKET=${UPSTREAM_CLOUD_BUCKET:-cloud}"
+  serviceValues[integration-worker-env_vars]="-e LOG_LEVEL=${LOG_LEVEL:-info} -e LOG_FORMAT=${LOG_FORMAT:-logfmt} -e NODE_ENV=${NODE_ENV:-production} -e SYSTEM_LEVEL=${SYSTEM_LEVEL:-PRODUCTION} -e CLIENT_DOMAIN_NAME=${CLIENT_DOMAIN_NAME:?err} -e INTEGRATION_WORKER_PORT=${INTEGRATION_WORKER_PORT:-9100} -e COUCHBASE_URL=${COUCHBASE_URL:-plextracdb} -e CB_API_USER=${CB_API_USER:?err} -e CB_API_PASS=${CB_API_PASS:?err} -e CB_BUCKET=${CB_BUCKET:?err} -e PG_HOST=${PG_HOST:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_DEBUG_QUERY_LOGGING=${PG_DEBUG_QUERY_LOGGING:-true} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e CLOUD_STORAGE_ENDPOINT=${CLOUD_STORAGE_ENDPOINT:-minio} -e CLOUD_STORAGE_PORT=${CLOUD_STORAGE_PORT:-9000} -e CLOUD_STORAGE_SSL=${CLOUD_STORAGE_SSL:-false} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err} -e CLOUD_STORAGE_BUCKET_NAME=${CLOUD_STORAGE_BUCKET_NAME:-cloud} -e CLOUD_STORAGE_KEY_PREFIX=${CLOUD_STORAGE_KEY_PREFIX:-uploads} -e LAUNCH_DARKLY_SDK_KEY=${LAUNCH_DARKLY_SDK_KEY} -e FEATURE_FLAGS_USE_LD_OVERRIDES=${FEATURE_FLAGS_USE_LD_OVERRIDES} -e TELEMETRY_EXPORTERS=${TELEMETRY_EXPORTERS} -e JAEGER_ENDPOINT=${JAEGER_ENDPOINT}"
 
   if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
-    serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx" "minio" "minio-bootstrap")
+    serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx" "minio" "minio-bootstrap" "integration-worker")
   fi
   serviceValues[notification-env_vars]="-e API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE=${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
   serviceValues[notification-env_vars]="-e INTERNAL_API_KEY_SHARED=${INTERNAL_API_KEY_SHARED:?err}"
@@ -275,6 +278,9 @@ function plextrac_start_podman() {
       elif [ "$service" == "minio-bootstrap" ]; then
         local image="${serviceValues[minio-bootstrap-image]}"
         local env_vars="${serviceValues[minio-bootstrap-env_vars]}"
+      elif [ "$service" == "integration-worker" ]; then
+        local image="${serviceValues[integration-worker-image]}"
+        local env_vars="${serviceValues[integration-worker-env_vars]}"
       fi
       info "Creating $service"
       # This specific if loop is because Bash escaping and the specific need for the podman flag --entrypoint were being a massive pain in figuring out. After hours of effort, simply making an if statement here and calling podman directly fixes the escaping issues
