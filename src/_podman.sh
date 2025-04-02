@@ -177,7 +177,7 @@ function plextrac_start_podman() {
   serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
   serviceValues[api-image]="${PODMAN_API_IMAGE}"
   serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
-  serviceValues[integration-worker-image]="${PODMAN_INTEGRATION_IMAGE}"
+  serviceValues[integration-worker-image]="${PODMAN_INTEGRATION_WORKER_IMAGE}"
   serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
   if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
