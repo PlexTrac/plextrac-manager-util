@@ -41,7 +41,7 @@ svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw -v nginx_ss
 svcValues[plextracnginx-healthcheck]='--health-cmd=["echo","GET","/","|","openssl","s_client","-quiet","-connect","127.0.0.1:443"]'
 svcValues[plextracnginx-alias]="--network-alias=ckeditor"
 #Minio
-svcValues[minio-volumes]="-v minio-data:/data:rw"
+svcValues[minio-volumes]="-v minio-data:/data:Z"
 
 
 trap 'cleanup $?' SIGINT ERR EXIT
