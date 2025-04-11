@@ -106,6 +106,8 @@ for db_name in ${PGDATABASES[@]}; do
   ro_password="PG_${db_name_uppercase}_RO_PASSWORD"
   rw_user="PG_${db_name_uppercase}_RW_USER"
   rw_password="PG_${db_name_uppercase}_RW_PASSWORD"
+  ai_user="PG_CORE_AI_SQL_USER"
+  ai_password="PG_CORE_AI_SQL_PASSWORD"
   
   # Execute bootstrap template for all databases
   psql -a -v ON_ERROR_STOP=1 \
@@ -124,8 +126,8 @@ for db_name in ${PGDATABASES[@]}; do
   if [ "${db_name}" = "core" ]; then
     psql -a -v ON_ERROR_STOP=1 \
       -v db_name="${db_name}" \
-      -v pg_core_ai_sql_user="$PG_CORE_AI_SQL_USER" \
-      -v pg_core_ai_sql_password="$PG_CORE_AI_SQL_PASSWORD" \
+      -v pg_core_ai_sql_user="${!ai_user}" \
+      -v pg_core_ai_sql_password="${!ai_password}" \
       --username $POSTGRES_USER \
       -d ${db_name} \
       < /docker-entrypoint-initdb.d/ai-sql-user.sql.txt
