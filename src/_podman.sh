@@ -302,7 +302,7 @@ function podman_run_cb_migrations() {
   local image="${serviceValues[api-image]}"
 
   debug "Running migrations"
-  podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:superuser:bootstrap && npm run pg:migrate && npm run pg:superuser:bootstrap:post-migration && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no \
+  podman run ${serviceValues[env-file]} $env_vars --entrypoint='["/bin/sh","-c","npm run maintenance:enable && npm run pg:superuser:bootstrap && npm run pg:migrate && npm run pg:superuser:bootstrap:post-migration --if-present && npm run db:migrate && npm run pg:etl up all && npm run maintenance:disable"]' --restart=no \
   $volumes:z --replace --name="migrations" ${serviceValues[network]} -d $image 1>/dev/null
 }
 
