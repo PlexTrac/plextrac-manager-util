@@ -76,38 +76,38 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :'admin_user'
     GRANT USAGE ON SEQUENCES TO :'rw_user';
 
 -- AI SQL User (only for core database)
-DO $$ 
+DO $$
 BEGIN
   IF (:'db_name' = 'core') THEN
     CREATE USER :'pg_core_ai_sql_user' WITH PASSWORD :'pg_core_ai_sql_password';
-    
+
     -- Grant necessary permissions
     GRANT CONNECT ON DATABASE core TO :'pg_core_ai_sql_user';
     GRANT USAGE ON SCHEMA public TO :'pg_core_ai_sql_user';
-    
+
     -- Grant SELECT on specific tables and columns (similar to ai-user-etl.ts)
-    GRANT SELECT (cuid, id, tenant_id, name, description, created_at, last_updated_at) 
+    GRANT SELECT (cuid, id, tenant_id, name, description, created_at, last_updated_at)
       ON public.client TO :'pg_core_ai_sql_user';
-    
-    GRANT SELECT (cuid, id, tenant_id, tenant_cuid, client_id, name, description, status, 
-      start_date, end_date, report_type, reviewers, operators, custom_field, tags, 
-      created_at, last_updated_at) 
+
+    GRANT SELECT (cuid, id, tenant_id, tenant_cuid, client_id, name, description, status,
+      start_date, end_date, report_type, reviewers, operators, custom_field, tags,
+      created_at, last_updated_at)
       ON public.report TO :'pg_core_ai_sql_user';
-    
-    GRANT SELECT (cuid, flaw_id, tenant_id, client_id, report_id, description, status, 
-      sub_status, tags, title, severity, risk_score, recommendations, assigned_to_user_email, 
-      created_at, last_updated_at, reopened_at, closed_at) 
+
+    GRANT SELECT (cuid, flaw_id, tenant_id, client_id, report_id, description, status,
+      sub_status, tags, title, severity, risk_score, recommendations, assigned_to_user_email,
+      created_at, last_updated_at, reopened_at, closed_at)
       ON public.finding TO :'pg_core_ai_sql_user';
-    
-    GRANT SELECT (cuid, id, tenant_id, client_id, parent_id, name, type, known_ips, hostname, 
-      description, mac_address, netbios_name, dns_name, host_fqdn, host_rdns, system_owner, 
-      data_owner, physical_location, tags, criticality, operating_systems, pci_status, ports, 
-      integration_data, total_cves, created_at, last_updated_at) 
+
+    GRANT SELECT (cuid, id, tenant_id, client_id, parent_id, name, type, known_ips, hostname,
+      description, mac_address, netbios_name, dns_name, host_fqdn, host_rdns, system_owner,
+      data_owner, physical_location, tags, criticality, operating_systems, pci_status, ports,
+      integration_data, total_cves, created_at, last_updated_at)
       ON public.asset TO :'pg_core_ai_sql_user';
-    
-    GRANT SELECT (cuid, tenant_id, client_id, report_id, location_url, status, integration_data, 
-      created_at, last_updated_at, closed_at, reopened_at, finding_cuid, asset_cuid, 
-      assigned_to_user_email, sub_status) 
+
+    GRANT SELECT (cuid, tenant_id, client_id, report_id, location_url, status, integration_data,
+      created_at, last_updated_at, closed_at, reopened_at, finding_cuid, asset_cuid,
+      assigned_to_user_email, sub_status)
       ON public.asset_finding TO :'pg_core_ai_sql_user';
   END IF;
 END $$;
