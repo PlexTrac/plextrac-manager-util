@@ -31,86 +31,87 @@ function deploy_volume_contents_postgres() {
   fi
   debug "Adding scripts to $targetDir"
   cat > "$targetDir/bootstrap-template.sql.txt" <<- "EOBOOTSTRAPTEMPLATE"
+-- this file is used in the migration that creates the DB for CKEditor. Be sure to test the CKE DB is functional with the
+-- CKE service if this is altered
+
 -- Add Service Roles
 --
 -- Service Admin
-CREATE USER :'admin_user' WITH PASSWORD :'admin_password';
+CREATE USER :"admin_user" WITH PASSWORD :'admin_password';
 -- Service Read-Only User
-CREATE USER :'ro_user' WITH PASSWORD :'ro_password';
+CREATE USER :"ro_user" WITH PASSWORD :'ro_password';
 -- Service Read-Write User
-CREATE USER :'rw_user' WITH PASSWORD :'rw_password';
+CREATE USER :"rw_user" WITH PASSWORD :'rw_password';
 
 -- Role memberships
 -- Each role inherits from the role below
-GRANT :'ro_user' TO :'rw_user';
-GRANT :'rw_user' TO :'admin_user';
+GRANT :"ro_user" TO :"rw_user";
+GRANT :"rw_user" TO :"admin_user";
 
 -- Create Service Database
-CREATE DATABASE :'db_name';
-REVOKE ALL ON DATABASE :'db_name' FROM public;
-GRANT CONNECT ON DATABASE :'db_name' TO :'ro_user';
-
--- switch to the new database.
-\connect :'db_name';
-
--- Schema level grants within the database
---
--- Service Read-Only user needs basic access
-GRANT USAGE ON SCHEMA public TO :'ro_user';
-
--- Only the admin account should ever create new resources
--- This also marks Service Admin account as owner of new resources
-GRANT CREATE ON SCHEMA public TO :'admin_user';
-
--- Enable read access to all new tables for Service Read-Only
-ALTER DEFAULT PRIVILEGES FOR ROLE :'admin_user'
-    GRANT SELECT ON TABLES TO :'ro_user';
-
--- Enable read-write access to all new tables for Service Read-Write
-ALTER DEFAULT PRIVILEGES FOR ROLE :'admin_user'
-    GRANT INSERT,DELETE,TRUNCATE,UPDATE ON TABLES TO :'rw_user';
-
--- Need to enable usage on sequences for Service Read-Write
--- to enable auto-incrementing ids
-ALTER DEFAULT PRIVILEGES FOR ROLE :'admin_user'
-    GRANT USAGE ON SEQUENCES TO :'rw_user';
+CREATE DATABASE :"db_name";
+REVOKE ALL ON DATABASE :"db_name" FROM public;
+GRANT CONNECT ON DATABASE :"db_name" TO :"ro_user";
 
 -- AI SQL User (only for core database)
 DO $$
 BEGIN
   IF (:'db_name' = 'core') THEN
-    CREATE USER :'pg_core_ai_sql_user' WITH PASSWORD :'pg_core_ai_sql_password';
+    CREATE USER :"pg_core_ai_sql_user" WITH PASSWORD :'pg_core_ai_sql_password';
 
     -- Grant necessary permissions
-    GRANT CONNECT ON DATABASE core TO :'pg_core_ai_sql_user';
-    GRANT USAGE ON SCHEMA public TO :'pg_core_ai_sql_user';
+    GRANT CONNECT ON DATABASE core TO :"pg_core_ai_sql_user";
+    GRANT USAGE ON SCHEMA public TO :"pg_core_ai_sql_user";
 
     -- Grant SELECT on specific tables and columns (similar to ai-user-etl.ts)
     GRANT SELECT (cuid, id, tenant_id, name, description, created_at, last_updated_at)
-      ON public.client TO :'pg_core_ai_sql_user';
+      ON public.client TO :"pg_core_ai_sql_user";
 
     GRANT SELECT (cuid, id, tenant_id, tenant_cuid, client_id, name, description, status,
       start_date, end_date, report_type, reviewers, operators, custom_field, tags,
       created_at, last_updated_at)
-      ON public.report TO :'pg_core_ai_sql_user';
+      ON public.report TO :"pg_core_ai_sql_user";
 
     GRANT SELECT (cuid, flaw_id, tenant_id, client_id, report_id, description, status,
       sub_status, tags, title, severity, risk_score, recommendations, assigned_to_user_email,
       created_at, last_updated_at, reopened_at, closed_at)
-      ON public.finding TO :'pg_core_ai_sql_user';
+      ON public.finding TO :"pg_core_ai_sql_user";
 
     GRANT SELECT (cuid, id, tenant_id, client_id, parent_id, name, type, known_ips, hostname,
       description, mac_address, netbios_name, dns_name, host_fqdn, host_rdns, system_owner,
       data_owner, physical_location, tags, criticality, operating_systems, pci_status, ports,
       integration_data, total_cves, created_at, last_updated_at)
-      ON public.asset TO :'pg_core_ai_sql_user';
+      ON public.asset TO :"pg_core_ai_sql_user";
 
     GRANT SELECT (cuid, tenant_id, client_id, report_id, location_url, status, integration_data,
       created_at, last_updated_at, closed_at, reopened_at, finding_cuid, asset_cuid,
       assigned_to_user_email, sub_status)
-      ON public.asset_finding TO :'pg_core_ai_sql_user';
+      ON public.asset_finding TO :"pg_core_ai_sql_user";
   END IF;
 END $$;
+
+-- switch to the new database.
+\connect :"db_name";
+
+-- Schema level grants within the database
+--
+-- Service Read-Only user needs basic access
+GRANT USAGE ON SCHEMA public TO :"ro_user";
+-- Only the admin account should ever create new resources
+-- This also marks Service Admin account as owner of new resources
+GRANT CREATE ON SCHEMA public TO :"admin_user";
+
+
+-- Enable read access to all new tables for Service Read-Only
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_user"
+    GRANT SELECT ON TABLES TO :"ro_user";
+-- Enable read-write access to all new tables for Service Read-Write
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_user"
+    GRANT INSERT,DELETE,TRUNCATE,UPDATE ON TABLES TO :"rw_user";
+-- Need to enable usage on sequences for Service Read-Write
+-- to enable auto-incrementing ids
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_user"
+    GRANT USAGE ON SEQUENCES TO :"rw_user";
 EOBOOTSTRAPTEMPLATE
   cat > "$targetDir/initdb.sh" <<- "EOINITDBSCRIPT"
 #!/bin/bash
