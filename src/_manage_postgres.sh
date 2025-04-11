@@ -53,43 +53,6 @@ CREATE DATABASE :"db_name";
 REVOKE ALL ON DATABASE :"db_name" FROM public;
 GRANT CONNECT ON DATABASE :"db_name" TO :"ro_user";
 
--- AI SQL User (only for core database)
-DO $$
-BEGIN
-  IF (:'db_name' = 'core') THEN
-    CREATE USER :"pg_core_ai_sql_user" WITH PASSWORD :'pg_core_ai_sql_password';
-
-    -- Grant necessary permissions
-    GRANT CONNECT ON DATABASE core TO :"pg_core_ai_sql_user";
-    GRANT USAGE ON SCHEMA public TO :"pg_core_ai_sql_user";
-
-    -- Grant SELECT on specific tables and columns (similar to ai-user-etl.ts)
-    GRANT SELECT (cuid, id, tenant_id, name, description, created_at, last_updated_at)
-      ON public.client TO :"pg_core_ai_sql_user";
-
-    GRANT SELECT (cuid, id, tenant_id, tenant_cuid, client_id, name, description, status,
-      start_date, end_date, report_type, reviewers, operators, custom_field, tags,
-      created_at, last_updated_at)
-      ON public.report TO :"pg_core_ai_sql_user";
-
-    GRANT SELECT (cuid, flaw_id, tenant_id, client_id, report_id, description, status,
-      sub_status, tags, title, severity, risk_score, recommendations, assigned_to_user_email,
-      created_at, last_updated_at, reopened_at, closed_at)
-      ON public.finding TO :"pg_core_ai_sql_user";
-
-    GRANT SELECT (cuid, id, tenant_id, client_id, parent_id, name, type, known_ips, hostname,
-      description, mac_address, netbios_name, dns_name, host_fqdn, host_rdns, system_owner,
-      data_owner, physical_location, tags, criticality, operating_systems, pci_status, ports,
-      integration_data, total_cves, created_at, last_updated_at)
-      ON public.asset TO :"pg_core_ai_sql_user";
-
-    GRANT SELECT (cuid, tenant_id, client_id, report_id, location_url, status, integration_data,
-      created_at, last_updated_at, closed_at, reopened_at, finding_cuid, asset_cuid,
-      assigned_to_user_email, sub_status)
-      ON public.asset_finding TO :"pg_core_ai_sql_user";
-  END IF;
-END $$;
-
 -- switch to the new database.
 \connect :"db_name";
 
@@ -113,6 +76,17 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_user"
 ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_user"
     GRANT USAGE ON SEQUENCES TO :"rw_user";
 EOBOOTSTRAPTEMPLATE
+
+  # Create a separate file for AI SQL user creation
+  cat > "$targetDir/ai-sql-user.sql.txt" <<- "EOAISQLUSER"
+-- AI SQL User creation for core database
+CREATE USER :"pg_core_ai_sql_user" WITH PASSWORD :'pg_core_ai_sql_password';
+
+-- Grant necessary permissions
+GRANT CONNECT ON DATABASE :"db_name" TO :"pg_core_ai_sql_user";
+GRANT USAGE ON SCHEMA public TO :"pg_core_ai_sql_user";
+EOAISQLUSER
+
   cat > "$targetDir/initdb.sh" <<- "EOINITDBSCRIPT"
 #!/bin/bash
 
@@ -133,25 +107,29 @@ for db_name in ${PGDATABASES[@]}; do
   rw_user="PG_${db_name_uppercase}_RW_USER"
   rw_password="PG_${db_name_uppercase}_RW_PASSWORD"
   
-  # Common psql parameters
-  psql_params="-a -v ON_ERROR_STOP=1 \
-    -v db_name=\"${db_name}\" \
-    -v admin_user=\"${!admin_user}\" \
-    -v admin_password=\"${!admin_password}\" \
-    -v ro_user=\"${!ro_user}\" \
-    -v ro_password=\"${!ro_password}\" \
-    -v rw_user=\"${!rw_user}\" \
-    -v rw_password=\"${!rw_password}\""
+  # Execute bootstrap template for all databases
+  psql -a -v ON_ERROR_STOP=1 \
+    -v db_name="${db_name}" \
+    -v admin_user="${!admin_user}" \
+    -v admin_password="${!admin_password}" \
+    -v ro_user="${!ro_user}" \
+    -v ro_password="${!ro_password}" \
+    -v rw_user="${!rw_user}" \
+    -v rw_password="${!rw_password}" \
+    --username $POSTGRES_USER \
+    -d $POSTGRES_USER \
+    < /docker-entrypoint-initdb.d/bootstrap-template.sql.txt
   
-  # Add AI SQL user variables only for core database
+  # Execute AI SQL user creation only for core database
   if [ "${db_name}" = "core" ]; then
-    psql_params="$psql_params \
-      -v pg_core_ai_sql_user=\"$PG_CORE_AI_SQL_USER\" \
-      -v pg_core_ai_sql_password=\"$PG_CORE_AI_SQL_PASSWORD\""
+    psql -a -v ON_ERROR_STOP=1 \
+      -v db_name="${db_name}" \
+      -v pg_core_ai_sql_user="$PG_CORE_AI_SQL_USER" \
+      -v pg_core_ai_sql_password="$PG_CORE_AI_SQL_PASSWORD" \
+      --username $POSTGRES_USER \
+      -d ${db_name} \
+      < /docker-entrypoint-initdb.d/ai-sql-user.sql.txt
   fi
-  
-  # Execute psql with appropriate parameters
-  eval "psql $psql_params --username $POSTGRES_USER -d $POSTGRES_USER < /docker-entrypoint-initdb.d/bootstrap-template.sql.txt"
 done
 EOINITDBSCRIPT
   # postgres container does not have a uid 1337, most reliable way to bootstrap
