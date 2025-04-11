@@ -34,46 +34,83 @@ function deploy_volume_contents_postgres() {
 -- Add Service Roles
 --
 -- Service Admin
-CREATE USER $PG_PLACEHOLDER_ADMIN_USER WITH PASSWORD '$PG_PLACEHOLDER_ADMIN_PASSWORD';
+CREATE USER :'admin_user' WITH PASSWORD :'admin_password';
 -- Service Read-Only User
-CREATE USER $PG_PLACEHOLDER_RO_USER WITH PASSWORD '$PG_PLACEHOLDER_RO_PASSWORD';
+CREATE USER :'ro_user' WITH PASSWORD :'ro_password';
 -- Service Read-Write User
-CREATE USER $PG_PLACEHOLDER_RW_USER WITH PASSWORD '$PG_PLACEHOLDER_RW_PASSWORD';
+CREATE USER :'rw_user' WITH PASSWORD :'rw_password';
 
 -- Role memberships
 -- Each role inherits from the role below
-GRANT $PG_PLACEHOLDER_RO_USER TO $PG_PLACEHOLDER_RW_USER;
-GRANT $PG_PLACEHOLDER_RW_USER TO $PG_PLACEHOLDER_ADMIN_USER;
+GRANT :'ro_user' TO :'rw_user';
+GRANT :'rw_user' TO :'admin_user';
 
--- Create Service Database $PG_PLACEHOLDER_DB
-CREATE DATABASE $PG_PLACEHOLDER_DB;
-REVOKE ALL ON DATABASE $PG_PLACEHOLDER_DB FROM public;
-GRANT CONNECT ON DATABASE $PG_PLACEHOLDER_DB TO $PG_PLACEHOLDER_RO_USER;
+-- Create Service Database
+CREATE DATABASE :'db_name';
+REVOKE ALL ON DATABASE :'db_name' FROM public;
+GRANT CONNECT ON DATABASE :'db_name' TO :'ro_user';
 
 -- switch to the new database.
-\connect $PG_PLACEHOLDER_DB;
+\connect :'db_name';
 
--- Schema level grants within $PG_PLACEHOLDER_DB db
+-- Schema level grants within the database
 --
 -- Service Read-Only user needs basic access
-GRANT USAGE ON SCHEMA public TO $PG_PLACEHOLDER_RO_USER;
+GRANT USAGE ON SCHEMA public TO :'ro_user';
 
 -- Only the admin account should ever create new resources
 -- This also marks Service Admin account as owner of new resources
-GRANT CREATE ON SCHEMA public TO $PG_PLACEHOLDER_ADMIN_USER;
+GRANT CREATE ON SCHEMA public TO :'admin_user';
 
 -- Enable read access to all new tables for Service Read-Only
-ALTER DEFAULT PRIVILEGES FOR ROLE $PG_PLACEHOLDER_ADMIN_USER
-    GRANT SELECT ON TABLES TO $PG_PLACEHOLDER_RO_USER;
+ALTER DEFAULT PRIVILEGES FOR ROLE :'admin_user'
+    GRANT SELECT ON TABLES TO :'ro_user';
 
 -- Enable read-write access to all new tables for Service Read-Write
-ALTER DEFAULT PRIVILEGES FOR ROLE $PG_PLACEHOLDER_ADMIN_USER
-    GRANT INSERT,DELETE,TRUNCATE,UPDATE ON TABLES TO $PG_PLACEHOLDER_RW_USER;
+ALTER DEFAULT PRIVILEGES FOR ROLE :'admin_user'
+    GRANT INSERT,DELETE,TRUNCATE,UPDATE ON TABLES TO :'rw_user';
 
 -- Need to enable usage on sequences for Service Read-Write
 -- to enable auto-incrementing ids
-ALTER DEFAULT PRIVILEGES FOR ROLE $PG_PLACEHOLDER_ADMIN_USER
-    GRANT USAGE ON SEQUENCES TO $PG_PLACEHOLDER_RW_USER;
+ALTER DEFAULT PRIVILEGES FOR ROLE :'admin_user'
+    GRANT USAGE ON SEQUENCES TO :'rw_user';
+
+-- AI SQL User (only for core database)
+DO $$ 
+BEGIN
+  IF (:'db_name' = 'core') THEN
+    CREATE USER :'pg_core_ai_sql_user' WITH PASSWORD :'pg_core_ai_sql_password';
+    
+    -- Grant necessary permissions
+    GRANT CONNECT ON DATABASE core TO :'pg_core_ai_sql_user';
+    GRANT USAGE ON SCHEMA public TO :'pg_core_ai_sql_user';
+    
+    -- Grant SELECT on specific tables and columns (similar to ai-user-etl.ts)
+    GRANT SELECT (cuid, id, tenant_id, name, description, created_at, last_updated_at) 
+      ON public.client TO :'pg_core_ai_sql_user';
+    
+    GRANT SELECT (cuid, id, tenant_id, tenant_cuid, client_id, name, description, status, 
+      start_date, end_date, report_type, reviewers, operators, custom_field, tags, 
+      created_at, last_updated_at) 
+      ON public.report TO :'pg_core_ai_sql_user';
+    
+    GRANT SELECT (cuid, flaw_id, tenant_id, client_id, report_id, description, status, 
+      sub_status, tags, title, severity, risk_score, recommendations, assigned_to_user_email, 
+      created_at, last_updated_at, reopened_at, closed_at) 
+      ON public.finding TO :'pg_core_ai_sql_user';
+    
+    GRANT SELECT (cuid, id, tenant_id, client_id, parent_id, name, type, known_ips, hostname, 
+      description, mac_address, netbios_name, dns_name, host_fqdn, host_rdns, system_owner, 
+      data_owner, physical_location, tags, criticality, operating_systems, pci_status, ports, 
+      integration_data, total_cves, created_at, last_updated_at) 
+      ON public.asset TO :'pg_core_ai_sql_user';
+    
+    GRANT SELECT (cuid, tenant_id, client_id, report_id, location_url, status, integration_data, 
+      created_at, last_updated_at, closed_at, reopened_at, finding_cuid, asset_cuid, 
+      assigned_to_user_email, sub_status) 
+      ON public.asset_finding TO :'pg_core_ai_sql_user';
+  END IF;
+END $$;
 EOBOOTSTRAPTEMPLATE
   cat > "$targetDir/initdb.sh" <<- "EOINITDBSCRIPT"
 #!/bin/bash
@@ -83,10 +120,37 @@ PGDATABASES=('core' 'runbooks' 'ckeditor')
 
 tmpl=`cat /docker-entrypoint-initdb.d/bootstrap-template.sql.txt`
 
-for db in ${PGDATABASES[@]}; do
-  # Ugh this is ugly. Thanks Bash
-  eval "echo "'"'"`echo "$tmpl" | sed "s/PLACEHOLDER/${db^^}/g" -`"'"'"" |
-    psql -a -v ON_ERROR_STOP=1 --username $POSTGRES_USER -d $POSTGRES_USER
+for db_name in ${PGDATABASES[@]}; do
+  # Convert database name to uppercase for variable name construction
+  db_name_uppercase=${db_name^^}
+  
+  # Build environment variable names
+  admin_user="PG_${db_name_uppercase}_ADMIN_USER"
+  admin_password="PG_${db_name_uppercase}_ADMIN_PASSWORD"
+  ro_user="PG_${db_name_uppercase}_RO_USER"
+  ro_password="PG_${db_name_uppercase}_RO_PASSWORD"
+  rw_user="PG_${db_name_uppercase}_RW_USER"
+  rw_password="PG_${db_name_uppercase}_RW_PASSWORD"
+  
+  # Common psql parameters
+  psql_params="-a -v ON_ERROR_STOP=1 \
+    -v db_name=\"${db_name}\" \
+    -v admin_user=\"${!admin_user}\" \
+    -v admin_password=\"${!admin_password}\" \
+    -v ro_user=\"${!ro_user}\" \
+    -v ro_password=\"${!ro_password}\" \
+    -v rw_user=\"${!rw_user}\" \
+    -v rw_password=\"${!rw_password}\""
+  
+  # Add AI SQL user variables only for core database
+  if [ "${db_name}" = "core" ]; then
+    psql_params="$psql_params \
+      -v pg_core_ai_sql_user=\"$PG_CORE_AI_SQL_USER\" \
+      -v pg_core_ai_sql_password=\"$PG_CORE_AI_SQL_PASSWORD\""
+  fi
+  
+  # Execute psql with appropriate parameters
+  eval "psql $psql_params --username $POSTGRES_USER -d $POSTGRES_USER < /docker-entrypoint-initdb.d/bootstrap-template.sql.txt"
 done
 EOINITDBSCRIPT
   # postgres container does not have a uid 1337, most reliable way to bootstrap
