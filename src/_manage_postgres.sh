@@ -26,7 +26,7 @@ function deploy_volume_contents_postgres() {
     targetDir="${PLEXTRAC_HOME}/volumes/postgres-initdb"
   else
     targetDir=`compose_client config --format=json | jq -r \
-      '.volumes[] | select(.name | test("postgres-initdb")) | 
+      '.volumes[] | select(.name | test("postgres-initdb")) |
         .driver_opts.device'`
   fi
   debug "Adding scripts to $targetDir"
@@ -98,7 +98,7 @@ tmpl=`cat /docker-entrypoint-initdb.d/bootstrap-template.sql.txt`
 for db_name in ${PGDATABASES[@]}; do
   # Convert database name to uppercase for variable name construction
   db_name_uppercase=${db_name^^}
-  
+
   # Build environment variable names
   admin_user="PG_${db_name_uppercase}_ADMIN_USER"
   admin_password="PG_${db_name_uppercase}_ADMIN_PASSWORD"
@@ -108,7 +108,7 @@ for db_name in ${PGDATABASES[@]}; do
   rw_password="PG_${db_name_uppercase}_RW_PASSWORD"
   ai_user="PG_CORE_AI_SQL_USER"
   ai_password="PG_CORE_AI_SQL_PASSWORD"
-  
+
   # Execute bootstrap template for all databases
   psql -a -v ON_ERROR_STOP=1 \
     -v db_name="${db_name}" \
@@ -121,7 +121,7 @@ for db_name in ${PGDATABASES[@]}; do
     --username $POSTGRES_USER \
     -d $POSTGRES_USER \
     < /docker-entrypoint-initdb.d/bootstrap-template.sql.txt
-  
+
   # Execute AI SQL user creation only for core database
   if [ "${db_name}" = "core" ]; then
     psql -a -v ON_ERROR_STOP=1 \
@@ -150,7 +150,7 @@ function postgres_metrics_validation() {
       local container_runtime="container_client exec"
     fi
     debug "`$container_runtime -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
-        psql -a -v -U internalonly -d core 2>&1 <<- EOF 
+        psql -a -v -U internalonly -d core 2>&1 <<- EOF
 CREATE OR REPLACE FUNCTION __tmp_create_user() returns void as \\$\\$
 BEGIN
   IF NOT EXISTS (
@@ -287,6 +287,6 @@ function etl_failure() {
   sed -i "/^LOCK_VERSION/s/=.*$/=${LOCK_VERSION}/" "${PLEXTRAC_HOME}/.env"
   sed -i '/^LOCK_UPDATES/s/=.*$/=true/' "${PLEXTRAC_HOME}/.env"
   sed -i '/^UPGRADE_STRATEGY/s/=.*$/=NULL/' "${PLEXTRAC_HOME}/.env"
-  
+
   die "Updates are locked due to a failed data migration. Version Lock: $LOCK_VERSION. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
 }
