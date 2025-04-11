@@ -44,8 +44,9 @@ services:
     command: |
       sh -c
         "npm run maintenance:enable &&
-         npm run pg:superuser:bootstrap --if-present &&
+         npm run pg:superuser:bootstrap &&
          npm run pg:migrate &&
+         npm run pg:superuser:bootstrap:post-migration &&
          npm run db:migrate &&
          npm run pg:etl up all &&
          npm run maintenance:disable"
