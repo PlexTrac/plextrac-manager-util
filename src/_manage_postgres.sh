@@ -31,9 +31,6 @@ function deploy_volume_contents_postgres() {
   fi
   debug "Adding scripts to $targetDir"
   cat > "$targetDir/bootstrap-template.sql.txt" <<- "EOBOOTSTRAPTEMPLATE"
--- this file is used in the migration that creates the DB for CKEditor. Be sure to test the CKE DB is functional with the
--- CKE service if this is altered
-
 -- Add Service Roles
 --
 -- Service Admin
