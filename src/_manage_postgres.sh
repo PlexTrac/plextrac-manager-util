@@ -93,8 +93,6 @@ EOAISQLUSER
 PGPASSWORD="$POSTGRES_PASSWORD"
 PGDATABASES=('core' 'runbooks' 'ckeditor')
 
-tmpl=`cat /docker-entrypoint-initdb.d/bootstrap-template.sql.txt`
-
 for db_name in ${PGDATABASES[@]}; do
   # Convert database name to uppercase for variable name construction
   db_name_uppercase=${db_name^^}
