@@ -31,9 +31,6 @@ function deploy_volume_contents_postgres() {
   fi
   debug "Adding scripts to $targetDir"
   cat > "$targetDir/bootstrap-template.sql.txt" <<- "EOBOOTSTRAPTEMPLATE"
--- this file is used in the migration that creates the DB for CKEditor. Be sure to test the CKE DB is functional with the
--- CKE service if this is altered
-
 -- Add Service Roles
 --
 -- Service Admin
@@ -90,12 +87,7 @@ EOAISQLUSER
   cat > "$targetDir/initdb.sh" <<- "EOINITDBSCRIPT"
 #!/bin/bash
 
-PGPASSWORD="$POSTGRES_PASSWORD"
-PGDATABASES=('core' 'runbooks' 'ckeditor')
-
-tmpl=`cat /docker-entrypoint-initdb.d/bootstrap-template.sql.txt`
-
-for db_name in ${PGDATABASES[@]}; do
+for db_name in core runbooks ckeditor; do
   # Convert database name to uppercase for variable name construction
   db_name_uppercase=${db_name^^}
 
@@ -106,8 +98,6 @@ for db_name in ${PGDATABASES[@]}; do
   ro_password="PG_${db_name_uppercase}_RO_PASSWORD"
   rw_user="PG_${db_name_uppercase}_RW_USER"
   rw_password="PG_${db_name_uppercase}_RW_PASSWORD"
-  ai_user="PG_CORE_AI_SQL_USER"
-  ai_password="PG_CORE_AI_SQL_PASSWORD"
 
   # Execute bootstrap template for all databases
   psql -a -v ON_ERROR_STOP=1 \
@@ -126,8 +116,8 @@ for db_name in ${PGDATABASES[@]}; do
   if [ "${db_name}" = "core" ]; then
     psql -a -v ON_ERROR_STOP=1 \
       -v db_name="${db_name}" \
-      -v pg_core_ai_sql_user="${!ai_user}" \
-      -v pg_core_ai_sql_password="${!ai_password}" \
+      -v pg_core_ai_sql_user="$PG_CORE_AI_SQL_USER" \
+      -v pg_core_ai_sql_password="$PG_CORE_AI_SQL_PASSWORD" \
       --username $POSTGRES_USER \
       -d ${db_name} \
       < /docker-entrypoint-initdb.d/ai-sql-user.sql.txt
