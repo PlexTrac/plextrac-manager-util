@@ -229,6 +229,7 @@ services:
     deploy:
       replicas: 1
     depends_on:
+      - plextracdb
       - postgres
       - redis
     restart: always
@@ -242,11 +243,13 @@ services:
       COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
       CB_API_USER: ${CB_API_USER:?err}
       CB_API_PASS: ${CB_API_PASS:?err}
-      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:-}
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
       CORE_API_BASE_URL: ${CORE_API_BASE_URL:?err}
       CTEM_API_BASE_URL: ${CTEM_API_BASE_URL:?err}
       INTERNAL_API_KEY_SHARED: ${INTERNAL_API_KEY_SHARED:?err}
-      MAILER_SECURE: ${MAILER_SECURE:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-logfmt}
+      MAILER_SECURE: ${MAILER_SECURE:-true}
       PG_CORE_DB: ${PG_CORE_DB:?err}
       PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
       PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
