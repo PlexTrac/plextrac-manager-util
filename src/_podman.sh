@@ -35,7 +35,7 @@ function plextrac_install_podman() {
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
-  PODMAN_MINIO_IMAGE="${PODMAN_MINIO_IMAGE:-docker.io/chainguard/minio@sha256:92b5ea1641d52262d6f65c95cffff4668663e00d6b2033875774ba1c2212cfa7}"
+  PODMAN_MINIO_IMAGE="${PODMAN_MINIO_IMAGE:-docker.io/plextrac/minio:stable}"
   PODMAN_MINIO_BOOTSTRAP_IMAGE="${PODMAN_MINIO_BOOTSTRAP_IMAGE:-docker.io/plextrac/plextrac-minio-bootstrap:stable}"
 
   serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
@@ -165,7 +165,7 @@ function plextrac_start_podman() {
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
-  PODMAN_MINIO_IMAGE="${PODMAN_MINIO_IMAGE:-docker.io/chainguard/minio@sha256:92b5ea1641d52262d6f65c95cffff4668663e00d6b2033875774ba1c2212cfa7}"
+  PODMAN_MINIO_IMAGE="${PODMAN_MINIO_IMAGE:-docker.io/plextrac/minio:stable}"
   PODMAN_MINIO_BOOTSTRAP_IMAGE="${PODMAN_MINIO_BOOTSTRAP_IMAGE:-docker.io/plextrac/plextrac-minio-bootstrap:stable}"
   PODMAN_INTEGRATION_WORKER_IMAGE="${PODMAN_INTEGRATION_WORKER_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
 
