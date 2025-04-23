@@ -46,6 +46,7 @@ services:
         "npm run maintenance:enable &&
          npm run pg:superuser:bootstrap --if-present &&
          npm run pg:migrate &&
+         npm run pg:superuser:bootstrap:post-migration --if-present &&
          npm run db:migrate &&
          npm run pg:etl up all &&
          npm run maintenance:disable"
@@ -346,6 +347,8 @@ services:
       POSTGRES_INITDB_ARGS: '--auth-local=scram-sha-256 --auth-host=scram-sha-256'
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?err}
       POSTGRES_USER: ${POSTGRES_USER:?err}
+      PG_CORE_AI_SQL_PASSWORD: ${PG_CORE_AI_SQL_PASSWORD:-}
+      PG_CORE_AI_SQL_USER: ${PG_CORE_AI_SQL_USER:-}
     volumes:
     # this is where the initdb script & SQL template go
     - postgres-initdb:/docker-entrypoint-initdb.d
@@ -394,7 +397,7 @@ services:
     ports:
       - 127.0.0.1:9000:9000
       - 127.0.0.1:9001:9001
-    image: chainguard/minio@sha256:92b5ea1641d52262d6f65c95cffff4668663e00d6b2033875774ba1c2212cfa7
+    image: plextrac/minio:stable
     restart: always
     volumes:
       - minio-data:/data
