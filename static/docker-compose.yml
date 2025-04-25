@@ -399,6 +399,8 @@ services:
     restart: always
     ports:
       - 9100:9100
+    volumes:
+      - uploads:/usr/src/plextrac-api/uploads:rw
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-logfmt}
