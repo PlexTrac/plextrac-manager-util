@@ -225,6 +225,44 @@ services:
     entrypoint: npm run
     command: "start:notification-sender"
 
+  event-orchestrator:
+    image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
+    deploy:
+      replicas: 1
+    depends_on:
+      - plextracdb
+      - postgres
+      - redis
+    restart: always
+    ports:
+      - 4354:4354
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - uploads:/usr/src/plextrac-api/uploads:rw
+    environment:
+      COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
+      CB_API_USER: ${CB_API_USER:?err}
+      CB_API_PASS: ${CB_API_PASS:?err}
+      CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
+      CORE_API_BASE_URL: ${CORE_API_BASE_URL:?err}
+      CTEM_API_BASE_URL: ${CTEM_API_BASE_URL:?err}
+      INTERNAL_API_KEY_SHARED: ${INTERNAL_API_KEY_SHARED:?err}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-logfmt}
+      MAILER_SECURE: ${MAILER_SECURE:-true}
+      PG_CORE_DB: ${PG_CORE_DB:?err}
+      PG_CORE_RO_PASSWORD: ${PG_CORE_RO_PASSWORD:?err}
+      PG_CORE_RO_USER: ${PG_CORE_RO_USER:?err}
+      PG_CORE_RW_PASSWORD: ${PG_CORE_RW_PASSWORD:?err}
+      PG_CORE_RW_USER: ${PG_CORE_RW_USER:?err}
+      PG_HOST: ${PG_HOST:?err}
+      REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING:-redis}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?err}
+      serviceConfig: ${serviceConfig:-}
+    entrypoint: npm run
+    command: "start:event-orchestrator"
+
   datalake-maintainer:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
     deploy:

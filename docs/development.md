@@ -14,23 +14,25 @@ You'll need to have [Vagrant](https://www.vagrantup.com/) installed before you c
 preconfigured virtual machine. Optionally, install the `vagrant-hostmanager` plugin to allow Vagrant
 to manage host entries for you.
 
-1.  Start up the Vagrant virtual machine:
+1. Download and install [VirtualBox](https://www.oracle.com/virtualization/technologies/vm/downloads/virtualbox-downloads.html) to be used as the provider for Vagrant.
+
+2. Start up the Vagrant virtual machine:
 
         vagrant up
 
-2.  SSH into the Vagrant VM and become the `plextrac` user
+3. SSH into the Vagrant VM and become the `plextrac` user
 
         vagrant ssh
         sudo -iu plextrac
 
-3.  Create a default `.env` file by running the `configure` command
+4. Create a default `.env` file by running the `configure` command
 
         DOCKER_HUB_KEY=<YOUR_DOCKER_HUB_KEY> plextrac configure
 
     This will write a `.env` file to `/opt/plextrac/.env` with default values plus the
     DOCKER_HUB_KEY that you just provided.
 
-4.  Set any non-default environment variables in the `.env` file
+5. Set any non-default environment variables in the `.env` file
 
         vim /opt/plextrac/.env
 
@@ -43,11 +45,11 @@ to manage host entries for you.
 
         OVERRIDE_TRANSACTION_ID_LOGGING=true
 
-5.  Install the Plextrac application
+6. Install the Plextrac application
 
         plextrac install
 
-6.  You can tail logs:
+7. You can tail logs:
 
     ...for a specific service:
 
