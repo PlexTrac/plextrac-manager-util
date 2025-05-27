@@ -97,7 +97,7 @@ function restore_doPostgresRestore() {
   if get_user_approval; then
     # Tear down the existing postgres container to ensure a clean restore
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      # TODO: What are the podman commands for this?
+      info "TODO: What are the podman commands for this?"
     else
       # tear down the existing postgres container, including the related volumes
       compose_client down $postgresComposeService --volumes
@@ -114,7 +114,7 @@ function restore_doPostgresRestore() {
     # Now we need to finish setting up the database into a state where timescaledb is ready
     # for the restore to proceed.
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      # TODO: What are the podman commands for this?
+      info "TODO: What are the podman commands for this?"
     else
       # create the timescaledb extension for the core database
       debug "`compose_client exec -T --user $plextrac_user_id $postgresComposeService \
@@ -165,7 +165,7 @@ function restore_doPostgresRestore() {
 
     # Run through the post-restore steps
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      # TODO: What are the podman commands for this?
+      info "TODO: What are the podman commands for this?"
     else
       # run the timescaledb post_restore command
       debug "`compose_client exec -T --user $plextrac_user_id $postgresComposeService \
