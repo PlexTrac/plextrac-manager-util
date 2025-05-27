@@ -127,12 +127,6 @@ function restore_doPostgresRestore() {
       # run the timescaledb pre_restore command
       debug "`compose_client exec -T --user $plextrac_user_id $postgresComposeService \
         psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();" 2>&1`"
-
-      # run the timescaledb post_restore command
-      docker exec --env PGPASSWORD=$PG_CORE_ADMIN_PASSWORD -it postgres psql -U $PG_CORE_ADMIN_USER $PG_CORE_DB -c 'SELECT timescaledb_post_restore();'
-
-      # revoke the temporarily granted superuser privileges from core_admin
-      docker exec --env PGPASSWORD=$POSTGRES_PASSWORD -it postgres psql -U $POSTGRES_USER $PG_CORE_DB -c 'ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;'
     fi
 
     # now actually perform the db restore
