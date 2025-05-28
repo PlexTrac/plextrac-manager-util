@@ -86,6 +86,7 @@ function restore_doPostgresRestore() {
   title "Restoring Postgres from backup"
 
   local plextrac_user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+  compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
 
   latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/postgres/* | head -n1`"
   backupFile=`basename $latestBackup`
@@ -117,15 +118,15 @@ function restore_doPostgresRestore() {
       info "TODO: What are the podman commands for this?"
     else
       # create the timescaledb extension for the core database
-      debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+      debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
         psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION timescaledb;" 2>&1`"
 
       # temporarily grant superuser priveleges to the core_admin user
-      debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+      debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
         psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;" 2>&1`"
 
       # run the timescaledb pre_restore command
-      debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+      debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
         psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();" 2>&1`"
     fi
 
@@ -168,11 +169,11 @@ function restore_doPostgresRestore() {
       info "TODO: What are the podman commands for this?"
     else
       # run the timescaledb post_restore command
-      debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+      debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
         psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_post_restore();" 2>&1`"
 
       # revoke the temporarily granted superuser privileges from core_admin
-      debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+      debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
         psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;" 2>&1`"
         
       # TODO: What happens if any of the steps above fail and the core admin user gets left with superuser privileges?
