@@ -113,21 +113,18 @@ function restore_doPostgresRestore() {
     # databases and users.
     # Now we need to finish setting up the database into a state where timescaledb is ready
     # for the restore to proceed.
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      info "TODO: What are the podman commands for this?"
-    else
-      # create the timescaledb extension for the core database
-      debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-        psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION timescaledb;" 2>&1`"
 
-      # temporarily grant superuser priveleges to the core_admin user
-      debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-        psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;" 2>&1`"
+    # create the timescaledb extension for the core database
+    create_extension_timescale="psql -U $POSTGRES_USER -d $PG_CORE_DB -c \"CREATE EXTENSION timescaledb;\""
+    debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService $create_extension_timescale 2>&1`"
 
-      # run the timescaledb pre_restore command
-      debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-        psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();" 2>&1`"
-    fi
+    # temporarily grant superuser priveleges to the core_admin user
+    debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+      psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;" 2>&1`"
+
+    # run the timescaledb pre_restore command
+    debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+      psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();" 2>&1`"
 
     # now actually perform the db restore
     databaseBackups=$(basename -s .psql `tar -tf $latestBackup | awk '/.psql/{print $1}'`)
@@ -149,9 +146,9 @@ function restore_doPostgresRestore() {
         tar -xvzf /backups/$backupFile ./$db.psql 2>&1`"
       dbAdminEnvvar="PG_${db^^}_ADMIN_USER"
       dbAdminRole=$(eval echo "\$$dbAdminEnvvar")
-      
+
       # Note: Not using `--clean --if-exists` here because it is incompatible with timescaledb.
-      # This is because --clean will drop the extension and recreate it during the restoration, 
+      # This is because --clean will drop the extension and recreate it during the restoration,
       # but that will fail because timescaledb requires that the CREATE EXTENSION command be
       # run as the first command in the session due to the way it modified the process's memory.
       dbRestoreFlags="-d $db --no-privileges --no-owner --role=$dbAdminRole  --disable-triggers --verbose"
@@ -174,7 +171,7 @@ function restore_doPostgresRestore() {
       # revoke the temporarily granted superuser privileges from core_admin
       debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
         psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;" 2>&1`"
-        
+
       # TODO: What happens if any of the steps above fail and the core admin user gets left with superuser privileges?
     fi
   fi
