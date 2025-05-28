@@ -115,7 +115,7 @@ function restore_doPostgresRestore() {
     # for the restore to proceed.
 
     # create the timescaledb extension for the core database
-    create_extension_timescale="psql -U $POSTGRES_USER -d $PG_CORE_DB -c \"CREATE EXTENSION timescaledb;\""
+    create_extension_timescale="psql -U $POSTGRES_USER -d $PG_CORE_DB -c 'CREATE EXTENSION timescaledb;'"
     debug "`compose_client exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService $create_extension_timescale 2>&1`"
 
     # temporarily grant superuser priveleges to the core_admin user
