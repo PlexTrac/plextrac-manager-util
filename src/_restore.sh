@@ -151,8 +151,8 @@ function restore_doPostgresRestore() {
         log "restoring core db, running special timescaledb commands"
 
         # create the timescaledb extension for the core database
-        debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-          psql -U $POSTGRES_USER -c "CREATE DATABASE core;" 2>&1`"
+        # debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+        #   psql -U $POSTGRES_USER -c "CREATE DATABASE core;" 2>&1`"
 
         # temporarily grant superuser priveleges to the core_admin user
         debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
