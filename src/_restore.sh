@@ -117,9 +117,9 @@ function restore_doPostgresRestore() {
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       info "TODO: What are the podman commands for this?"
     else
-      # create the timescaledb extension for the core database
-      debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-        psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION timescaledb;" 2>&1`"
+      # # create the timescaledb extension for the core database
+      # debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+      #   psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION timescaledb;" 2>&1`"
 
       # # temporarily grant superuser priveleges to the core_admin user
       # debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
@@ -149,9 +149,17 @@ function restore_doPostgresRestore() {
       # only the core database gets timescaledb tables, so we need to do special things for this restore to work
       if [ $db = "core" ]; then
         log "restoring core db, running special timescaledb commands"
+
+        # create the timescaledb extension for the core database
+        debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+          psql -U $POSTGRES_USER -c "CREATE DATABASE core;" 2>&1`"
+
         # temporarily grant superuser priveleges to the core_admin user
         debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
           psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;" 2>&1`"
+
+        debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+          psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION timescaledb;" 2>&1`"
 
         # run the timescaledb pre_restore command
         debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
