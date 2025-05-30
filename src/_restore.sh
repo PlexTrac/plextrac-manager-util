@@ -180,11 +180,10 @@ function restore_doPostgresRestore() {
           # MM: most likely there are other issues as well and will be addressed. Limited risk since admin already has very high privileges and is limited to the app
         fi
       fi
-
-      # now, start the rest of the app and sleep for 30s to give couchbase a chance
-      mod_start
-      sleep 30
-
     done
+
+    log "now, start the rest of the app and sleep for 30s to give couchbase a chance"
+    mod_start
+    sleep 30
   fi
 }
