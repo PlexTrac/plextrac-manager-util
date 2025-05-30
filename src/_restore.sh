@@ -103,6 +103,9 @@ function restore_doPostgresRestore() {
       # tear down the existing postgres container, including the related volumes
       compose_client down $postgresComposeService --volumes
 
+      # stop the rest of the app to avoid issues with writes coming into the fresh database before a restore
+      compose_client down
+
       # recreate the postgres container
       compose_client up -d $postgresComposeService
 
@@ -177,6 +180,9 @@ function restore_doPostgresRestore() {
           # MM: most likely there are other issues as well and will be addressed. Limited risk since admin already has very high privileges and is limited to the app
         fi
       fi
+
+      # now, start the rest of the app
+      mod_start
 
     done
   fi
