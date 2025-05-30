@@ -181,8 +181,9 @@ function restore_doPostgresRestore() {
         fi
       fi
 
-      # now, start the rest of the app
+      # now, start the rest of the app and sleep for 30s to give couchbase a chance
       mod_start
+      sleep 30
 
     done
   fi
