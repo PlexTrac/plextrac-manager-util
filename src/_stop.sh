@@ -15,8 +15,8 @@ function mod_stop() {
     debug "Validating the expected version against current running version"
     running_backend_version="$(for i in $(compose_client ps plextracapi -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
     running_frontend_version="$(for i in $(compose_client ps plextracnginx -q); do  docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
-    expected_backend_tag="$(compose_client config | grep image | grep plextracapi | head -n 1 | awk '{print $2}')"
-    expected_frontend_tag="$(compose_client config | grep image | grep plextracnginx | head -n 1 | awk '{print $2}')"
+    expected_backend_tag="$(compose_client config --format json | jq -r .services.plextracapi.image)"
+    expected_frontend_tag="$(compose_client config --format json | jq -r .services.plextracnginx.image)"
     expected_backend_version="$(docker image inspect $expected_backend_tag --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")')"
     expected_frontend_version="$(docker image inspect $expected_frontend_tag --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")')"
 
@@ -34,8 +34,8 @@ function mod_stop() {
     debug "Validating the expected version against current running version"
     running_backend_version="$(for i in $(compose_client ps plextracapi -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
     running_frontend_version="$(for i in $(compose_client ps plextracnginx -q); do  docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
-    expected_backend_tag="$(compose_client config | grep image | grep plextracapi | head -n 1 | awk '{print $2}')"
-    expected_frontend_tag="$(compose_client config | grep image | grep plextracnginx | head -n 1 | awk '{print $2}')"
+    expected_backend_tag="$(compose_client config --format json | jq -r .services.plextracapi.image)"
+    expected_frontend_tag="$(compose_client config --format json | jq -r .services.plextracnginx.image)"
     expected_backend_version="$(docker image inspect $expected_backend_tag --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")')"
     expected_frontend_version="$(docker image inspect $expected_frontend_tag --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")')"
 
