@@ -99,6 +99,19 @@ function restore_doPostgresRestore() {
     # Tear down the existing postgres container to ensure a clean restore
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       info "TODO: What are the podman commands for this?"
+      # Tear down the existing postgres container, including the related volumes
+      podman stop postgres
+      podman volume rm postgres-data
+
+      # Stop the rest of the app
+      mod_stop
+
+      # recreate the postgres container
+      plextrac_start_podman postgres
+
+      # wait for postgres to be ready
+      sleep 10
+
     else
       # tear down the existing postgres container, including the related volumes
       compose_client down $postgresComposeService --volumes
@@ -134,6 +147,14 @@ function restore_doPostgresRestore() {
         log "restoring core db, running special timescaledb commands"
         if [ "$CONTAINER_RUNTIME" == "podman" ]; then
           info "TODO: what are the podman commands for this?"
+          # temporarily grant
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;"'
+
+          # create the timescaledb extension
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION timescaledb;"'
+
+          # run the timescaledb pre_restore
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();"'
         else
           # temporarily grant superuser priveleges to the core_admin user
           debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
