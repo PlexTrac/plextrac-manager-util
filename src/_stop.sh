@@ -11,7 +11,7 @@ function mod_stop() {
   # Does not work with podman, so skipping that check if this is a podman environment.
   # Also skipping if a new install with restore, since it will not have existing images to compare.
 
-  if [ "$CONTAINER_RUNTIME" == "docker" ] && [ "${RESTOREONINSTALL:0}" -eq 0 ]; then
+  if [ "$CONTAINER_RUNTIME" == "docker" ] && [ "${RESTOREONINSTALL:-0}" -eq 0 ]; then
 
     debug "Validating the expected version against current running version"
     running_backend_version="$(for i in $(compose_client ps plextracapi -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
