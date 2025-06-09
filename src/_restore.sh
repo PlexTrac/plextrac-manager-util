@@ -110,7 +110,14 @@ function restore_doPostgresRestore() {
       mod_stop
 
       # recreate the postgres container
-      plextrac_start_podman postgres
+      # copied from the plextrac_install_podman function
+      local volumes="${serviceValues[pg-volumes]}"
+      local ports="${serviceValues[pg-ports]}"
+      local healthcheck="${serviceValues[pg-healthcheck]}"
+      local image="${serviceValues[pg-image]}"
+      local env_vars="${serviceValues[pg-env-vars]}"
+      container_client run "${serviceValues[env-file]}" "$env_vars" --restart=always "$healthcheck" \
+        "$volumes" --name="postgres" "${serviceValues[network]}" "$ports" -d "$image" 1>/dev/null
 
       # wait for postgres to be ready
       sleep 10
