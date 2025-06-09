@@ -98,7 +98,6 @@ function restore_doPostgresRestore() {
   if get_user_approval; then
     # Tear down the existing postgres container to ensure a clean restore
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      info "TODO: What are the podman commands for this?"
       # Tear down the existing postgres container, including the related volumes
       podman stop postgres
       podman volume rm postgres-data
@@ -146,7 +145,6 @@ function restore_doPostgresRestore() {
       if [ $db = "core" ]; then
         log "restoring core db, running special timescaledb commands"
         if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-          info "TODO: what are the podman commands for this?"
           # temporarily grant
           podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;"'
 
@@ -190,7 +188,8 @@ function restore_doPostgresRestore() {
       # Run through the post-restore steps for core db
       if [ $db = "core" ]; then
         if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-          info "TODO: What are the podman commands for this?"
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_post_restore();"'
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;"'
         else
           # run the timescaledb post_restore command
           debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
@@ -200,8 +199,6 @@ function restore_doPostgresRestore() {
           debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
             psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;" 2>&1`"
 
-          # TODO: What happens if any of the steps above fail and the core admin user gets left with superuser privileges?
-          # MM: most likely there are other issues as well and will be addressed. Limited risk since admin already has very high privileges and is limited to the app
         fi
       fi
     done
