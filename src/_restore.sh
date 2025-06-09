@@ -104,6 +104,7 @@ function restore_doPostgresRestore() {
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       # Tear down the existing postgres container, including the related volumes
       podman stop postgres
+      podman rm postgres
       podman volume rm postgres-data
 
       # Stop the rest of the app
