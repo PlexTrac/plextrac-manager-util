@@ -86,7 +86,11 @@ function restore_doPostgresRestore() {
   title "Restoring Postgres from backup"
 
   local plextrac_user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
-  compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
+
+  # If docker runtime, gather a list of compose files
+  if [ "$CONTAINER_RUNTIME" == "docker" ]; then
+    compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
+  fi
 
   latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/postgres/* | head -n1`"
   backupFile=`basename $latestBackup`
