@@ -86,6 +86,7 @@ function restore_doPostgresRestore() {
   title "Restoring Postgres from backup"
 
   local plextrac_user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
+  PODMAN_PG_IMAGE="${PODMAN_PG_IMAGE:-docker.io/plextrac/plextracpostgres:stable}"
 
   # If docker runtime, gather a list of compose files
   if [ "$CONTAINER_RUNTIME" == "docker" ]; then
@@ -112,13 +113,13 @@ function restore_doPostgresRestore() {
 
       # recreate the postgres container
       # copied from the plextrac_install_podman function
-      local volumes="${serviceValues[pg-volumes]}"
-      local ports="${serviceValues[pg-ports]}"
-      local healthcheck="${serviceValues[pg-healthcheck]}"
-      local image="${serviceValues[pg-image]}"
-      local env_vars="${serviceValues[pg-env-vars]}"
-      container_client run "${serviceValues[env-file]}" "$env_vars" --restart=always "$healthcheck" \
-        "$volumes" --name="postgres" "${serviceValues[network]}" "$ports" -d "$image" 1>/dev/null
+      local volumes="${svcValues[pg-volumes]}"
+      local ports="${svcValues[pg-ports]}"
+      local healthcheck="${svcValues[pg-healthcheck]}"
+      local image="${PODMAN_PG_IMAGE}"
+      local env_vars="${svcValues[pg-env-vars]}"
+      container_client run --env-file ${PLEXTRAC_HOME:-}/.env "$env_vars" --restart=always "$healthcheck" \
+        "$volumes" --name="postgres" "${svcValues[network]}" "$ports" -d "$image" 1>/dev/null
 
       # wait for postgres to be ready
       sleep 10

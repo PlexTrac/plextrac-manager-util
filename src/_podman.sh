@@ -44,7 +44,6 @@ function plextrac_install_podman() {
   serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
   serviceValues[api-image]="${PODMAN_API_IMAGE}"
   serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
-  serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
 
   serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
   serviceValues[redis-entrypoint]=$(printf '%s' "--entrypoint=" "[" "\"redis-server\"" "," "\"--requirepass\"" "," "\"${REDIS_PASSWORD}\"" "]")
