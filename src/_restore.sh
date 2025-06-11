@@ -86,7 +86,12 @@ function restore_doPostgresRestore() {
   title "Restoring Postgres from backup"
 
   local plextrac_user_id=$(id -u ${PLEXTRAC_USER_NAME:-plextrac})
-  compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
+  PODMAN_PG_IMAGE="${PODMAN_PG_IMAGE:-docker.io/plextrac/plextracpostgres:stable}"
+
+  # If docker runtime, gather a list of compose files
+  if [ "$CONTAINER_RUNTIME" == "docker" ]; then
+    compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
+  fi
 
   latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/postgres/* | head -n1`"
   backupFile=`basename $latestBackup`
@@ -98,7 +103,27 @@ function restore_doPostgresRestore() {
   if get_user_approval; then
     # Tear down the existing postgres container to ensure a clean restore
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      info "TODO: What are the podman commands for this?"
+      # Tear down the existing postgres container, including the related volumes
+      podman stop postgres
+      podman rm postgres
+      podman volume rm postgres-data
+
+      # Stop the rest of the app
+      mod_stop
+
+      # recreate the postgres container
+      # copied from the plextrac_install_podman function
+      local volumes="${svcValues[pg-volumes]}"
+      local ports="${svcValues[pg-ports]}"
+      local healthcheck="${svcValues[pg-healthcheck]}"
+      local image="${PODMAN_PG_IMAGE}"
+      local env_vars="${svcValues[pg-env-vars]}"
+      container_client run --env-file ${PLEXTRAC_HOME:-}/.env "$env_vars" --restart=always "$healthcheck" \
+        "$volumes" --name="postgres" "${svcValues[network]}" "$ports" -d "$image" 1>/dev/null
+
+      # wait for postgres to be ready
+      sleep 10
+
     else
       # tear down the existing postgres container, including the related volumes
       compose_client down $postgresComposeService --volumes
@@ -133,7 +158,14 @@ function restore_doPostgresRestore() {
       if [ $db = "core" ]; then
         log "restoring core db, running special timescaledb commands"
         if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-          info "TODO: what are the podman commands for this?"
+          # temporarily grant
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;"'
+
+          # create the timescaledb extension
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION timescaledb;"'
+
+          # run the timescaledb pre_restore
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();"'
         else
           # temporarily grant superuser priveleges to the core_admin user
           debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
@@ -169,7 +201,8 @@ function restore_doPostgresRestore() {
       # Run through the post-restore steps for core db
       if [ $db = "core" ]; then
         if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-          info "TODO: What are the podman commands for this?"
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_post_restore();"'
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;"'
         else
           # run the timescaledb post_restore command
           debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
@@ -179,8 +212,6 @@ function restore_doPostgresRestore() {
           debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
             psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;" 2>&1`"
 
-          # TODO: What happens if any of the steps above fail and the core admin user gets left with superuser privileges?
-          # MM: most likely there are other issues as well and will be addressed. Limited risk since admin already has very high privileges and is limited to the app
         fi
       fi
     done
