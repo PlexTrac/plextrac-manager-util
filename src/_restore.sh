@@ -188,5 +188,8 @@ function restore_doPostgresRestore() {
     log "now, start the rest of the app and sleep for 120s to give couchbase a chance"
     mod_start
     sleep 120
+
+    log "need to clear the license cache in redis so it properly uses the one from the restore"
+    compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) redis redis-cli -a $REDIS_PASSWORD FLUSHALL
   fi
 }
