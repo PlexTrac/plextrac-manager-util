@@ -12,6 +12,9 @@ function mod_restore() {
       $target
     fi
   done
+
+  log "Clearing the license cache in redis so it properly uses the one from the restore"
+  compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) redis redis-cli -a $REDIS_PASSWORD DEL "{\"cacheDomain\":\"License\",\"method\":\"getTenantLicense\",\"params\":0,\"tenantId\":0}"
 }
 
 function restore_doUploadsRestore() {
@@ -220,7 +223,5 @@ function restore_doPostgresRestore() {
     mod_start
     sleep 120
 
-    log "need to clear the license cache in redis so it properly uses the one from the restore"
-    compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) redis redis-cli -a $REDIS_PASSWORD FLUSHALL
   fi
 }
