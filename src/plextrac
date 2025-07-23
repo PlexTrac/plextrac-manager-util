@@ -9,7 +9,7 @@ declare -A svcValues
 export POSTGRES_INITDB_ARGS='--auth-local=scram-sha-256 --auth-host=scram-sha-256'
 
 databaseNames=("plextracdb" "postgres")
-serviceNames=("plextracdb" "postgres" "redis" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx")
+serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx" "minio" "minio-bootstrap" "integration-worker" "event-orchestrator")
 #Defaults
 svcValues[network]="--network=plextrac"
 #Couchbase
@@ -37,11 +37,15 @@ svcValues[contextual-scoring-service-healthcheck]='--health-cmd=["npm","run","he
 #Migrations
 svcValues[migrations-volumes]="--volumes-from=plextracapi"
 #Nginx
-svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw -v nginx_ssl_certs:/etc/ssl/:Z,U -v nginx_logos:/usr/share/nginx/html/dist/img/:Z,U"
+svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw -v nginx_ssl_certs:/etc/ssl/:Z,U -v nginx_logos:/usr/share/nginx/html/dist/img/:Z,U -v naxsi-waf:/etc/nginx/naxsi:Z,U"
 svcValues[plextracnginx-healthcheck]='--health-cmd=["echo","GET","/","|","openssl","s_client","-quiet","-connect","127.0.0.1:443"]'
 svcValues[plextracnginx-alias]="--network-alias=ckeditor"
 #Minio
 svcValues[minio-volumes]="-v minio-data:/data:Z"
+# Event Orchestrator
+svcValues[event-orchestrator-entrypoint]='--entrypoint ["npm","run","start:event-orchestrator"]'
+# Integration Worker
+svcValues[integration-worker-entrypoint]='--entrypoint ["npm","run","start:integration-worker"]'
 
 
 trap 'cleanup $?' SIGINT ERR EXIT
@@ -457,6 +461,9 @@ function mod_recreate() {
 }
 
 function mod_restart() {
+  if [ "$CONTAINER_RUNTIME" == "podman-compose" ] ||[ "$CONTAINER_RUNTIME" == "podman" ]; then
+    error "plextrac restart is not supported with podman or podman-compose. Please restart or recreate the containers manually."
+  fi
   title "Restarting Containers"
   requires_user_plextrac
   compose_client restart
