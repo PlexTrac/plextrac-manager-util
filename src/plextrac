@@ -17,7 +17,7 @@ svcValues[cb-volumes]="-v dbdata:/opt/couchbase/var:Z,U -v couchbase-backups:/ba
 svcValues[cb-ports]="-p 127.0.0.1:8091-8094:8091-8094"
 #Postgres
 svcValues[pg-volumes]="-v postgres-initdb:/docker-entrypoint-initdb.d:Z -v postgres-data:/var/lib/postgresql/data -v postgres-backups:/backups:Z"
-svcValues[pg-ports]="-p 127.0.0.1::5432"
+svcValues[pg-ports]="-p 127.0.0.1:5432:5432"
 svcValues[pg-healthcheck]='--health-cmd=["pg_isready","-U","internalonly"]'
 svcValues[pg-env-vars]="-e 'POSTGRES_HOST_AUTH_METHOD=scram-sha-256' -e 'PG_MIGRATE_PATH=/usr/src/plextrac-api' -e 'PGDATA=/var/lib/postgresql/data/pgdata'"
 #API
@@ -41,11 +41,14 @@ svcValues[plextracnginx-volumes]="-v letsencrypt:/etc/letsencrypt:rw -v nginx_ss
 svcValues[plextracnginx-healthcheck]='--health-cmd=["echo","GET","/","|","openssl","s_client","-quiet","-connect","127.0.0.1:443"]'
 svcValues[plextracnginx-alias]="--network-alias=ckeditor"
 #Minio
-svcValues[minio-volumes]="-v minio-data:/data:Z"
+svcValues[minio-volumes]="-v minio-data:/data:Z,U"
+svcValues[minio-ports]="-p 127.0.0.1:9000-9001:9000-9001"
 # Event Orchestrator
 svcValues[event-orchestrator-entrypoint]='--entrypoint ["npm","run","start:event-orchestrator"]'
+svcValues[event-orchestrator-ports]="-p 127.0.0.1:4354:4354"
 # Integration Worker
 svcValues[integration-worker-entrypoint]='--entrypoint ["npm","run","start:integration-worker"]'
+svcValues[integration-worker-ports]="-p 127.0.0.1:9100:9100"
 
 
 trap 'cleanup $?' SIGINT ERR EXIT
