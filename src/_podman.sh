@@ -34,7 +34,7 @@ function plextrac_install_podman() {
   PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
-  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
+  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.25.0}"
   PODMAN_MINIO_IMAGE="${PODMAN_MINIO_IMAGE:-docker.io/plextrac/minio:stable}"
   PODMAN_MINIO_BOOTSTRAP_IMAGE="${PODMAN_MINIO_BOOTSTRAP_IMAGE:-docker.io/plextrac/plextrac-minio-bootstrap:stable}"
 
@@ -163,7 +163,7 @@ function plextrac_start_podman() {
   PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
-  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
+  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.25.0}"
   PODMAN_MINIO_IMAGE="${PODMAN_MINIO_IMAGE:-docker.io/plextrac/minio:stable}"
   PODMAN_MINIO_BOOTSTRAP_IMAGE="${PODMAN_MINIO_BOOTSTRAP_IMAGE:-docker.io/plextrac/plextrac-minio-bootstrap:stable}"
   PODMAN_INTEGRATION_WORKER_IMAGE="${PODMAN_INTEGRATION_WORKER_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
