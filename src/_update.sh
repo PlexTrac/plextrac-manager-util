@@ -59,6 +59,13 @@ function mod_update() {
           if [ "$i" != "$running_ver" ]; then
             info "Starting Update..."
             debug "Upgrading to $i"
+            # Check version of ckeditor-backend if app version is greater than or equal to v2.21
+            # If it is, we need to update ckeditor-backend before anything else
+            running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+            if [ $(printf "%03d%03d%03d%03d" $(echo "${i}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "2.21" | tr '.' ' ')) ] && [ "${running_ckeditor_backend_version}" -ne "4.25.0" ]; then
+              info "App now requires a newer version of the ckeditor-backend server. Would you like to update automatically?"
+              update_ckeditor_backend_version
+            fi
             getCKEditorRTCConfig
             mod_configure
             UPGRADE_STRATEGY="$i"
@@ -66,6 +73,7 @@ function mod_update() {
             # ETL Check before an update
             ETL_OUTPUT=false
             mod_check_etl_status "${ETL_OUTPUT-}"
+
             if [ "$CONTAINER_RUNTIME" == "podman" ]; then
               title "Pulling latest container images"
               podman_remove
@@ -96,6 +104,13 @@ function mod_update() {
   else
       info "Starting Update..."
       debug "Proceeding with normal update"
+      # Check version of ckeditor-backend if version is greater than or equal to v2.21
+      # If it is, we need to update ckeditor-backend before anything else
+      running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+      if [ $(printf "%03d%03d%03d%03d" $(echo "${UPGRADE_STRATEGY}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "2.20" | tr '.' ' ')) ] && [ $(printf "%03d%03d%03d%03d" $(echo "${running_ckeditor_backend_version}" | tr '.' ' ')) -ne $(printf "%03d%03d%03d%03d" $(echo "4.25.0" | tr '.' ' ')) ]; then
+        info "App now requires a newer version of the ckeditor-backend server. Would you like to update automatically?"
+        update_ckeditor_backend_version
+      fi
       getCKEditorRTCConfig
       mod_configure
       # ETL Check before an update
@@ -239,4 +254,27 @@ function mod_util-update() {
     die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
     exit 1 # just in case, previous line should already exit
   fi
+}
+
+function update_ckeditor_backend_version () {
+
+  if get_user_approval; then
+    info "Updating config files for the new ckeditor-backend server."
+    # find the ckeditor-backend definition and use sed to bump version
+    ckeditor_backend_file=$(grep "cs:4.17.1" docker-compose.*.yml -l)
+    if [ $(echo $ckeditor_backend_file | wc -w) -gt 1 ]; then
+      error "More than one config files detected with the ckeditor-backend defined. Please use only one config file or manually change the version defined."
+      return 1
+    else
+      info "Updating config file and updating ckeditor-backend containers"
+      sed -i.bak 's/cs:4.17.1/cs:4.25.0/' $ckeditor_backend_file
+      debug "Pulling new ckeditor-backend container and updating"
+      compose_client up ckeditor-backend -d
+      debug "ckeditor-backend container is updated now, proceeding with rest of the update"
+    fi
+  else
+    error "Unable to proceed without updating ckeditor-backend"
+    return 1
+  fi
+
 }
