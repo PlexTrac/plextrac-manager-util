@@ -268,7 +268,7 @@ function update_ckeditor_backend_version () {
     elif [ -z $ckeditor_backend_file ]; then
       debug "No files found with the old definition, validating new version is configured"
       expected_ckeditor_backend_tag="$(compose_client config --format json | jq -r .services.\"ckeditor-backend\".image)"
-      if [ $(echo $expected_ckeditor_backend_tag | grep -q cs:4.25.0) ]; then
+      if echo $expected_ckeditor_backend_tag | grep -q cs:4.25.0 ; then
         debug "Confirmed current configs look correct, attempting update of ckeditor-backend container"
         compose_client up ckeditor-backend -d
         debug "ckeditor-backend container is updated now, proceeding with rest of the update"
