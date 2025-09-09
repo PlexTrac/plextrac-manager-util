@@ -63,7 +63,7 @@ function mod_update() {
             # If it is, we need to update ckeditor-backend before anything else
             running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
             if [ $(printf "%03d%03d%03d%03d" $(echo "${i}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "2.21" | tr '.' ' ')) ] && [ "${running_ckeditor_backend_version}" -ne "4.25.0" ]; then
-              info "App now requires a newer version of the ckeditor-backend server. Would you like to update automatically?"
+              error "App now requires a newer version of the ckeditor-backend server. Would you like to update automatically?"
               update_ckeditor_backend_version
             fi
             getCKEditorRTCConfig
@@ -107,8 +107,8 @@ function mod_update() {
       # Check version of ckeditor-backend if version is greater than or equal to v2.21
       # If it is, we need to update ckeditor-backend before anything else
       running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
-      if [ $(printf "%03d%03d%03d%03d" $(echo "${UPGRADE_STRATEGY}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "2.20" | tr '.' ' ')) ] && [ $(printf "%03d%03d%03d%03d" $(echo "${running_ckeditor_backend_version}" | tr '.' ' ')) -ne $(printf "%03d%03d%03d%03d" $(echo "4.25.0" | tr '.' ' ')) ]; then
-        info "App now requires a newer version of the ckeditor-backend server. Would you like to update automatically?"
+      if [ $(printf "%03d%03d%03d%03d" $(echo "${UPGRADE_STRATEGY}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "2.21" | tr '.' ' ')) ] && [ $(printf "%03d%03d%03d%03d" $(echo "${running_ckeditor_backend_version}" | tr '.' ' ')) -ne $(printf "%03d%03d%03d%03d" $(echo "4.25.0" | tr '.' ' ')) ]; then
+        error "App now requires a newer version of the ckeditor-backend server. Would you like to update automatically?"
         update_ckeditor_backend_version
       fi
       getCKEditorRTCConfig
@@ -261,10 +261,21 @@ function update_ckeditor_backend_version () {
   if get_user_approval; then
     info "Updating config files for the new ckeditor-backend server."
     # find the ckeditor-backend definition and use sed to bump version
-    ckeditor_backend_file=$(grep "cs:4.17.1" docker-compose.*.yml -l)
+    ckeditor_backend_file=$(grep "cs:4.17.1" docker-compose.*.yml -l) || true
     if [ $(echo $ckeditor_backend_file | wc -w) -gt 1 ]; then
       error "More than one config files detected with the ckeditor-backend defined. Please use only one config file or manually change the version defined."
       return 1
+    elif [ -z $ckeditor_backend_file ]; then
+      debug "No files found with the old definition, validating new version is configured"
+      expected_ckeditor_backend_tag="$(compose_client config --format json | jq -r .services.\"ckeditor-backend\".image)"
+      if [ $(echo $expected_ckeditor_backend_tag | grep -q cs:4.25.0) ]; then
+        debug "Confirmed current configs look correct, attempting update of ckeditor-backend container"
+        compose_client up ckeditor-backend -d
+        debug "ckeditor-backend container is updated now, proceeding with rest of the update"
+      else
+        error "Update of ckeditor-backend container failed, please contact support"
+        return 1
+      fi
     else
       info "Updating config file and updating ckeditor-backend containers"
       sed -i.bak 's/cs:4.17.1/cs:4.25.0/' $ckeditor_backend_file
