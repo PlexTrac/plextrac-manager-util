@@ -62,7 +62,7 @@ function mod_update() {
             # Check version of ckeditor-backend if app version is greater than or equal to v2.21
             # If it is, we need to update ckeditor-backend before anything else
             running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
-            if [ $(printf "%03d%03d%03d%03d" $(echo "${i}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "2.21" | tr '.' ' ')) ] && [ "${running_ckeditor_backend_version}" -ne "4.25.0" ]; then
+            if [ $(printf "%03d%03d%03d%03d" $(echo "${i}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "2.21" | tr '.' ' ')) ] && [ $(printf "%03d%03d%03d%03d" $(echo "${running_ckeditor_backend_version}" | tr '.' ' ')) -ne $(printf "%03d%03d%03d%03d" $(echo "4.25.0" | tr '.' ' ')) ]; then
               error "App now requires a newer version of the ckeditor-backend server. Would you like to update automatically?"
               update_ckeditor_backend_version
             fi
@@ -104,7 +104,7 @@ function mod_update() {
   else
       info "Starting Update..."
       debug "Proceeding with normal update"
-      # Check version of ckeditor-backend if version is greater than or equal to v2.21
+      # Check version of ckeditor-backend if app version is greater than or equal to v2.21
       # If it is, we need to update ckeditor-backend before anything else
       running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
       if [ $(printf "%03d%03d%03d%03d" $(echo "${UPGRADE_STRATEGY}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "2.21" | tr '.' ' ')) ] && [ $(printf "%03d%03d%03d%03d" $(echo "${running_ckeditor_backend_version}" | tr '.' ' ')) -ne $(printf "%03d%03d%03d%03d" $(echo "4.25.0" | tr '.' ' ')) ]; then
