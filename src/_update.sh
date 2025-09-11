@@ -66,7 +66,13 @@ function mod_update() {
             debug "Upgrading to $i"
             # Check version of ckeditor-backend if app version is greater than or equal to v2.21
             # If it is, we need to update ckeditor-backend before anything else
-            running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+            if compose_client ps ckeditor-backend -q >/dev/null 2>&1; then
+              running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+            else
+              # If it's not running, set the version to 0 so the configs are validated below. Using a string since that's what we are comparing against
+              running_ckeditor_backend_version="0"
+            fi
+
             if [ $(printf "%03d%03d%03d%03d" $(echo "${i}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "${coupled_app_version}" | tr '.' ' ')) ] && [ $(printf "%03d%03d%03d%03d" $(echo "${running_ckeditor_backend_version}" | tr '.' ' ')) -ne $(printf "%03d%03d%03d%03d" $(echo "${coupled_cke_backend_version}" | tr '.' ' ')) ]; then
               error "App now requires a newer version of the ckeditor-backend server. Would you like to update automatically?"
               update_ckeditor_backend_version
@@ -111,7 +117,12 @@ function mod_update() {
       debug "Proceeding with normal update"
       # Check version of ckeditor-backend if app version is greater than or equal to v2.21
       # If it is, we need to update ckeditor-backend before anything else
-      running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+      if compose_client ps ckeditor-backend -q >/dev/null 2>&1; then
+        running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+      else
+        # If it's not running, set the version to 0 so the configs are validated below. Using a string since that's what we are comparing against
+        running_ckeditor_backend_version="0"
+      fi
 
       # Upgrade strategy could be stable, so we need to check the actual expected app version. Copied from the stop function.
 
