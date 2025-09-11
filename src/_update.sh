@@ -114,9 +114,13 @@ function mod_update() {
       running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
 
       # Upgrade strategy could be stable, so we need to check the actual expected app version. Copied from the stop function.
-      local expected_backend_tag="$(compose_client config --format json | jq -r .services.plextracapi.image)"
-      local expected_backend_version="$(docker image inspect $expected_backend_tag --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")')"
 
+      if [[ "${UPGRADE_STRATEGY}" == "stable" ]]; then
+        local expected_backend_tag="$(compose_client config --format json | jq -r .services.plextracapi.image)"
+        local expected_backend_version="$(docker image inspect $expected_backend_tag --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")')"
+      else
+        local expected_backend_version="${UPGRADE_STRATEGY}"
+      fi
       if [ $(printf "%03d%03d%03d%03d" $(echo "${expected_backend_version}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "${coupled_app_version}" | tr '.' ' ')) ] && [ $(printf "%03d%03d%03d%03d" $(echo "${running_ckeditor_backend_version}" | tr '.' ' ')) -ne $(printf "%03d%03d%03d%03d" $(echo "${coupled_cke_backend_version}" | tr '.' ' ')) ]; then
         error "App now requires a newer version of the ckeditor-backend server. Would you like to update automatically?"
         update_ckeditor_backend_version
@@ -288,7 +292,7 @@ function update_ckeditor_backend_version () {
       fi
     else
       info "Updating config file and updating ckeditor-backend containers"
-      sed -i.bak \'s/cs:${previous_cke_backend_version}/cs:${coupled_cke_backend_version}/\' $ckeditor_backend_file
+      sed -i.bak 's/cs:${previous_cke_backend_version}/cs:${coupled_cke_backend_version}/' $ckeditor_backend_file
       debug "Pulling new ckeditor-backend container and updating"
       compose_client up ckeditor-backend -d
       debug "ckeditor-backend container is updated now, proceeding with rest of the update"
