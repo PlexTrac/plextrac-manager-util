@@ -292,7 +292,7 @@ function update_ckeditor_backend_version () {
       fi
     else
       info "Updating config file and updating ckeditor-backend containers"
-      sed -i.bak 's/cs:${previous_cke_backend_version}/cs:${coupled_cke_backend_version}/' $ckeditor_backend_file
+      sed -i.bak "s/cs:${previous_cke_backend_version}/cs:${coupled_cke_backend_version}/" $ckeditor_backend_file
       debug "Pulling new ckeditor-backend container and updating"
       compose_client up ckeditor-backend -d
       debug "ckeditor-backend container is updated now, proceeding with rest of the update"
