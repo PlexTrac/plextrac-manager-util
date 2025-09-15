@@ -15,6 +15,11 @@ function mod_update() {
   #   info "Cloud hosted customer - no modification of UPGRADE_STRATEGY necessary"
   # fi
 
+  # App version that needs to have the updated ckeditor-backend version
+  coupled_app_version="2.21"
+  coupled_cke_backend_version="4.25.0"
+  previous_cke_backend_version="4.17.1"
+
   title "Updating PlexTrac"
   # I'm comparing an int :shrug:
   # shellcheck disable=SC2086
@@ -59,6 +64,19 @@ function mod_update() {
           if [ "$i" != "$running_ver" ]; then
             info "Starting Update..."
             debug "Upgrading to $i"
+            # Check version of ckeditor-backend if app version is greater than or equal to v2.21
+            # If it is, we need to update ckeditor-backend before anything else
+            if compose_client ps ckeditor-backend -q >/dev/null 2>&1; then
+              running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+            else
+              # If it's not running, set the version to 0 so the configs are validated below. Using a string since that's what we are comparing against
+              running_ckeditor_backend_version="0"
+            fi
+
+            if [ $(printf "%03d%03d%03d%03d" $(echo "${i}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "${coupled_app_version}" | tr '.' ' ')) ] && [ $(printf "%03d%03d%03d%03d" $(echo "${running_ckeditor_backend_version}" | tr '.' ' ')) -ne $(printf "%03d%03d%03d%03d" $(echo "${coupled_cke_backend_version}" | tr '.' ' ')) ]; then
+              error "App now requires a newer version of the ckeditor-backend server. Would you like to update automatically?"
+              update_ckeditor_backend_version
+            fi
             getCKEditorRTCConfig
             mod_configure
             UPGRADE_STRATEGY="$i"
@@ -66,6 +84,7 @@ function mod_update() {
             # ETL Check before an update
             ETL_OUTPUT=false
             mod_check_etl_status "${ETL_OUTPUT-}"
+
             if [ "$CONTAINER_RUNTIME" == "podman" ]; then
               title "Pulling latest container images"
               podman_remove
@@ -96,6 +115,27 @@ function mod_update() {
   else
       info "Starting Update..."
       debug "Proceeding with normal update"
+      # Check version of ckeditor-backend if app version is greater than or equal to v2.21
+      # If it is, we need to update ckeditor-backend before anything else
+      if compose_client ps ckeditor-backend -q >/dev/null 2>&1; then
+        running_ckeditor_backend_version="$(for i in $(compose_client ps ckeditor-backend -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u)"
+      else
+        # If it's not running, set the version to 0 so the configs are validated below. Using a string since that's what we are comparing against
+        running_ckeditor_backend_version="0"
+      fi
+
+      # Upgrade strategy could be stable, so we need to check the actual expected app version. Copied from the stop function.
+
+      if [[ "${UPGRADE_STRATEGY}" == "stable" ]]; then
+        local expected_backend_tag="$(compose_client config --format json | jq -r .services.plextracapi.image)"
+        local expected_backend_version="$(docker image inspect $expected_backend_tag --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")')"
+      else
+        local expected_backend_version="${UPGRADE_STRATEGY}"
+      fi
+      if [ $(printf "%03d%03d%03d%03d" $(echo "${expected_backend_version}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "${coupled_app_version}" | tr '.' ' ')) ] && [ $(printf "%03d%03d%03d%03d" $(echo "${running_ckeditor_backend_version}" | tr '.' ' ')) -ne $(printf "%03d%03d%03d%03d" $(echo "${coupled_cke_backend_version}" | tr '.' ' ')) ]; then
+        error "App now requires a newer version of the ckeditor-backend server. Would you like to update automatically?"
+        update_ckeditor_backend_version
+      fi
       getCKEditorRTCConfig
       mod_configure
       # ETL Check before an update
@@ -239,4 +279,38 @@ function mod_util-update() {
     die "Failed to upgrade PlexTrac Management Util! Please reach out to support if problem persists"
     exit 1 # just in case, previous line should already exit
   fi
+}
+
+function update_ckeditor_backend_version () {
+
+  if get_user_approval; then
+    info "Processing update of ckeditor-backend."
+    # find the ckeditor-backend definition and use sed to bump version
+    ckeditor_backend_file=$(grep "cs:${previous_cke_backend_version}" docker-compose.*.yml -l) || true
+    if [ $(echo $ckeditor_backend_file | wc -w) -gt 1 ]; then
+      error "More than one config files detected with the ckeditor-backend defined. Please use only one config file or manually change the version defined."
+      return 1
+    elif [ -z $ckeditor_backend_file ]; then
+      debug "No files found with the old definition, validating new version is configured"
+      expected_ckeditor_backend_tag="$(compose_client config --format json | jq -r .services.\"ckeditor-backend\".image)"
+      if echo $expected_ckeditor_backend_tag | grep -q cs:${coupled_cke_backend_version} ; then
+        debug "Confirmed current configs look correct, attempting update of ckeditor-backend container"
+        compose_client up ckeditor-backend -d
+        debug "ckeditor-backend container is updated now, proceeding with rest of the update"
+      else
+        error "Update of ckeditor-backend container failed, please contact support"
+        return 1
+      fi
+    else
+      info "Updating config file and updating ckeditor-backend containers"
+      sed -i.bak "s/cs:${previous_cke_backend_version}/cs:${coupled_cke_backend_version}/" $ckeditor_backend_file
+      debug "Pulling new ckeditor-backend container and updating"
+      compose_client up ckeditor-backend -d
+      debug "ckeditor-backend container is updated now, proceeding with rest of the update"
+    fi
+  else
+    error "Unable to proceed without updating ckeditor-backend"
+    return 1
+  fi
+
 }
