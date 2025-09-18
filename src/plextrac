@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.7.38
+VERSION=0.7.39
 
 ## Podman Global Declaration Variable
 declare -A svcValues
@@ -9,7 +9,8 @@ declare -A svcValues
 export POSTGRES_INITDB_ARGS='--auth-local=scram-sha-256 --auth-host=scram-sha-256'
 
 databaseNames=("plextracdb" "postgres")
-serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx" "minio" "minio-bootstrap" "integration-worker" "event-orchestrator")
+# Doesn't include CKEditor by default. 'ckeditor-backend' service is added in the src/_podman.sh line 2000 if needed depending on env var CKEDITOR_MIGRATE being true
+serviceNames=("plextracdb" "postgres" "redis" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx" "minio" "minio-bootstrap" "integration-worker" "event-orchestrator")
 #Defaults
 svcValues[network]="--network=plextrac"
 #Couchbase
