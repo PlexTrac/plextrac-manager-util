@@ -309,7 +309,7 @@ function podman_run_cb_migrations() {
   var=$(declare -p "$1")
   eval "declare -A serviceValues="${var#*=}
   serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
-  serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e CKEDITOR_MIGRATE=${CKEDITOR_MIGRATE:-} -e CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-}"
+  serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e CKEDITOR_MIGRATE=${CKEDITOR_MIGRATE:-} -e CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_AI_SQL_PASSWORD=${PG_CORE_AI_SQL_PASSWORD:?err} -e PG_CORE_AI_SQL_USER=${PG_CORE_AI_SQL_USER:?err} -e RUXPIN_ENABLED=${RUXPIN_ENABLED:-}"
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   serviceValues[api-image]="${PODMAN_API_IMAGE}"
   local env_vars="${serviceValues[migrations-env_vars]}"
@@ -354,4 +354,36 @@ function podman_remove() {
       fi
     fi
   done
+}
+
+function podman_start_cke() {
+  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
+
+  local volumes=""
+  local ports=""
+  local healthcheck=""
+  local restart_policy="--restart=always"
+  local entrypoint=""
+  local deploy=""
+  local alias=""
+  local init=""
+  local image="${PODMAN_CKE_IMAGE}"
+  local env_file="--env-file ${PLEXTRAC_HOME:-}/.env"
+  local env_vars="-e DATABASE_DATABASE=${PG_CKEDITOR_DB:?err} -e DATABASE_DRIVER=postgres -e DATABASE_HOST=postgres -e DATABASE_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e DATABASE_POOL_CONNECTION_LIMIT=10 -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e DATABASE_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false} -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e LOG_LEVEL=${CKEDITOR_LOG_LEVEL:-} -e REDIS_CONNECTION_STRING=redis://redis:6379 -e REDIS_HOST=redis -e REDIS_PASSWORD=${REDIS_PASSWORD:?err}"
+
+  debug "podman_start_cke: Checking if ckeditor-backend exists then stopping and removing"
+  if ! podman container exists ckeditor-backend; then
+    debug "podman_start_cke: ckeditor-backend does not exist, skipping stop and remove"
+  else
+    debug "podman_start_cke: ckeditor-backend exists, stopping and removing"
+    podman stop ckeditor-backend 1>/dev/null
+    podman rm -f ckeditor-backend 1>/dev/null
+    podman image prune -f 1>/dev/null
+  fi
+  debug "podman_start_cke: Starting CKEditor Backend"
+  container_client run $env_file $env_vars $init $alias $entrypoint $restart_policy $healthcheck \
+        $volumes --name=ckeditor-backend $deploy --network=plextrac $ports -d $image 1>/dev/null
+  debug "podman_start_cke: CKEditor Backend started, waiting 10 seconds for it to initialize"
+  info "Waiting 10 seconds for CKEditor Backend to initialize"
+  sleep 10
 }
