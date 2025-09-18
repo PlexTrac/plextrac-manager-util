@@ -281,32 +281,61 @@ function mod_util-update() {
   fi
 }
 
-function update_ckeditor_backend_version () {
-
+function update_ckeditor_backend_version() {
   if get_user_approval; then
     info "Processing update of ckeditor-backend."
-    # find the ckeditor-backend definition and use sed to bump version
-    ckeditor_backend_file=$(grep "cs:${previous_cke_backend_version}" docker-compose.*.yml -l) || true
-    if [ $(echo $ckeditor_backend_file | wc -w) -gt 1 ]; then
-      error "More than one config files detected with the ckeditor-backend defined. Please use only one config file or manually change the version defined."
-      return 1
-    elif [ -z $ckeditor_backend_file ]; then
-      debug "No files found with the old definition, validating new version is configured"
-      expected_ckeditor_backend_tag="$(compose_client config --format json | jq -r .services.\"ckeditor-backend\".image)"
-      if echo $expected_ckeditor_backend_tag | grep -q cs:${coupled_cke_backend_version} ; then
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      # podman needs to check if the PODMAN_CKE_IMAGE is set to docker.cke-cs.com/cs:4.17.1 or docker.cke-cs.com/cs:4.25.0
+      PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
+      if echo $PODMAN_CKE_IMAGE | grep -q cs:${previous_cke_backend_version} ; then
+        PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
+        info "Updating PODMAN_CKE_IMAGE to use the new version"
+        sed -i.bak "s/cs:${previous_cke_backend_version}/cs:${coupled_cke_backend_version}/" .env
+        # if the .env file doesn't contain PODMAN_CKE_IMAGE, we need to add it
+        if ! grep -q "^PODMAN_CKE_IMAGE=" .env; then
+          echo "PODMAN_CKE_IMAGE=docker.cke-cs.com/cs:${coupled_cke_backend_version}" >> .env
+        fi
+        # re-export the variable in case it was changed
+        export PODMAN_CKE_IMAGE=$(sed -n 's/^PODMAN_CKE_IMAGE=\(.*\)/\1/p' .env)
+        debug "Pulling new ckeditor-backend container and updating"
+        container_client pull $PODMAN_CKE_IMAGE
+        podman_start_cke "svcValues"
+        debug "ckeditor-backend container is updated now, proceeding with rest of the update"
+      elif echo $PODMAN_CKE_IMAGE | grep -q cs:${coupled_cke_backend_version} ; then
+        PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
         debug "Confirmed current configs look correct, attempting update of ckeditor-backend container"
-        compose_client up ckeditor-backend -d
+        container_client pull $PODMAN_CKE_IMAGE
+        podman_start_cke "svcValues"
         debug "ckeditor-backend container is updated now, proceeding with rest of the update"
       else
-        error "Update of ckeditor-backend container failed, please contact support"
+        error "PODMAN_CKE_IMAGE is set to an unknown version, unable to proceed with update of ckeditor-backend"
+        error "Please set PODMAN_CKE_IMAGE to docker.cke-cs.com/cs:4.25.0 in your .env file if updating >=2.21, run plextrac start, and try again"
         return 1
       fi
     else
-      info "Updating config file and updating ckeditor-backend containers"
-      sed -i.bak "s/cs:${previous_cke_backend_version}/cs:${coupled_cke_backend_version}/" $ckeditor_backend_file
-      debug "Pulling new ckeditor-backend container and updating"
-      compose_client up ckeditor-backend -d
-      debug "ckeditor-backend container is updated now, proceeding with rest of the update"
+      # find the ckeditor-backend definition and use sed to bump version
+      ckeditor_backend_file=$(grep "cs:${previous_cke_backend_version}" docker-compose.*.yml -l) || true
+      if [ $(echo $ckeditor_backend_file | wc -w) -gt 1 ]; then
+        error "More than one config files detected with the ckeditor-backend defined. Please use only one config file or manually change the version defined."
+        return 1
+      elif [ -z $ckeditor_backend_file ]; then
+        debug "No files found with the old definition, validating new version is configured"
+        expected_ckeditor_backend_tag="$(compose_client config --format json | jq -r .services.\"ckeditor-backend\".image)"
+        if echo $expected_ckeditor_backend_tag | grep -q cs:${coupled_cke_backend_version} ; then
+          debug "Confirmed current configs look correct, attempting update of ckeditor-backend container"
+          compose_client up ckeditor-backend -d
+          debug "ckeditor-backend container is updated now, proceeding with rest of the update"
+        else
+          error "Update of ckeditor-backend container failed, please contact support"
+          return 1
+        fi
+      else
+        info "Updating config file and updating ckeditor-backend containers"
+        sed -i.bak "s/cs:${previous_cke_backend_version}/cs:${coupled_cke_backend_version}/" $ckeditor_backend_file
+        debug "Pulling new ckeditor-backend container and updating"
+        compose_client up ckeditor-backend -d
+        debug "ckeditor-backend container is updated now, proceeding with rest of the update"
+      fi
     fi
   else
     error "Unable to proceed without updating ckeditor-backend"
