@@ -281,11 +281,12 @@ function mod_util-update() {
   fi
 }
 
-function update_ckeditor_backend_version () {
+function update_ckeditor_backend_version() {
   if get_user_approval; then
     info "Processing update of ckeditor-backend."
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       # podman needs to check if the PODMAN_CKE_IMAGE is set to docker.cke-cs.com/cs:4.17.1 or docker.cke-cs.com/cs:4.25.0
+      PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
       if echo $PODMAN_CKE_IMAGE | grep -q cs:${previous_cke_backend_version} ; then
         PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
         info "Updating PODMAN_CKE_IMAGE to use the new version"
@@ -298,13 +299,13 @@ function update_ckeditor_backend_version () {
         export PODMAN_CKE_IMAGE=$(sed -n 's/^PODMAN_CKE_IMAGE=\(.*\)/\1/p' .env)
         debug "Pulling new ckeditor-backend container and updating"
         container_client pull $PODMAN_CKE_IMAGE
-        podman_start_cke
+        podman_start_cke "svcValues"
         debug "ckeditor-backend container is updated now, proceeding with rest of the update"
       elif echo $PODMAN_CKE_IMAGE | grep -q cs:${coupled_cke_backend_version} ; then
         PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
         debug "Confirmed current configs look correct, attempting update of ckeditor-backend container"
         container_client pull $PODMAN_CKE_IMAGE
-        podman_start_cke
+        podman_start_cke "svcValues"
         debug "ckeditor-backend container is updated now, proceeding with rest of the update"
       else
         error "PODMAN_CKE_IMAGE is set to an unknown version, unable to proceed with update of ckeditor-backend"
