@@ -339,3 +339,20 @@ function podman_remove() {
     fi
   done
 }
+
+function podman_start_cke() {
+  var=$(declare -p "$1")
+  eval "declare -A serviceValues="${var#*=}
+  PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
+  serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
+  serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
+  serviceValues[ckeditor-backend-env_vars]="-e DATABASE_DATABASE=${PG_CKEDITOR_DB:?err} -e DATABASE_DRIVER=postgres -e DATABASE_HOST=postgres -e DATABASE_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e DATABASE_POOL_CONNECTION_LIMIT=10 -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e DATABASE_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false} -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e LOG_LEVEL=${CKEDITOR_LOG_LEVEL:-} -e REDIS_CONNECTION_STRING=redis://redis:6379 -e REDIS_HOST=redis -e REDIS_PASSWORD=${REDIS_PASSWORD:?err}"
+
+  podman stop ckeditor-backend 1>/dev/null
+  podman rm -f ckeditor-backend 1>/dev/null
+  podman image prune -f 1>/dev/null
+  debug "podman_start_cke: Starting CKEditor Backend"
+  container_client run ${serviceValues[env-file]} $env_vars $init $alias $entrypoint $restart_policy $healthcheck \
+        $volumes --name=ckeditor-backend $deploy ${serviceValues[network]} $ports -d $image 1>/dev/null
+  debug "podman_start_cke: CKEditor Backend started"
+}
