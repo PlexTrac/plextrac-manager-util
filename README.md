@@ -15,8 +15,8 @@ Please refer to `docs/development.md` for development setup and contribution ins
 
 Now officially supported on:
 
-- Ubuntu 20.04 and 22.04
-- CentOS 7, Stream 8, and Stream 9*
+- Ubuntu 22.04 and 24.04
+- CentOS Stream 8, and Stream 9*
 - RedHat Linux 8 and 9*
 - Rocky Linux 8 and 9*
 - Debian 11 and 12

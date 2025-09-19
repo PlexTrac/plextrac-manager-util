@@ -15,7 +15,8 @@ jobs:
       - run: |
           ./src/plextrac dist > plextrac
           sha256sum plextrac > sha256sum-plextrac.txt
-      - uses: actions/upload-release-asset@v1
+      - name: Upload Release Asset - Checksum
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -23,7 +24,8 @@ jobs:
           asset_path: ./sha256sum-plextrac.txt
           asset_name: sha256sum-plextrac.txt
           asset_content_type: text/plain
-      - uses: actions/upload-release-asset@v1
+      - name: Upload Release Asset - Binary
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

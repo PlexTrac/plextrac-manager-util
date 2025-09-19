@@ -4,8 +4,8 @@
       "name": "ubuntu",
       "family": "debian",
       "versions": [
-        "20.04",
-        "18.04"
+        "22.04",
+        "24.04"
       ]
     },
     {
@@ -13,6 +13,14 @@
       "family": "rhel",
       "versions": [
         "7.9.2009"
+      ]
+    },
+    {
+      "name": "rhel",
+      "family": "rhel",
+      "versions": [
+        "8.0",
+        "9.0"
       ]
     }
   ]
