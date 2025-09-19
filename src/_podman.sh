@@ -15,6 +15,7 @@ function podman_setup() {
   pt_volumes["postgres-backups"]="${PLEXTRAC_BACKUP_PATH}/postgres"
   pt_volumes["nginx_ssl_certs"]="${PLEXTRAC_HOME:-.}/volumes/nginx_ssl_certs"
   pt_volumes["nginx_logos"]="${PLEXTRAC_HOME:-.}/volumes/nginx_logos"
+  pt_volumes["nginx_waf"]="${PLEXTRAC_HOME:-.}/volumes/naxsi-waf"
   pt_volumes["minio-data"]="${PLEXTRAC_HOME:-.}/volumes/minio"
   for volume in "${!pt_volumes[@]}"; do
     if container_client volume exists "$volume"; then
@@ -53,9 +54,10 @@ function plextrac_install_podman() {
   else
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
   fi
+  serviceValues[plextracnginx-env_vars]="-e UPSTREAM_CLOUD_BUCKET=${UPSTREAM_CLOUD_BUCKET:-cloud} -e UPSTREAM_CLOUD_PREFIX=${UPSTREAM_CLOUD_PREFIX:-uploads} -e MINIO_ENABLED=${MINIO_ENABLED:-true} -e UPSTREAM_CLOUD_HOST=${UPSTREAM_CLOUD_HOST:-minio}"
   serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e CKEDITOR_MIGRATE=${CKEDITOR_MIGRATE:-} -e CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-} -e PG_CORE_AI_SQL_PASSWORD=${PG_CORE_AI_SQL_PASSWORD:?err} -e PG_CORE_AI_SQL_USER=${PG_CORE_AI_SQL_USER:?err}"
   serviceValues[ckeditor-backend-env_vars]="-e DATABASE_DATABASE=${PG_CKEDITOR_DB:?err} -e DATABASE_DRIVER=postgres -e DATABASE_HOST=postgres -e DATABASE_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e DATABASE_POOL_CONNECTION_LIMIT=10 -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e DATABASE_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false} -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e LOG_LEVEL=${CKEDITOR_LOG_LEVEL:-60} -e REDIS_CONNECTION_STRING=redis://redis:6379 -e REDIS_HOST=redis -e REDIS_PASSWORD=${REDIS_PASSWORD:?err}"
-  serviceValues[minio-entrypoint]="$(printf '%s' "--entrypoint=" "[" "\"/usr/bin/minio\"" "," "\"server\"" "," "\"/data\"" "]")"
+  serviceValues[minio-entrypoint]="$(printf '%s' "--entrypoint=" "[" "\"/usr/bin/minio\"" "," "\"server\"" "," "\"/data\"" "," "\"--console-address\"" "," "\":9001\"" "," "\"--address\"" "," "\"0.0.0.0:9000\"" "]")"
   serviceValues[minio-env_vars]="-e MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin} -e MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?err} -e MINIO_LOCAL_USER=${MINIO_LOCAL_USER:-localadmin} -e MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:?err} -e CLOUD_STORAGE_ENDPOINT=${CLOUD_STORAGE_ENDPOINT:-127.0.0.1} -e CLOUD_STORAGE_PORT=${CLOUD_STORAGE_PORT:-9000} -e CLOUD_STORAGE_SSL=${CLOUD_STORAGE_SSL:-false} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err}"
   serviceValues[minio-bootstrap-env_vars]="-e MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin} -e MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?err} -e MINIO_LOCAL_USER=${MINIO_LOCAL_USER:-localadmin} -e MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:?err} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err} -e MINIO_ENABLED=${MINIO_ENABLED:-true} -e UPSTREAM_CLOUD_BUCKET=${UPSTREAM_CLOUD_BUCKET:-cloud}"
 
@@ -167,6 +169,7 @@ function plextrac_start_podman() {
   PODMAN_MINIO_IMAGE="${PODMAN_MINIO_IMAGE:-docker.io/plextrac/minio:stable}"
   PODMAN_MINIO_BOOTSTRAP_IMAGE="${PODMAN_MINIO_BOOTSTRAP_IMAGE:-docker.io/plextrac/plextrac-minio-bootstrap:stable}"
   PODMAN_INTEGRATION_WORKER_IMAGE="${PODMAN_INTEGRATION_WORKER_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_EVENT_ORCHESTRATOR_IMAGE="${PODMAN_EVENT_ORCHESTRATOR_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
 
   serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
   serviceValues[minio-image]="${PODMAN_MINIO_IMAGE}"
@@ -177,21 +180,24 @@ function plextrac_start_podman() {
   serviceValues[api-image]="${PODMAN_API_IMAGE}"
   serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
   serviceValues[integration-worker-image]="${PODMAN_INTEGRATION_WORKER_IMAGE}"
+  serviceValues[event-orchestrator-image]="${PODMAN_EVENT_ORCHESTRATOR_IMAGE}"
   serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
   if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
   else
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443"
   fi
+  serviceValues[plextracnginx-env_vars]="-e UPSTREAM_CLOUD_BUCKET=${UPSTREAM_CLOUD_BUCKET:-cloud} -e UPSTREAM_CLOUD_PREFIX=${UPSTREAM_CLOUD_PREFIX:-uploads} -e MINIO_ENABLED=${MINIO_ENABLED:-true} -e UPSTREAM_CLOUD_HOST=${UPSTREAM_CLOUD_HOST:-minio}"
   serviceValues[migrations-env_vars]="-e COUCHBASE_URL=${COUCHBASE_URL:-http://plextracdb} -e CB_API_PASS=${CB_API_PASS} -e CB_API_USER=${CB_API_USER} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e PG_HOST=${PG_HOST:-postgres} -e PG_MIGRATE_PATH=/usr/src/plextrac-api -e PG_SUPER_USER=${POSTGRES_USER:?err} -e PG_SUPER_PASSWORD=${POSTGRES_PASSWORD:?err} -e PG_CORE_ADMIN_PASSWORD=${PG_CORE_ADMIN_PASSWORD:?err} -e PG_CORE_ADMIN_USER=${PG_CORE_ADMIN_USER:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_RUNBOOKS_ADMIN_PASSWORD=${PG_RUNBOOKS_ADMIN_PASSWORD:?err} -e PG_RUNBOOKS_ADMIN_USER=${PG_RUNBOOKS_ADMIN_USER:?err} -e PG_RUNBOOKS_RW_PASSWORD=${PG_RUNBOOKS_RW_PASSWORD:?err} -e PG_RUNBOOKS_RW_USER=${PG_RUNBOOKS_RW_USER:?err} -e PG_RUNBOOKS_DB=${PG_RUNBOOKS_DB:?err} -e PG_CKEDITOR_ADMIN_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e PG_CKEDITOR_ADMIN_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e PG_CKEDITOR_DB=${PG_CKEDITOR_DB:?err} -e PG_CKEDITOR_RO_PASSWORD=${PG_CKEDITOR_RO_PASSWORD:?err} -e PG_CKEDITOR_RO_USER=${PG_CKEDITOR_RO_USER:?err} -e PG_CKEDITOR_RW_PASSWORD=${PG_CKEDITOR_RW_PASSWORD:?err} -e PG_CKEDITOR_RW_USER=${PG_CKEDITOR_RW_USER:?err} -e PG_TENANTS_WRITE_MODE=${PG_TENANTS_WRITE_MODE:-couchbase_only} -e PG_TENANTS_READ_MODE=${PG_TENANTS_READ_MODE:-couchbase_only} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e CKEDITOR_MIGRATE=${CKEDITOR_MIGRATE:-} -e CKEDITOR_SERVER_CONFIG=${CKEDITOR_SERVER_CONFIG:-} -e RUXPIN_ENABLED=${RUXPIN_ENABLED:-}"
   serviceValues[ckeditor-backend-env_vars]="-e DATABASE_DATABASE=${PG_CKEDITOR_DB:?err} -e DATABASE_DRIVER=postgres -e DATABASE_HOST=postgres -e DATABASE_PASSWORD=${PG_CKEDITOR_ADMIN_PASSWORD:?err} -e DATABASE_POOL_CONNECTION_LIMIT=10 -e DATABASE_PORT=5432 -e DATABASE_SCHEMA=public -e DATABASE_USER=${PG_CKEDITOR_ADMIN_USER:?err} -e ENABLE_METRIC_LOGS=${CKEDITOR_ENABLE_METRIC_LOGS:-false} -e ENVIRONMENTS_MANAGEMENT_SECRET_KEY=${CKEDITOR_ENVIRONMENT_SECRET_KEY:-} -e LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-} -e LOG_LEVEL=${CKEDITOR_LOG_LEVEL:-} -e REDIS_CONNECTION_STRING=redis://redis:6379 -e REDIS_HOST=redis -e REDIS_PASSWORD=${REDIS_PASSWORD:?err}"
   serviceValues[minio-entrypoint]="$(printf '%s' "--entrypoint=" "[" "\"/usr/bin/minio\"" "," "\"server\"" "," "\"/data\"" "]")"
   serviceValues[minio-env_vars]="-e MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin} -e MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?err} -e MINIO_LOCAL_USER=${MINIO_LOCAL_USER:-localadmin} -e MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:?err} -e CLOUD_STORAGE_ENDPOINT=${CLOUD_STORAGE_ENDPOINT:-127.0.0.1} -e CLOUD_STORAGE_PORT=${CLOUD_STORAGE_PORT:-9000} -e CLOUD_STORAGE_SSL=${CLOUD_STORAGE_SSL:-false} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err}"
   serviceValues[minio-bootstrap-env_vars]="-e MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin} -e MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?err} -e MINIO_LOCAL_USER=${MINIO_LOCAL_USER:-localadmin} -e MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:?err} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err} -e MINIO_ENABLED=${MINIO_ENABLED:-true} -e UPSTREAM_CLOUD_BUCKET=${UPSTREAM_CLOUD_BUCKET:-cloud}"
   serviceValues[integration-worker-env_vars]="-e LOG_LEVEL=${LOG_LEVEL:-info} -e LOG_FORMAT=${LOG_FORMAT:-logfmt} -e NODE_ENV=${NODE_ENV:-production} -e SYSTEM_LEVEL=${SYSTEM_LEVEL:-PRODUCTION} -e CLIENT_DOMAIN_NAME=${CLIENT_DOMAIN_NAME:?err} -e INTEGRATION_WORKER_PORT=${INTEGRATION_WORKER_PORT:-9100} -e COUCHBASE_URL=${COUCHBASE_URL:-plextracdb} -e CB_API_USER=${CB_API_USER:?err} -e CB_API_PASS=${CB_API_PASS:?err} -e CB_BUCKET=${CB_BUCKET:?err} -e PG_HOST=${PG_HOST:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_DEBUG_QUERY_LOGGING=${PG_DEBUG_QUERY_LOGGING:-true} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e CLOUD_STORAGE_ENDPOINT=${CLOUD_STORAGE_ENDPOINT:-minio} -e CLOUD_STORAGE_PORT=${CLOUD_STORAGE_PORT:-9000} -e CLOUD_STORAGE_SSL=${CLOUD_STORAGE_SSL:-false} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err} -e CLOUD_STORAGE_BUCKET_NAME=${CLOUD_STORAGE_BUCKET_NAME:-cloud} -e CLOUD_STORAGE_KEY_PREFIX=${CLOUD_STORAGE_KEY_PREFIX:-uploads} -e LAUNCH_DARKLY_SDK_KEY=${LAUNCH_DARKLY_SDK_KEY:-} -e FEATURE_FLAGS_USE_LD_OVERRIDES=${FEATURE_FLAGS_USE_LD_OVERRIDES:-} -e TELEMETRY_EXPORTERS=${TELEMETRY_EXPORTERS:-} -e JAEGER_ENDPOINT=${JAEGER_ENDPOINT:-}"
+  serviceValues[event-orchestrator-env_vars]="-e LOG_LEVEL=${LOG_LEVEL:-info} -e LOG_FORMAT=${LOG_FORMAT:-logfmt} -e COUCHBASE_URL=${COUCHBASE_URL:-plextracdb} -e CB_API_USER=${CB_API_USER:?err} -e CB_API_PASS=${CB_API_PASS:?err} -e CLIENT_DOMAIN_NAME=${CLIENT_DOMAIN_NAME:?err} -e CORE_API_BASE_URL=${CORE_API_BASE_URL:?err} -e CTEM_API_BASE_URL=${CTEM_API_BASE_URL:?err} -e INTERNAL_API_KEY_SHARED=${INTERNAL_API_KEY_SHARED:?err} -e LOG_LEVEL=${LOG_LEVEL:-info} -e LOG_FORMAT=${LOG_FORMAT:-logfmt} -e MAILER_SECURE=${MAILER_SECURE:-true} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e PG_HOST=${PG_HOST:?err} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e serviceConfig: ${serviceConfig:-}"
 
   if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
-    serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx" "minio" "minio-bootstrap" "integration-worker")
+    serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx" "minio" "minio-bootstrap" "integration-worker" "event-orchestrator")
   fi
   serviceValues[notification-env_vars]="-e API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE=${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
   serviceValues[notification-env_vars]="-e INTERNAL_API_KEY_SHARED=${INTERNAL_API_KEY_SHARED:?err}"
@@ -266,6 +272,7 @@ function plextrac_start_podman() {
         local image="${serviceValues[plextracnginx-image]}"
         local healthcheck="${serviceValues[plextracnginx-healthcheck]}"
         local alias="${serviceValues[plextracnginx-alias]}"
+        local env_vars="${serviceValues[plextracnginx-env_vars]}"
       elif [ "$service" == "ckeditor-backend" ]; then
         local image="${serviceValues[ckeditor-backend-image]}"
         local env_vars="${serviceValues[ckeditor-backend-env_vars]}"
@@ -274,12 +281,21 @@ function plextrac_start_podman() {
         local entrypoint="${serviceValues[minio-entrypoint]}"
         local env_vars="${serviceValues[minio-env_vars]}"
         local volumes="${serviceValues[minio-volumes]}"
+        local ports="${serviceValues[minio-ports]}"
       elif [ "$service" == "minio-bootstrap" ]; then
         local image="${serviceValues[minio-bootstrap-image]}"
         local env_vars="${serviceValues[minio-bootstrap-env_vars]}"
+        local restart_policy="--restart=no"
       elif [ "$service" == "integration-worker" ]; then
         local image="${serviceValues[integration-worker-image]}"
         local env_vars="${serviceValues[integration-worker-env_vars]}"
+        local entrypoint="${serviceValues[integration-worker-entrypoint]}"
+        local ports="${serviceValues[integration-worker-ports]}"
+      elif [ "$service" == "event-orchestrator" ]; then
+        local entrypoint="${serviceValues[event-orchestrator-entrypoint]}"
+        local image="${serviceValues[event-orchestrator-image]}"
+        local env_vars="${serviceValues[event-orchestrator-env_vars]}"
+        local ports="${serviceValues[event-orchestrator-ports]}"
       fi
       info "Creating $service"
       # This specific if loop is because Bash escaping and the specific need for the podman flag --entrypoint were being a massive pain in figuring out. After hours of effort, simply making an if statement here and calling podman directly fixes the escaping issues
