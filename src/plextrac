@@ -492,9 +492,9 @@ function run_cb_migrations() {
   else
     compose_client --profile=database-migrations up -d couchbase-migrations --remove-orphans
   fi
+  info "Waiting up to 5 minutes for migrations to complete..."
   # While the duraction of 5 minutes is running, check if the migration container has exited
   while [ $(date +%s) -lt $endTime ]; do
-    info "Waiting up to 5 minutes for migrations to complete..."
     local migration_exited=$(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'`)
     if [ "$migration_exited" == "exited" ]; then
       printf "\r\033[K"
