@@ -61,7 +61,7 @@ docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
           debug "Number of desired service images does NOT match!"
           debug "The Image or number of running images has changed. Scaling"
           IMAGE_CHANGED=true
-        else 
+        else
           IMAGE_CHANGED=false
       fi
     else
@@ -76,7 +76,7 @@ docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
           debug "New Images Matching `echo "$new_image_digests" | wc -l`"
           debug "$new_image_digests"
           if [ "$new_image_digests" = "$current_image_digests" ]
-            then 
+            then
               IMAGE_CHANGED=false
             else
               IMAGE_CHANGED=true
@@ -99,7 +99,6 @@ function pull_docker_images() {
 
 function composeConfigNeedsUpdated() {
   info "Checking for pending changes to docker-compose.yml"
-  decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
   targetComposeFile="${PLEXTRAC_HOME}/docker-compose.yml"
   if [ $(echo "$decodedComposeFile" | md5sum | awk '{print $1}') == $(md5sum $targetComposeFile | awk '{print $1}') ]; then
     debug "docker-compose.yml content matches"; return 1;
