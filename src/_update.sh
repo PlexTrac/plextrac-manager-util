@@ -341,6 +341,8 @@ function update_ckeditor_backend_version() {
         expected_ckeditor_backend_tag="$(compose_client config --format json | jq -r .services.\"ckeditor-backend\".image)"
         if echo $expected_ckeditor_backend_tag | grep -q cs:${coupled_cke_backend_version} ; then
           debug "Confirmed current configs look correct, attempting update of ckeditor-backend container"
+          # Adding a sleep to allow the containers to start before running the migration
+          sleep 15
           compose_client up ckeditor-backend -d
           debug "ckeditor-backend container is updated now, proceeding with rest of the update"
         else
@@ -352,6 +354,8 @@ function update_ckeditor_backend_version() {
         sed -i.bak "s/cs:${previous_cke_backend_version}/cs:${coupled_cke_backend_version}/" $ckeditor_backend_file
         debug "Pulling new ckeditor-backend container and updating"
         compose_client up ckeditor-backend -d
+        # Adding a sleep to allow the containers to start before running the migration
+        sleep 15
         debug "ckeditor-backend container is updated now, proceeding with rest of the update"
       fi
     fi
