@@ -7,7 +7,7 @@ postgresComposeService="postgres"
 function compose_client() {
   flags=($@)
   compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
-  if [ "$CONTAINER_RUNTIME" == "podman-compose" ] || [ "$CONTAINER_RUNTIME" == "podman" ]; then
+  if [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
     debug "podman-compose flags: ${flags[@]}"
     debug "podman-compose configs: ${compose_files}"
     podman-compose $(echo $compose_files) ${flags[@]}
