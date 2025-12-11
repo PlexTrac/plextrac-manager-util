@@ -304,7 +304,7 @@ services:
     - datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp:r
 
   redis:
-    image: redis:6.2-alpine
+    image: redis:8.4.0-alpine
     command: "redis-server --requirepass ${REDIS_PASSWORD}"
     container_name: redis
     volumes:
