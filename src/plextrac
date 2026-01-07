@@ -138,6 +138,7 @@ function mod_help() {
   log "start                                ${DIM}manually start a PlexTrac instance if normal processes did not succeed${RESET}"
   log "stop                                 ${DIM}manually stops the PlexTrac instance. Not a part of normal maintenance${RESET}"
   log "update                               ${DIM}updates the management utility & applies any configuration or application updates${RESET}"
+  log "update-postgres                      ${DIM}updates postgres service${RESET}"
   log ""
   info "Available flags to modify command behavior:"
   log " -h | --help                         ${DIM}prints this help message${RESET}"
@@ -519,6 +520,13 @@ function run_cb_migrations() {
 
 function mod_version() {
   echo "${VERSION}"
+}
+
+function mod_postgres-upgrade() {
+  title "Upgrading Postgres Database to latest supported version"
+  requires_user_plextrac
+  check_container_runtime
+  upgrade_postgres
 }
 
 main "$@"

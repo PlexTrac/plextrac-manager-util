@@ -322,7 +322,7 @@ services:
       timeout: 30s
 
   postgres:
-    image: plextrac/plextracpostgres:stable
+    image: plextrac/plextracpostgres:${POSTGRES_IMAGE:-stable}
     shm_size: 128MB
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata

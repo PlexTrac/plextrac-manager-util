@@ -77,6 +77,7 @@ CLOUD_STORAGE_ENDPOINT=${CLOUD_STORAGE_ENDPOINT:-"minio"}
 CLOUD_STORAGE_SSL=${CLOUD_STORAGE_SSL:-"false"}
 PG_CORE_AI_SQL_USER=${PG_CORE_AI_SQL_USER:-"ai_sql"}
 PG_CORE_AI_SQL_PASSWORD=${PG_CORE_AI_SQL_PASSWORD:-`generateSecret`}
+POSTGRES_IMAGE=${POSTGRES_IMAGE:-"stable"}
 
 
 `generate_default_couchbase_env | setDefaultSecrets`
