@@ -49,7 +49,8 @@ services:
          npm run pg:superuser:bootstrap:post-migration --if-present &&
          npm run db:migrate &&
          npm run pg:etl up all &&
-         npm run maintenance:disable"
+         npm run maintenance:disable &&
+         npm run seed:prebuilt-content --if-present"
     environment:
       COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
       CB_API_PASS: ${CB_API_PASS}
