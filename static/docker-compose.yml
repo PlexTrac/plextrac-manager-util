@@ -305,9 +305,11 @@ services:
     - datalake-maintainer-keys:/usr/src/plextrac-api/keys/gcp:r
 
   redis:
-    image: redis:6.2-alpine
-    command: ["redis-server", "--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "2gb", "--loglevel", "warning"]
+    image: redis:8.4.0-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--maxmemory", "2gb", "--loglevel", "warning"]
     container_name: redis
+    environment:
+      REDISCLI_AUTH: "${REDIS_PASSWORD:?err}"
     volumes:
     - redis:/etc/redis:rw
     restart: always
