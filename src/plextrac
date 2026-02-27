@@ -316,6 +316,12 @@ function mod_dist() {
       echo "" \
       echo -n "DOCKER_COMPOSE_OVERRIDE_ENCODED="; \
       base64 -w0 '"$(dirname $0)"'/../static/docker-compose.override.yml \
+      echo "" \
+      echo -n "DOCKER_COMPOSE_ENCODED_V2="; \
+      base64 -w0 '"$(dirname $0)"'/../static/docker-compose-v2.yml \
+      echo "" \
+      echo -n "DOCKER_COMPOSE_ENCODED_V2_RTC="; \
+      base64 -w0 '"$(dirname $0)"'/../static/docker-compose-v2-rtc.yml \
       echo ""' \
       $0
   fi
