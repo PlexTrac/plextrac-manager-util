@@ -77,5 +77,5 @@ function clean_sweepUploadsCache() {
   fi
   # Leaving the cleanup fairly light, this should help a ton without getting aggressive
   debug "`$cmd -w /usr/src/plextrac-api/uploads plextracapi \
-    find . -maxdepth 1 -type f -regex '^.*\.\(json\|xml\|ptrac\|csv\|nessus\)$' -delete`"
+    find . -maxdepth 1 -type f -regex '^.*\.\(json\|xml\|ptrac\|csv\|nessus\)$' ! -name "export_*" -delete`"
 }
