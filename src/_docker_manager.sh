@@ -43,7 +43,7 @@ function image_version_check() {
         expected_services="docker.io/plextrac/plextracdb:7.2.0
 docker.io/plextrac/plextracpostgres:stable
 docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}
-docker.io/redis:6.2-alpine
+docker.io/redis:8.4.0-alpine
 docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}"
       else
         expected_services=$(compose_client config --format json | jq -r .services[].image | sort -u)

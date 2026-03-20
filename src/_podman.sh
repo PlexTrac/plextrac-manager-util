@@ -32,7 +32,7 @@ function plextrac_install_podman() {
   eval "declare -A serviceValues="${var#*=}
   PODMAN_CB_IMAGE="${PODMAN_CB_IMAGE:-docker.io/plextrac/plextracdb:7.2.0}"
   PODMAN_PG_IMAGE="${PODMAN_PG_IMAGE:-docker.io/plextrac/plextracpostgres:stable}"
-  PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:6.2-alpine}"
+  PODMAN_REDIS_IMAGE="${PODMAN_REDIS_IMAGE:-docker.io/redis:8.4.0-alpine}"
   PODMAN_API_IMAGE="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_NGINX_IMAGE="${PODMAN_NGINX_IMAGE:-docker.io/plextrac/plextracnginx:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
