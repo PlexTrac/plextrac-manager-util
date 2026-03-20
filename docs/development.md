@@ -80,3 +80,81 @@ Then run whatever cli command you were editing. i.e. `plextrac info`
     As a bonus, stack traces will be more useful as the line numbers and file references will point
     to the actual source files.
 
+## Testing UMF / DVU locally
+
+**UMF** (*Unified Migration Framework*) is the app’s unified migration runner. **DVU** (*Direct Version Upgrades*) is upgrading across version gaps in one go; UMF is what enables that once you’re on images that ship it.
+
+You can test the `unified-migrations` Compose service without a full v3 API image in some cases. Use the **live source**: `/vagrant/src/plextrac <command>` (Vagrant) or `./src/plextrac <command>` from the repo root (local).
+
+### How the script chooses unified vs legacy
+
+- **Rule:** resolved version **≥ v3.0** and **`FORCE_LEGACY_MIGRATIONS` is not `true`**
+  -> **`unified-migrations`** (UMF / `npm run db:migrate` chain — the path used for DVU on v3+).  
+  **Otherwise** -> **`couchbase-migrations`** (full legacy chain).  
+  There is no env flag to run UMF on **2.x**; those images are not expected to ship UMF.  
+  Pinned **`UPGRADE_STRATEGY`** and image labels use plain semver (**`2.26.5`**, **`3.0`**) — no **`v`** prefix.
+
+- **`USE_UMF`** is an internal boolean used by the script only (not an operator setting).
+
+- If **`UPGRADE_STRATEGY`** is `stable` (or another non-numeric tag), the version **must** be read
+  from **`org.opencontainers.image.version`** on the pulled `plextracapi` image. Missing or invalid
+  label -> **abort** (no silent fallback).
+
+### 0. Inspect the decision without running migrations
+
+From `/opt/plextrac` (or your `PLEXTRAC_HOME`) as the `plextrac` user, with `.env` loaded:
+
+      plextrac migration-plan
+
+This prints resolved version, whether it came from `.env` vs image label, and which compose service
+would run (`unified-migrations` vs `couchbase-migrations`).
+
+### 1. Legacy path (2.x)
+
+Resolved **2.x** -> **`couchbase-migrations`** always.
+
+- From Vagrant (as `plextrac` user, with `.env` in place):
+
+      cd /opt/plextrac
+      /vagrant/src/plextrac update -y
+
+- You should see the **`couchbase-migrations`** container run.
+
+### 2. Unified path (3.0+)
+
+Resolved **3.0+** and **`FORCE_LEGACY_MIGRATIONS` unset/false** -> **`unified-migrations`**
+(`maintenance:enable` -> `db:migrate` -> `maintenance:disable` -> `seed:prebuilt-content --if-present`).
+
+- You should see "Using Unified Migration Framework (resolved …)" and
+  `compose --profile database-migrations up unified-migrations`.
+
+- The API image must define **`npm run db:migrate`**. If it is missing, the container exits with an error.
+
+### 3. Break-glass: legacy on 3.x
+
+      FORCE_LEGACY_MIGRATIONS=true /vagrant/src/plextrac update -y
+
+Forces **`couchbase-migrations`** even when the resolved version is **3.x**.
+
+### 4. Run only the migration service (no full update)
+
+To test just the compose definition and the migration command (no install/update flow):
+
+- From the directory that has your compose file and `.env` (e.g. `/opt/plextrac` or
+  wherever `PLEXTRAC_HOME` points):
+
+      docker compose --profile database-migrations run --rm unified-migrations
+
+- This runs the `unified-migrations` service once. It will fail if the image does not have
+  `npm run db:migrate` (and the other scripts in the chain).
+
+- To run the legacy migration container for comparison:
+
+      docker compose --profile database-migrations up couchbase-migrations
+
+### 5. Trace which path runs (debug)
+
+      bash -x /vagrant/src/plextrac update -y 2>&1 | tee update.log
+
+- Search for `unified-migrations`, `couchbase-migrations`, `FORCE_LEGACY`, `_migration_resolve`.
+
