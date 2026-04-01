@@ -204,6 +204,34 @@ function restore_doPostgresRestore() {
     for psql_path in "${psql_files[@]}"; do
       db=$(basename "$psql_path" .psql)
       log "Restoring backup for $db"
+
+      # Ensure the target database and admin role exist before restoring
+      dbAdminEnvvar="PG_${db^^}_ADMIN_USER"
+      dbAdminRole=$(eval echo "\$$dbAdminEnvvar")
+      dbPasswordEnvvar="PG_${db^^}_ADMIN_PASS"
+      dbAdminPass=$(eval echo "\$${dbPasswordEnvvar:-}" 2>/dev/null || echo "")
+
+      log "Ensuring database '$db' and role '$dbAdminRole' exist"
+      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+        podman exec -e PGPASSWORD=$POSTGRES_PASSWORD postgres \
+          psql -U $POSTGRES_USER -c "SELECT 1 FROM pg_roles WHERE rolname='$dbAdminRole'" | grep -q 1 || \
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD postgres \
+            psql -U $POSTGRES_USER -c "CREATE ROLE $dbAdminRole WITH LOGIN PASSWORD '$dbAdminPass';"
+        podman exec -e PGPASSWORD=$POSTGRES_PASSWORD postgres \
+          psql -U $POSTGRES_USER -tc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 || \
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD postgres \
+            psql -U $POSTGRES_USER -c "CREATE DATABASE $db OWNER $dbAdminRole;"
+      else
+        $cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+          psql -U $POSTGRES_USER -tc "SELECT 1 FROM pg_roles WHERE rolname='$dbAdminRole'" | grep -q 1 || \
+          $cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+            psql -U $POSTGRES_USER -c "CREATE ROLE $dbAdminRole WITH LOGIN PASSWORD '$dbAdminPass';"
+        $cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+          psql -U $POSTGRES_USER -tc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 || \
+          $cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+            psql -U $POSTGRES_USER -c "CREATE DATABASE $db OWNER $dbAdminRole;"
+      fi
+
       # only the core database gets timescaledb tables, so we need to do special things for this restore to work
       if [ $db = "core" ]; then
         log "restoring core db, running special timescaledb commands"
@@ -212,27 +240,27 @@ function restore_doPostgresRestore() {
           podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;"'
 
           # create the timescaledb extension
-          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION timescaledb;"'
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"'
 
           # run the timescaledb pre_restore
           podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();"'
         else
           # temporarily grant superuser priveleges to the core_admin user
-          debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;" 2>&1`"
+          log "Granting temporary superuser to $PG_CORE_ADMIN_USER"
+          docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;" 2>&1 | while read -r line; do debug "$line"; done
 
           # create the timescaledb extension for the core database
-          debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION timescaledb;" 2>&1`"
+          log "Creating timescaledb extension"
+          docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION IF NOT EXISTS timescaledb;" 2>&1 | while read -r line; do debug "$line"; done
 
           # run the timescaledb pre_restore command
-          debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();" 2>&1`"
+          log "Running timescaledb pre_restore"
+          docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();" 2>&1 | while read -r line; do debug "$line"; done
         fi
       fi
-
-      dbAdminEnvvar="PG_${db^^}_ADMIN_USER"
-      dbAdminRole=$(eval echo "\$$dbAdminEnvvar")
 
       # Note: Not using `--clean --if-exists` here because it is incompatible with timescaledb.
       # This is because --clean will drop the extension and recreate it during the restoration,
@@ -241,6 +269,7 @@ function restore_doPostgresRestore() {
       dbRestoreFlags="-d $db --no-privileges --no-owner --role=$dbAdminRole  --disable-triggers --verbose"
 
       # Copy the backup file into the container for restore
+      log "Copying backup file into container"
       if [ "$CONTAINER_RUNTIME" == "podman" ]; then
         podman cp "$psql_path" $postgresComposeService:/tmp/$(basename "$psql_path")
       else
@@ -248,8 +277,22 @@ function restore_doPostgresRestore() {
       fi
 
       log "Restoring $db with role:${dbAdminRole}"
-      debug "`$cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
-        pg_restore -U $POSTGRES_USER $dbRestoreFlags /tmp/$db.psql 2>&1`"
+      restoreOutput=$($cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+        pg_restore -U $POSTGRES_USER $dbRestoreFlags /tmp/$db.psql 2>&1) || true
+      restoreExitCode=${PIPESTATUS[0]:-$?}
+
+      # pg_restore returns non-zero for warnings too, so log output and check for real errors
+      if [ -n "$restoreOutput" ]; then
+        # Show errors/warnings at log level so they're always visible
+        while IFS= read -r line; do
+          if echo "$line" | grep -qiE '(error|fatal)'; then
+            error "pg_restore: $line"
+          else
+            debug "$line"
+          fi
+        done <<< "$restoreOutput"
+      fi
+
       debug "`$cmd $postgresComposeService \
         rm /tmp/$db.psql 2>&1`"
 
@@ -260,12 +303,14 @@ function restore_doPostgresRestore() {
           podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;"'
         else
           # run the timescaledb post_restore command
-          debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_post_restore();" 2>&1`"
+          log "Running timescaledb post_restore"
+          docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_post_restore();" 2>&1 | while read -r line; do debug "$line"; done
 
           # revoke the temporarily granted superuser privileges from core_admin
-          debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;" 2>&1`"
+          log "Revoking temporary superuser from $PG_CORE_ADMIN_USER"
+          docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;" 2>&1 | while read -r line; do debug "$line"; done
 
         fi
       fi
