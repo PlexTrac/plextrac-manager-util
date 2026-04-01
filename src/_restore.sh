@@ -27,12 +27,28 @@ function restore_doUploadsRestore() {
 
   if get_user_approval; then
     log "Restoring from $latestBackup"
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      cat $latestBackup | podman cp - plextracapi:/usr/src/plextrac-api
-    else
-      debug "`cat $latestBackup | compose_client run -T --workdir /usr/src/plextrac-api --rm --entrypoint='' \
-      $coreBackendComposeService tar -xzf -`"
+
+    # Extract to a temp directory to handle varying tarball structures
+    timestamp=$(date +%s)
+    restoreTmp="/tmp/uploads_restore_$timestamp"
+    mkdir -p "$restoreTmp"
+    tar -xzf "$latestBackup" -C "$restoreTmp"
+
+    # Find the uploads directory within the extracted backup, regardless of nesting
+    uploadsDir=$(find "$restoreTmp" -type d -name 'uploads' | head -n1)
+    if [ -z "$uploadsDir" ]; then
+      # No nested uploads dir found - assume the tarball contents ARE the uploads
+      uploadsDir="$restoreTmp"
     fi
+    log "Found uploads data at: $uploadsDir"
+
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      podman cp "$uploadsDir/." plextracapi:/usr/src/plextrac-api/uploads/
+    else
+      docker cp "$uploadsDir/." $(docker compose ps -q $coreBackendComposeService):/usr/src/plextrac-api/uploads/
+    fi
+
+    rm -rf "$restoreTmp"
     log "Done"
   fi
 }
@@ -69,14 +85,31 @@ function restore_doCouchbaseRestore() {
         tar -C $restoreTmp -xzvf /backups/$backupFile 2>&1`"
     fi
 
+    # Find the actual cbrestore data directory (contains bucket-* subdirs)
+    # The tarball may have the data nested at varying depths
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      cbRestorePath=$(podman exec $couchbaseComposeService \
+        find $restoreTmp -type d -name 'bucket-*' -print -quit 2>/dev/null | xargs dirname 2>/dev/null)
+    else
+      cbRestorePath=$(compose_client exec -T $couchbaseComposeService \
+        find $restoreTmp -type d -name 'bucket-*' -print -quit 2>/dev/null | xargs dirname 2>/dev/null | tr -d '\r')
+    fi
+
+    if [ -z "$cbRestorePath" ]; then
+      log "No bucket-* directories found, using extraction root: $restoreTmp"
+      cbRestorePath="$restoreTmp"
+    else
+      log "Found cbrestore data at: $cbRestorePath"
+    fi
+
     log "Running database restore"
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      podman exec $couchbaseComposeService cbrestore $restoreTmp http://127.0.0.1:8091 \
+      podman exec $couchbaseComposeService cbrestore $cbRestorePath http://127.0.0.1:8091 \
         -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
     else
       # We have the TTY enabled by default so the output from cbrestore is intelligible
       tty -s || { debug "Disabling TTY allocation for Couchbase restore due to non-interactive invocation"; ttyFlag="-T"; }
-      compose_client exec ${ttyFlag:-} $couchbaseComposeService cbrestore $restoreTmp http://127.0.0.1:8091 \
+      compose_client exec ${ttyFlag:-} $couchbaseComposeService cbrestore $cbRestorePath http://127.0.0.1:8091 \
         -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
     fi
 
@@ -148,17 +181,17 @@ function restore_doPostgresRestore() {
     fi
 
     # now actually perform the db restore
-    # Extract backup to a temp directory to handle varying tarball structures
+    # Extract backup to a temp directory on the host to handle varying tarball structures
     timestamp=$(date +%s)
     restoreTmp="/tmp/postgres_restore_$timestamp"
-    mkdir -p $restoreTmp
-    tar -xvzf $latestBackup -C $restoreTmp
+    mkdir -p "$restoreTmp"
+    tar -xvzf "$latestBackup" -C "$restoreTmp"
 
     # Find all .psql files in the extracted backup, regardless of directory structure
-    mapfile -t psql_files < <(find $restoreTmp -type f -name '*.psql')
+    mapfile -t psql_files < <(find "$restoreTmp" -type f -name '*.psql')
     if [ ${#psql_files[@]} -eq 0 ]; then
       error "No .psql files found in backup archive."
-      rm -rf $restoreTmp
+      rm -rf "$restoreTmp"
       return 1
     fi
 
@@ -239,7 +272,7 @@ function restore_doPostgresRestore() {
     done
 
     # Clean up the temp extraction directory
-    rm -rf $restoreTmp
+    rm -rf "$restoreTmp"
 
     log "now, start the rest of the app and sleep for 120s to give couchbase a chance"
     mod_start
