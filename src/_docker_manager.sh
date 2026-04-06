@@ -6,7 +6,29 @@ postgresComposeService="postgres"
 
 function compose_client() {
   flags=($@)
-  compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
+  compose_files=""
+  local matches f ph="${PLEXTRAC_HOME:-}"
+  if [ -z "$ph" ]; then
+    die "PLEXTRAC_HOME is unset; cannot locate docker-compose*.yml for docker compose."
+  fi
+  # Prefer ${PLEXTRAC_HOME}/docker-compose*.yml (normal install). The * matches zero chars, so
+  # docker-compose.yml counts. If none at root, use static/ (e.g. only static/docker-compose.yml)
+  # or compose-files/ (legacy).
+  shopt -s nullglob
+  matches=( "${ph}"/docker-compose*.yml )
+  if [ ${#matches[@]} -eq 0 ]; then
+    matches=( "${ph}/static"/docker-compose*.yml )
+  fi
+  if [ ${#matches[@]} -eq 0 ]; then
+    matches=( "${ph}/compose-files"/docker-compose*.yml )
+  fi
+  shopt -u nullglob
+  if [ ${#matches[@]} -eq 0 ]; then
+    die "No docker-compose*.yml under ${ph}, ${ph}/static, or ${ph}/compose-files. Cannot run docker compose. Either copy/link compose YAML to ${ph}/ or run from the directory that contains your compose files and set PLEXTRAC_HOME accordingly."
+  fi
+  while IFS= read -r f; do
+    compose_files+=" -f ${f}"
+  done < <(printf '%s\n' "${matches[@]}" | sort -r)
   if [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
     debug "podman-compose flags: ${flags[@]}"
     debug "podman-compose configs: ${compose_files}"

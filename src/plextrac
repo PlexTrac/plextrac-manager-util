@@ -510,9 +510,21 @@ function _migration_resolve_version_and_mode() {
       fi
     else
       local api_tag
-      api_tag="$(compose_client config --format json 2>/dev/null | jq -r '.services.plextracapi.image // empty')"
+      local compose_json
+      local compose_err
+      local errf="${TMPDIR:-/tmp}/plextrac-compose-err.$$"
+      rm -f "$errf"
+      if ! compose_json="$(compose_client config --format json 2>"$errf")"; then
+        compose_err="$(cat "$errf" 2>/dev/null || true)"
+        rm -f "$errf"
+        die "docker compose config --format json failed under ${PLEXTRAC_HOME:-}. With UPGRADE_STRATEGY='${UPGRADE_STRATEGY:-stable}', the migration path needs a valid compose project to find the plextracapi image.${compose_err:+ (${compose_err})}"
+      fi
+      rm -f "$errf"
+      if ! api_tag="$(printf '%s\n' "$compose_json" | jq -r '.services.plextracapi.image // empty')"; then
+        die "Could not parse docker compose JSON while reading services.plextracapi.image."
+      fi
       if [ -z "$api_tag" ]; then
-        die "Could not read services.plextracapi.image from compose config. Refusing to resolve migration path."
+        die "Could not read services.plextracapi.image from compose config (empty or missing). Refusing to resolve migration path."
       fi
       version_being_pulled="$(container_client image inspect "$api_tag" --format json 2>/dev/null | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version") // empty' 2>/dev/null || true)"
       if [ -z "$version_being_pulled" ]; then
@@ -539,7 +551,9 @@ function _migration_resolve_version_and_mode() {
     info "FORCE_LEGACY_MIGRATIONS=true: using couchbase-migrations (legacy) instead of unified-migrations for v${target_major}.x."
   fi
 
-  [ "$USE_UMF" = "true" ] && debug "Using unified-migrations (UMF): resolved version ${MIGRATION_RESOLVED_VERSION} (source=${MIGRATION_RESOLVED_SOURCE})"
+  if [ "$USE_UMF" = "true" ]; then
+    debug "Using unified-migrations (UMF): resolved version ${MIGRATION_RESOLVED_VERSION} (source=${MIGRATION_RESOLVED_SOURCE})"
+  fi
 }
 
 function mod_migration-plan() {
