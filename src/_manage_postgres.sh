@@ -223,6 +223,15 @@ function _plextrac_one_migration_container_id() {
   printf ''
 }
 
+# docker inspect/logs accept one id; if anything returns "id1 id2", use the first only.
+function _plextrac_sanitize_container_id() {
+  local raw="${1:-}"
+  raw="${raw%% *}"
+  raw="${raw//$'\n'/}"
+  raw="${raw//$'\r'/}"
+  printf '%s' "$raw"
+}
+
 function mod_check_etl_status() {
   local migration_exited="running"
   local mig_cid status_line logs_line
@@ -231,7 +240,7 @@ function mod_check_etl_status() {
   secs=300
   endTime=$(( $(date +%s) + secs ))
 
-  mig_cid="$(_plextrac_one_migration_container_id)"
+  mig_cid="$(_plextrac_sanitize_container_id "$(_plextrac_one_migration_container_id)")"
   if [[ -n "$mig_cid" ]]; then
     migration_exited="running"
   else
@@ -239,7 +248,7 @@ function mod_check_etl_status() {
     debug "Migration container not found"
   fi
   while [ "$migration_exited" == "running" ]; do
-    mig_cid="$(_plextrac_one_migration_container_id)"
+    mig_cid="$(_plextrac_sanitize_container_id "$(_plextrac_one_migration_container_id)")"
     if [[ -z "$mig_cid" ]]; then
       migration_exited="exited"
       break
@@ -286,7 +295,10 @@ function mod_check_etl_status() {
     fi
     local etl_breaking_ver=${etl_breaking_ver:-"2.0"}
     debug "Running Version: $etl_running_ver, Breaking Version: $etl_breaking_ver"
-    if (( $(echo "$etl_breaking_ver <= $etl_running_ver" | bc -l) )); then
+    # v3.0+ uses UMF (unified-migrations); legacy Couchbase→Postgres ETL gatekeeping is not applied here.
+    if [[ "${etl_maj_ver}" =~ ^[0-9]+$ ]] && [ "${etl_maj_ver}" -ge 3 ]; then
+      info "Skipping ETL status check for app v${etl_maj_ver}.x (UMF migration path; no separate pg:etl:status gate after update)."
+    elif (( $(echo "$etl_breaking_ver <= $etl_running_ver" | bc -l) )); then
       title "Checking Data ETL Status"
       debug "Checking ETL health and status..."
       ETL_OUTPUT=${ETL_OUTPUT:-true}
@@ -321,13 +333,13 @@ function mod_check_etl_status() {
         if [[ "$ETLS_COMBINED_STATUS" == "HEALTHY" ]]; then
             info "All ETLs are in a healthy status."
           else
-            etl_failure
+            etl_failure "${etl_running_ver}"
         fi
       else
         info "PlexTrac API container not running, skipping ETL status check"
       fi
     else
-      info "Skipping ETL Check; Version prior to 2.0 detected: $running_ver"
+      info "Skipping ETL Check; Version prior to 2.0 detected: ${etl_running_ver:-unknown}"
     fi
   else
     error "Skipping ETL status check"
@@ -335,9 +347,10 @@ function mod_check_etl_status() {
 }
 
 function etl_failure() {
+  local app_ver="${1:-failed}"
   error "One or more ETLs are in an unhealthy status."
   LOCK_UPDATES=true
-  LOCK_VERSION=${running_ver:-"failed"}
+  LOCK_VERSION="$app_ver"
   sed -i "/^LOCK_VERSION/s/=.*$/=${LOCK_VERSION}/" "${PLEXTRAC_HOME}/.env"
   sed -i '/^LOCK_UPDATES/s/=.*$/=true/' "${PLEXTRAC_HOME}/.env"
   sed -i '/^UPGRADE_STRATEGY/s/=.*$/=NULL/' "${PLEXTRAC_HOME}/.env"
