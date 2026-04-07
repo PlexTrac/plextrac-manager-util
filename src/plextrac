@@ -586,12 +586,19 @@ function run_cb_migrations() {
       podman_run_cb_migrations "svcValues"
       info "Waiting up to 5 minutes for migrations to complete..."
       while [ $(date +%s) -lt $endTime ]; do
-        local migration_exited=$(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'`)
+        local mig_cid migration_exited
+        mig_cid="$(_plextrac_one_migration_container_id legacy)"
+        if [ -z "$mig_cid" ]; then
+          migration_exited="exited"
+        else
+          migration_exited=$(container_client inspect --format '{{.State.Status}}' "$mig_cid" 2>/dev/null) || migration_exited="exited"
+        fi
         if [ "$migration_exited" == "exited" ]; then
           printf "\r\033[K"
           info "Migrations completed"
           break
         fi
+        sleep 3
       done
       if [ $(date +%s) -ge $endTime ]; then
         error "Migration container timed out and may still be running. Please check the logs for more information"
@@ -616,12 +623,19 @@ function run_cb_migrations() {
   compose_client --profile=database-migrations up -d couchbase-migrations --remove-orphans
   info "Waiting up to 5 minutes for migrations to complete..."
   while [ $(date +%s) -lt $endTime ]; do
-    local migration_exited=$(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep couchbase-migrations 2>/dev/null | awk '{print $1}'`)
+    local mig_cid migration_exited
+    mig_cid="$(_plextrac_one_migration_container_id legacy)"
+    if [ -z "$mig_cid" ]; then
+      migration_exited="exited"
+    else
+      migration_exited=$(container_client inspect --format '{{.State.Status}}' "$mig_cid" 2>/dev/null) || migration_exited="exited"
+    fi
     if [ "$migration_exited" == "exited" ]; then
       printf "\r\033[K"
       info "Migrations completed"
       break
     fi
+    sleep 3
   done
   if [ $(date +%s) -ge $endTime ]; then
     error "Migration container timed out and may still be running. Please check the logs for more information"
