@@ -40,6 +40,17 @@ function generate_default_config() {
   # NOTE: we need to leave API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE until all cloud-hosted environments are no
   # longer running code that relies on this variable. It has been replaced by INTERNAL_API_KEY_SHARED for newer versions.
 
+  # Validate MCP_REPLICAS. MCP is a single-process service (one Python event
+  # loop with many async tasks internally), not a horizontally-scalable web
+  # worker. Running multiple replicas would:
+  #   - Break MCP session affinity (session state is in-process)
+  #   - Corrupt per-session rate-limit counters
+  #   - Cause streamable-HTTP transport requests to land on random replicas
+  # Hard-cap the value to 0 or 1.
+  if [ -n "${MCP_REPLICAS:-}" ] && [ "${MCP_REPLICAS}" != "0" ] && [ "${MCP_REPLICAS}" != "1" ]; then
+    die "MCP_REPLICAS='${MCP_REPLICAS}' is invalid. MCP is a single-process service and cannot run multiple replicas. Set MCP_REPLICAS=0 (disabled) or MCP_REPLICAS=1 (enabled) in .env."
+  fi
+
   # Generate base env, using imported vars from above where applicable
   generatedEnv="
 API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE=${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:-`generateSecret`}
@@ -77,6 +88,23 @@ CLOUD_STORAGE_ENDPOINT=${CLOUD_STORAGE_ENDPOINT:-"minio"}
 CLOUD_STORAGE_SSL=${CLOUD_STORAGE_SSL:-"false"}
 PG_CORE_AI_SQL_USER=${PG_CORE_AI_SQL_USER:-"ai_sql"}
 PG_CORE_AI_SQL_PASSWORD=${PG_CORE_AI_SQL_PASSWORD:-`generateSecret`}
+# MCP (Model Context Protocol) — see docs/mcp.md.
+# MCP_REPLICAS=0 disables the service. Set to 1 to enable.
+MCP_REPLICAS=${MCP_REPLICAS:-0}
+# MCP releases independently of the PlexTrac platform. Bump this default in
+# manager-util release notes when the MCP team publishes a new version.
+# Customers can override in .env without editing source.
+MCP_VERSION=${MCP_VERSION:-"0.1.0"}
+MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-"INFO"}
+MCP_RATE_LIMIT_ENABLED=${MCP_RATE_LIMIT_ENABLED:-"true"}
+# Keycloak placeholder vars — required by ETL >=3.0.0 even when Keycloak is not deployed.
+KEYCLOAK_INTERNAL_BASE_URL=${KEYCLOAK_INTERNAL_BASE_URL:-"http://keycloak.invalid"}
+KEYCLOAK_EXTERNAL_BASE_URL=${KEYCLOAK_EXTERNAL_BASE_URL:-"https://keycloak.invalid"}
+KEYCLOAK_TENANT_MANAGEMENT_SERVICE_BASE_URL=${KEYCLOAK_TENANT_MANAGEMENT_SERVICE_BASE_URL:-"http://keycloak-tms.invalid"}
+KEYCLOAK_OIDC_BROKER_PLEXTRACAPI_INTERNAL_BASE_URL=${KEYCLOAK_OIDC_BROKER_PLEXTRACAPI_INTERNAL_BASE_URL:-"http://plextracapi:4350"}
+KEYCLOAK_OIDC_BROKER_CLIENT_SECRET=${KEYCLOAK_OIDC_BROKER_CLIENT_SECRET:-"placeholder"}
+KEYCLOAK_TENANT_REALM_ADMIN_CLIENT_SECRET=${KEYCLOAK_TENANT_REALM_ADMIN_CLIENT_SECRET:-"placeholder"}
+KEYCLOAK_OIDC_BROKER_RSA_PRIVATE_KEY_PEM=${KEYCLOAK_OIDC_BROKER_RSA_PRIVATE_KEY_PEM:-}
 
 
 `generate_default_couchbase_env | setDefaultSecrets`
@@ -252,6 +280,51 @@ function create_volume_directories() {
     stat "${PLEXTRAC_HOME}/volumes/nginx_logos" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx_logos"
     stat "${PLEXTRAC_HOME}/volumes/minio" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/minio"
     stat "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules" &>/dev/null || mkdir -vp "${PLEXTRAC_HOME}/volumes/naxsi-waf"; echo '## Custom WAF Rules Below' > "${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules"
+  fi
+  # Ensure the MCP nginx location config exists. This file is mounted into the
+  # plextracnginx container at /etc/nginx/conf.d/mod_server-directive-extras.conf
+  # so that requests to /mcp are proxied to the mcp service. When MCP_REPLICAS=0
+  # the file is harmless because nothing resolves the upstream.
+  if ! stat "${PLEXTRAC_HOME}/volumes/nginx-custom/mod_mcp_location.conf" &>/dev/null; then
+    mkdir -vp "${PLEXTRAC_HOME}/volumes/nginx-custom"
+    cat > "${PLEXTRAC_HOME}/volumes/nginx-custom/mod_mcp_location.conf" <<'NGINXEOF'
+# MCP Service proxy — installed by plextrac-manager-util.
+# Proxies /mcp/* (and /mcp itself) to the mcp service on port 8000.
+# Mounted into the plextracnginx server block via mod_server-directive-extras.conf.
+location /mcp {
+    set $mcp_upstream mcp:8000;
+
+    # Strip the /mcp prefix so /mcp/foo -> /foo and /mcp -> /
+    rewrite ^/mcp(/.*)$ $1 break;
+    rewrite ^/mcp$ / break;
+
+    proxy_pass http://$mcp_upstream;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_connect_timeout 300s;
+    proxy_send_timeout 300s;
+    proxy_read_timeout 300s;
+    proxy_buffering off;
+
+    # SSE / streaming support — required by MCP Streamable HTTP transport
+    proxy_set_header Connection "";
+    proxy_http_version 1.1;
+    chunked_transfer_encoding on;
+
+    # CORS — MCP clients (Claude Desktop, Cursor, etc.) connect cross-origin
+    add_header Access-Control-Allow-Origin "*" always;
+    add_header Access-Control-Allow-Methods "GET, POST, DELETE, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Content-Type, Accept, Authorization, mcp-session-id, mcp-protocol-version" always;
+    add_header Access-Control-Expose-Headers "mcp-session-id" always;
+
+    if ($request_method = OPTIONS) {
+        return 204;
+    }
+}
+NGINXEOF
+    debug "Created default MCP nginx location config at ${PLEXTRAC_HOME}/volumes/nginx-custom/mod_mcp_location.conf"
   fi
 }
 

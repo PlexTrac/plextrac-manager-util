@@ -12,6 +12,17 @@ services:
       STARTUP_MODE: API_ONLY
       CLOUD_STORAGE_ENDPOINT: ${CLOUD_STORAGE_ENDPOINT:-minio}
       CLOUD_STORAGE_SSL: ${CLOUD_STORAGE_SSL:-false}
+      # Keycloak vars are required by the latest ETL (3.0.0+) even when Keycloak is
+      # not deployed on-prem. These default to placeholder values that satisfy the
+      # env var checks without pointing at a real Keycloak. Override in .env when
+      # Keycloak becomes available.
+      KEYCLOAK_INTERNAL_BASE_URL: ${KEYCLOAK_INTERNAL_BASE_URL:-http://keycloak.invalid}
+      KEYCLOAK_EXTERNAL_BASE_URL: ${KEYCLOAK_EXTERNAL_BASE_URL:-https://keycloak.invalid}
+      KEYCLOAK_TENANT_MANAGEMENT_SERVICE_BASE_URL: ${KEYCLOAK_TENANT_MANAGEMENT_SERVICE_BASE_URL:-http://keycloak-tms.invalid}
+      KEYCLOAK_OIDC_BROKER_PLEXTRACAPI_INTERNAL_BASE_URL: ${KEYCLOAK_OIDC_BROKER_PLEXTRACAPI_INTERNAL_BASE_URL:-http://plextracapi:4350}
+      KEYCLOAK_OIDC_BROKER_CLIENT_SECRET: ${KEYCLOAK_OIDC_BROKER_CLIENT_SECRET:-placeholder}
+      KEYCLOAK_TENANT_REALM_ADMIN_CLIENT_SECRET: ${KEYCLOAK_TENANT_REALM_ADMIN_CLIENT_SECRET:-placeholder}
+      KEYCLOAK_OIDC_BROKER_RSA_PRIVATE_KEY_PEM: ${KEYCLOAK_OIDC_BROKER_RSA_PRIVATE_KEY_PEM:-}
     env_file:
     - .env
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"
@@ -141,6 +152,17 @@ services:
     volumes:
     - letsencrypt:/etc/letsencrypt:rw
     - ${PLEXTRAC_HOME}/volumes/naxsi-waf/customer_curated.rules:/etc/nginx/conf.d/customer_curated.rules:Z
+    # MCP location block — only effective when MCP_REPLICAS > 0. Mounted into the
+    # server-directive-extras include so /mcp routes to the mcp service. Once the
+    # nginx image bakes in MCP routing natively, this mount can be removed.
+    # See docs/mcp.md for the full nginx routing rationale.
+    #
+    # NOTE: when running an RC nginx (e.g. nginx:3.0.0-rc.3) the CKEditor upstream
+    # was renamed from `ckeditor-backend` to `ckeditor-cs`. This util tracks
+    # `stable` nginx where the upstream is still `ckeditor-backend`, so no
+    # `ckeditor-cs` network alias is shipped here. Add it via a docker-compose
+    # override if you swap to an RC nginx image manually.
+    - ${PLEXTRAC_HOME}/volumes/nginx-custom/mod_mcp_location.conf:/etc/nginx/conf.d/mod_server-directive-extras.conf:ro
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -430,6 +452,63 @@ services:
       CLOUD_STORAGE_SECRET_KEY: ${CLOUD_STORAGE_SECRET_KEY:?err}
       MINIO_ENABLED : ${MINIO_ENABLED:-true}
       UPSTREAM_CLOUD_BUCKET: ${UPSTREAM_CLOUD_BUCKET:-cloud}
+
+  # MCP (Model Context Protocol) service — see docs/mcp.md for full context.
+  # Off by default; enable with MCP_REPLICAS=1 in .env.
+  #
+  # REPLICA CONSTRAINT: MCP is a single-process service (one Python event loop
+  # with many async tasks). MCP_REPLICAS must be 0 or 1 — never higher.
+  # Multiple replicas would break session affinity, corrupt per-session
+  # rate-limit counters, and scatter streamable-HTTP transport requests across
+  # processes. _configure_plextrac.sh hard-fails if this is violated.
+  #
+  # Version policy: MCP releases independently of the PlexTrac platform, so the
+  # image is NOT tied to UPGRADE_STRATEGY. Manager-util ships a blessed
+  # MCP_VERSION default and bumps it in release notes when the MCP team
+  # publishes a new version. Customers can override in .env:
+  #   MCP_VERSION=0.2.0
+  #     Pin a different published Docker Hub version.
+  #   MCP_IMAGE=registry.example.com/cicd-app-images/mcp:0.2.0
+  #     Full image path override — e.g. internal registry testing before the
+  #     Docker Hub publish lands, or customer-built images.
+  mcp:
+    image: "${MCP_IMAGE:-plextrac/mcp:${MCP_VERSION:-0.1.0}}"
+    deploy:
+      replicas: ${MCP_REPLICAS:-0}
+    depends_on:
+    - plextracapi
+    restart: always
+    environment:
+      APP_ENV: "prod"
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      TRANSPORT: "http"
+      LOG_LEVEL: "${MCP_LOG_LEVEL:-INFO}"
+      # API_INTERNAL_URL is required by MCP >=0.0.1. API_URL kept for backward compatibility.
+      API_URL: "http://plextracapi:4350"
+      API_INTERNAL_URL: "http://plextracapi:4350"
+      CLIENT_DOMAIN_NAME: "${CLIENT_DOMAIN_NAME:?err}"
+      JWT_KEY: "${JWT_KEY:?err}"
+      LAUNCH_DARKLY_SDK_KEY: "${LAUNCH_DARKLY_SDK_KEY:-}"
+      RATE_LIMIT_ENABLED: "${MCP_RATE_LIMIT_ENABLED:-true}"
+      # MCP >=0.0.1 dropped credential-mode auth from the HTTP transport.
+      # Until Keycloak is deployable on-prem, FAKE_AUTH=true bypasses auth entirely.
+      # DO NOT set DEMO_MODE=true — it takes priority over FAKE_AUTH and turns on
+      # the in-memory OAuth provider, which then requires real OAuth flow from clients.
+      FAKE_AUTH: "${MCP_FAKE_AUTH:-true}"
+      # Bypass MCP license enforcement until on-prem licensing for MCP exists.
+      DEACTIVATE_LICENSE: "${MCP_DEACTIVATE_LICENSE:-true}"
+      # Used by MCP to authenticate against the PlexTrac API for backend tool calls.
+      PLEXTRAC_EMAIL: "${PLEXTRAC_EMAIL:?err}"
+      PLEXTRAC_PASSWORD: "${PLEXTRAC_PASSWORD:?err}"
+    healthcheck:
+      test:
+      - "CMD-SHELL"
+      - "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\""
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   integration-worker:
     image: "plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}"

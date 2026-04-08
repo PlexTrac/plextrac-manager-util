@@ -38,6 +38,7 @@ function plextrac_install_podman() {
   PODMAN_CKE_IMAGE="${PODMAN_CKE_IMAGE:-docker.cke-cs.com/cs:4.17.1}"
   PODMAN_MINIO_IMAGE="${PODMAN_MINIO_IMAGE:-docker.io/plextrac/minio:stable}"
   PODMAN_MINIO_BOOTSTRAP_IMAGE="${PODMAN_MINIO_BOOTSTRAP_IMAGE:-docker.io/plextrac/plextrac-minio-bootstrap:stable}"
+  PODMAN_MCP_IMAGE="${PODMAN_MCP_IMAGE:-docker.io/plextrac/mcp:${MCP_VERSION:-0.1.0}}"
 
   serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
   serviceValues[cb-image]="${PODMAN_CB_IMAGE}"
@@ -45,6 +46,7 @@ function plextrac_install_podman() {
   serviceValues[redis-image]="${PODMAN_REDIS_IMAGE}"
   serviceValues[api-image]="${PODMAN_API_IMAGE}"
   serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
+  serviceValues[mcp-image]="${PODMAN_MCP_IMAGE}"
 
   serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
   serviceValues[redis-entrypoint]=$(printf '%s' "--entrypoint=" "[" "\"redis-server\"" "," "\"--requirepass\"" "," "\"${REDIS_PASSWORD}\"" "]")
@@ -60,6 +62,8 @@ function plextrac_install_podman() {
   serviceValues[minio-entrypoint]="$(printf '%s' "--entrypoint=" "[" "\"/usr/bin/minio\"" "," "\"server\"" "," "\"/data\"" "," "\"--console-address\"" "," "\":9001\"" "," "\"--address\"" "," "\"0.0.0.0:9000\"" "]")"
   serviceValues[minio-env_vars]="-e MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin} -e MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?err} -e MINIO_LOCAL_USER=${MINIO_LOCAL_USER:-localadmin} -e MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:?err} -e CLOUD_STORAGE_ENDPOINT=${CLOUD_STORAGE_ENDPOINT:-127.0.0.1} -e CLOUD_STORAGE_PORT=${CLOUD_STORAGE_PORT:-9000} -e CLOUD_STORAGE_SSL=${CLOUD_STORAGE_SSL:-false} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err}"
   serviceValues[minio-bootstrap-env_vars]="-e MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin} -e MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?err} -e MINIO_LOCAL_USER=${MINIO_LOCAL_USER:-localadmin} -e MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:?err} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err} -e MINIO_ENABLED=${MINIO_ENABLED:-true} -e UPSTREAM_CLOUD_BUCKET=${UPSTREAM_CLOUD_BUCKET:-cloud}"
+  serviceValues[mcp-env_vars]="-e APP_ENV=prod -e HOST=0.0.0.0 -e PORT=8000 -e TRANSPORT=http -e LOG_LEVEL=${MCP_LOG_LEVEL:-INFO} -e API_URL=http://plextracapi:4350 -e API_INTERNAL_URL=http://plextracapi:4350 -e CLIENT_DOMAIN_NAME=${CLIENT_DOMAIN_NAME:?err} -e JWT_KEY=${JWT_KEY:?err} -e LAUNCH_DARKLY_SDK_KEY=${LAUNCH_DARKLY_SDK_KEY:-} -e RATE_LIMIT_ENABLED=${MCP_RATE_LIMIT_ENABLED:-true} -e FAKE_AUTH=${MCP_FAKE_AUTH:-true} -e DEACTIVATE_LICENSE=${MCP_DEACTIVATE_LICENSE:-true} -e PLEXTRAC_EMAIL=${PLEXTRAC_EMAIL:?err} -e PLEXTRAC_PASSWORD=${PLEXTRAC_PASSWORD:?err}"
+  serviceValues[mcp-healthcheck]='--health-cmd=["python3","-c","import urllib.request; urllib.request.urlopen('"'"'http://127.0.0.1:8000/health'"'"')"]'
 
 
   title "Installing PlexTrac Instance"
@@ -170,6 +174,7 @@ function plextrac_start_podman() {
   PODMAN_MINIO_BOOTSTRAP_IMAGE="${PODMAN_MINIO_BOOTSTRAP_IMAGE:-docker.io/plextrac/plextrac-minio-bootstrap:stable}"
   PODMAN_INTEGRATION_WORKER_IMAGE="${PODMAN_INTEGRATION_WORKER_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
   PODMAN_EVENT_ORCHESTRATOR_IMAGE="${PODMAN_EVENT_ORCHESTRATOR_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+  PODMAN_MCP_IMAGE="${PODMAN_MCP_IMAGE:-docker.io/plextrac/mcp:${MCP_VERSION:-0.1.0}}"
 
   serviceValues[ckeditor-backend-image]="${PODMAN_CKE_IMAGE}"
   serviceValues[minio-image]="${PODMAN_MINIO_IMAGE}"
@@ -181,6 +186,7 @@ function plextrac_start_podman() {
   serviceValues[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
   serviceValues[integration-worker-image]="${PODMAN_INTEGRATION_WORKER_IMAGE}"
   serviceValues[event-orchestrator-image]="${PODMAN_EVENT_ORCHESTRATOR_IMAGE}"
+  serviceValues[mcp-image]="${PODMAN_MCP_IMAGE}"
   serviceValues[env-file]="--env-file ${PLEXTRAC_HOME:-}/.env"
   if [ "$LETS_ENCRYPT_EMAIL" != '' ] && [ "$USE_CUSTOM_CERT" == 'false' ]; then
     serviceValues[plextracnginx-ports]="-p 0.0.0.0:443:443 -p 0.0.0.0:80:80"
@@ -195,9 +201,15 @@ function plextrac_start_podman() {
   serviceValues[minio-bootstrap-env_vars]="-e MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin} -e MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?err} -e MINIO_LOCAL_USER=${MINIO_LOCAL_USER:-localadmin} -e MINIO_LOCAL_PASSWORD=${MINIO_LOCAL_PASSWORD:?err} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err} -e MINIO_ENABLED=${MINIO_ENABLED:-true} -e UPSTREAM_CLOUD_BUCKET=${UPSTREAM_CLOUD_BUCKET:-cloud}"
   serviceValues[integration-worker-env_vars]="-e LOG_LEVEL=${LOG_LEVEL:-info} -e LOG_FORMAT=${LOG_FORMAT:-logfmt} -e NODE_ENV=${NODE_ENV:-production} -e SYSTEM_LEVEL=${SYSTEM_LEVEL:-PRODUCTION} -e CLIENT_DOMAIN_NAME=${CLIENT_DOMAIN_NAME:?err} -e INTEGRATION_WORKER_PORT=${INTEGRATION_WORKER_PORT:-9100} -e COUCHBASE_URL=${COUCHBASE_URL:-plextracdb} -e CB_API_USER=${CB_API_USER:?err} -e CB_API_PASS=${CB_API_PASS:?err} -e CB_BUCKET=${CB_BUCKET:?err} -e PG_HOST=${PG_HOST:?err} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_DEBUG_QUERY_LOGGING=${PG_DEBUG_QUERY_LOGGING:-true} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e CLOUD_STORAGE_ENDPOINT=${CLOUD_STORAGE_ENDPOINT:-minio} -e CLOUD_STORAGE_PORT=${CLOUD_STORAGE_PORT:-9000} -e CLOUD_STORAGE_SSL=${CLOUD_STORAGE_SSL:-false} -e CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:?err} -e CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:?err} -e CLOUD_STORAGE_BUCKET_NAME=${CLOUD_STORAGE_BUCKET_NAME:-cloud} -e CLOUD_STORAGE_KEY_PREFIX=${CLOUD_STORAGE_KEY_PREFIX:-uploads} -e LAUNCH_DARKLY_SDK_KEY=${LAUNCH_DARKLY_SDK_KEY:-} -e FEATURE_FLAGS_USE_LD_OVERRIDES=${FEATURE_FLAGS_USE_LD_OVERRIDES:-} -e TELEMETRY_EXPORTERS=${TELEMETRY_EXPORTERS:-} -e JAEGER_ENDPOINT=${JAEGER_ENDPOINT:-}"
   serviceValues[event-orchestrator-env_vars]="-e LOG_LEVEL=${LOG_LEVEL:-info} -e LOG_FORMAT=${LOG_FORMAT:-logfmt} -e COUCHBASE_URL=${COUCHBASE_URL:-plextracdb} -e CB_API_USER=${CB_API_USER:?err} -e CB_API_PASS=${CB_API_PASS:?err} -e CLIENT_DOMAIN_NAME=${CLIENT_DOMAIN_NAME:?err} -e CORE_API_BASE_URL=${CORE_API_BASE_URL:?err} -e CTEM_API_BASE_URL=${CTEM_API_BASE_URL:?err} -e INTERNAL_API_KEY_SHARED=${INTERNAL_API_KEY_SHARED:?err} -e LOG_LEVEL=${LOG_LEVEL:-info} -e LOG_FORMAT=${LOG_FORMAT:-logfmt} -e MAILER_SECURE=${MAILER_SECURE:-true} -e PG_CORE_DB=${PG_CORE_DB:?err} -e PG_CORE_RO_PASSWORD=${PG_CORE_RO_PASSWORD:?err} -e PG_CORE_RO_USER=${PG_CORE_RO_USER:?err} -e PG_CORE_RW_PASSWORD=${PG_CORE_RW_PASSWORD:?err} -e PG_CORE_RW_USER=${PG_CORE_RW_USER:?err} -e PG_HOST=${PG_HOST:?err} -e REDIS_CONNECTION_STRING=${REDIS_CONNECTION_STRING:-redis} -e REDIS_PASSWORD=${REDIS_PASSWORD:?err} -e serviceConfig: ${serviceConfig:-}"
+  serviceValues[mcp-env_vars]="-e APP_ENV=prod -e HOST=0.0.0.0 -e PORT=8000 -e TRANSPORT=http -e LOG_LEVEL=${MCP_LOG_LEVEL:-INFO} -e API_URL=http://plextracapi:4350 -e API_INTERNAL_URL=http://plextracapi:4350 -e CLIENT_DOMAIN_NAME=${CLIENT_DOMAIN_NAME:?err} -e JWT_KEY=${JWT_KEY:?err} -e LAUNCH_DARKLY_SDK_KEY=${LAUNCH_DARKLY_SDK_KEY:-} -e RATE_LIMIT_ENABLED=${MCP_RATE_LIMIT_ENABLED:-true} -e FAKE_AUTH=${MCP_FAKE_AUTH:-true} -e DEACTIVATE_LICENSE=${MCP_DEACTIVATE_LICENSE:-true} -e PLEXTRAC_EMAIL=${PLEXTRAC_EMAIL:?err} -e PLEXTRAC_PASSWORD=${PLEXTRAC_PASSWORD:?err}"
+  serviceValues[mcp-healthcheck]='--health-cmd=["python3","-c","import urllib.request; urllib.request.urlopen('"'"'http://127.0.0.1:8000/health'"'"')"]'
 
   if [ "${CKEDITOR_MIGRATE:-false}" == "true" ]; then
     serviceNames=("plextracdb" "postgres" "redis" "ckeditor-backend" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx" "minio" "minio-bootstrap" "integration-worker" "event-orchestrator")
+  fi
+  # Add MCP to service list if enabled
+  if [ "${MCP_REPLICAS:-0}" != "0" ]; then
+    serviceNames+=("mcp")
   fi
   serviceValues[notification-env_vars]="-e API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE=${API_INTEGRATION_AUTH_CONFIG_NOTIFICATION_SERVICE:?err}"
   serviceValues[notification-env_vars]="-e INTERNAL_API_KEY_SHARED=${INTERNAL_API_KEY_SHARED:?err}"
@@ -296,6 +308,10 @@ function plextrac_start_podman() {
         local image="${serviceValues[event-orchestrator-image]}"
         local env_vars="${serviceValues[event-orchestrator-env_vars]}"
         local ports="${serviceValues[event-orchestrator-ports]}"
+      elif [ "$service" == "mcp" ]; then
+        local image="${serviceValues[mcp-image]}"
+        local env_vars="${serviceValues[mcp-env_vars]}"
+        local healthcheck="${serviceValues[mcp-healthcheck]}"
       fi
       info "Creating $service"
       # This specific if loop is because Bash escaping and the specific need for the podman flag --entrypoint were being a massive pain in figuring out. After hours of effort, simply making an if statement here and calling podman directly fixes the escaping issues
@@ -335,6 +351,10 @@ function podman_pull_images() {
   service_images[redis-image]="${PODMAN_REDIS_IMAGE}"
   service_images[api-image]="${PODMAN_API_IMAGE}"
   service_images[plextracnginx-image]="${PODMAN_NGINX_IMAGE}"
+  if [ "${MCP_REPLICAS:-0}" != "0" ]; then
+    PODMAN_MCP_IMAGE="${PODMAN_MCP_IMAGE:-docker.io/plextrac/mcp:${MCP_VERSION:-0.1.0}}"
+    service_images[mcp-image]="${PODMAN_MCP_IMAGE}"
+  fi
 
   info "Pulling updated container images"
   for image in "${service_images[@]}"; do

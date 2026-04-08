@@ -9,7 +9,7 @@ declare -A svcValues
 export POSTGRES_INITDB_ARGS='--auth-local=scram-sha-256 --auth-host=scram-sha-256'
 
 databaseNames=("plextracdb" "postgres")
-# Doesn't include CKEditor by default. 'ckeditor-backend' service is added in the src/_podman.sh line 2000 if needed depending on env var CKEDITOR_MIGRATE being true
+# Doesn't include CKEditor or MCP by default. 'ckeditor-backend' service is added in the src/_podman.sh if needed depending on env var CKEDITOR_MIGRATE being true. 'mcp' is added if MCP_REPLICAS > 0.
 serviceNames=("plextracdb" "postgres" "redis" "plextracapi" "notification-engine" "notification-sender" "contextual-scoring-service" "migrations" "plextracnginx" "minio" "minio-bootstrap" "integration-worker" "event-orchestrator")
 #Defaults
 svcValues[network]="--network=plextrac"
