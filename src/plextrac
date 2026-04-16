@@ -322,7 +322,7 @@ function mod_dist() {
 }
 
 
-function mod_initialize() {ß
+function mod_initialize() {
   info "Initializing environment for PlexTrac..."
   check_container_runtime
   requires_user_root
