@@ -280,3 +280,88 @@ function etl_failure() {
 
   die "Updates are locked due to a failed data migration. Version Lock: $LOCK_VERSION. Continuing to attempt to update may result in data loss!!! Please contact PlexTrac Support"
 }
+
+function postgres_validation() {
+  title "Validating Postgres Database Configuration"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    {
+      return
+    }
+    else
+    {
+      local row_count=$(compose_client exec -T --env PGPASSWORD="$PG_CORE_ADMIN_PASSWORD" postgres psql -U core_admin -d core -t -c "SELECT COALESCE(SUM(n_live_tup), 0) FROM pg_stat_user_tables;" 2>&1)
+      info "Total rows in database: $row_count"
+    }
+  fi
+}
+
+
+function upgrade_postgres() {
+  PG_IMAGE_TARGET="pr-192"
+  title "Upgrading Postgres Database to Postgres 18.X"
+  info "Checking If Upgrade has already Occurred"
+  if [ -f "${PLEXTRAC_HOME}/.postgres_upgraded_to_18" ]; then
+    info "Postgres upgrade already completed. Skipping."
+    return
+  fi
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    {
+      initialrow_count=$(compose_client exec -T --env PGPASSWORD="$PG_CORE_ADMIN_PASSWORD" postgres psql -U core_admin -d core -t -c "SELECT COALESCE(SUM(n_live_tup), 0) FROM pg_stat_user_tables;" 2>&1)
+    }
+  else
+    {
+      initialrow_count=$(compose_client exec -T --env PGPASSWORD="$PG_CORE_ADMIN_PASSWORD" postgres psql -U core_admin -d core -t -c "SELECT COALESCE(SUM(n_live_tup), 0) FROM pg_stat_user_tables;" 2>&1)
+    }
+  fi
+  info "Backing Up Existing Postgres Data"
+  backup_fullPostgresBackup
+  info "Stopping PlexTrac Services"
+  compose_client down postgres
+  info "Removing Old Postgres Volume"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    podman volume rm plextrac_postgres-data
+  else
+    compose_client volume rm plextrac_postgres-data
+  fi
+  info "Adding Overrides for Postgres 18.X"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    sed -i "/^PODMAN_PG_IMAGE/s/=.*$/=${PG_IMAGE_TARGET}/" "${PLEXTRAC_HOME}/.env"
+    PODMAN_PG_IMAGE="${PODMAN_PG_IMAGE:-docker.io/plextrac/plextracpostgres:${PG_IMAGE_TARGET}}"
+  else
+    sed -i "/^POSTGRES_IMAGE/s/=.*$/=${PG_IMAGE_TARGET}/" "${PLEXTRAC_HOME}/.env"
+  fi
+  info "Starting Postgres 18.X to Initialize New Volume"
+  compose_client up -d postgres
+  info "Waiting for Postgres to be Ready"
+  sleep 10
+  info "Restoring Postgres Data to New Version"
+  restore_doPostgresRestore
+  info "Validating Postgres Data Restoration"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    {
+      postrow_count=$(compose_client exec -T --env PGPASSWORD="$PG_CORE_ADMIN_PASSWORD" postgres psql -U core_admin -d core -t -c "SELECT COALESCE(SUM(n_live_tup), 0) FROM pg_stat_user_tables;" 2>&1)
+    }
+  else
+    {
+      postrow_count=$(compose_client exec -T --env PGPASSWORD="$PG_CORE_ADMIN_PASSWORD" postgres psql -U core_admin -d core -t -c "SELECT COALESCE(SUM(n_live_tup), 0) FROM pg_stat_user_tables;" 2>&1)
+    }
+  fi
+  info "Initial Row Count: $initialrow_count"
+  info "Post-Restoration Row Count: $postrow_count"
+
+  # Calculate the difference and check if within 1% tolerance
+  diff=$((postrow_count - initialrow_count))
+  # Get absolute value
+  [ $diff -lt 0 ] && diff=$((-diff))
+  # Calculate 1% threshold (with minimum of 1 to handle small row counts)
+  threshold=$(( (initialrow_count / 100) > 0 ? (initialrow_count / 100) : 1 ))
+
+  if [ $diff -gt $threshold ]; then
+    error "Row counts differ by more than 1% after restoration! Upgrade failed."
+    error "Difference: $diff rows, Allowed threshold: $threshold rows"
+    die "Postgres Upgrade Failed, Please Contact PlexTrac Support."
+  else
+    info "Row counts are within 1% tolerance. Upgrade successful."
+    touch "${PLEXTRAC_HOME}/.postgres_upgraded_to_18"
+  fi
+}
