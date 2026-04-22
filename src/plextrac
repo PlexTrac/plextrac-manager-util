@@ -1,7 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-VERSION=0.7.44
+VERSION=0.7.45
 
 ## Podman Global Declaration Variable
 declare -A svcValues
@@ -138,6 +138,7 @@ function mod_help() {
   log "start                                ${DIM}manually start a PlexTrac instance if normal processes did not succeed${RESET}"
   log "stop                                 ${DIM}manually stops the PlexTrac instance. Not a part of normal maintenance${RESET}"
   log "update                               ${DIM}updates the management utility & applies any configuration or application updates${RESET}"
+  log "migration-plan                       ${DIM}show which migration path would run (unified vs legacy) without running migrations${RESET}"
   log ""
   info "Available flags to modify command behavior:"
   log " -h | --help                         ${DIM}prints this help message${RESET}"
@@ -148,6 +149,9 @@ function mod_help() {
   log " --install-dir | --plextrac-home     ${DIM}path to non-standard install directory. The default is /opt/plextrac${RESET}. Must be used during initialization."
   log " --install-timeout NUM               ${DIM}seconds to wait for install migrations to complete. The default is 600 (10 mins)${RESET}"
   log " --skip-system-updates               ${DIM}skip system updates during the initialization step${RESET}"
+  log ""
+  info "Migration (see also: ${GREEN}plextrac migration-plan${RESET}):"
+  log " FORCE_LEGACY_MIGRATIONS=true         ${DIM}use couchbase-migrations even on v3.0+ (break-glass)${RESET}"
 }
 
 
@@ -484,35 +488,156 @@ function mod_restart() {
   log "Done!"
 }
 
+# Sets globals USE_UMF, MIGRATION_RESOLVED_VERSION, MIGRATION_RESOLVED_SOURCE (pinned|image).
+# UMF (Unified Migration Framework) in the app enables DVU (Direct Version Upgrades) on v3+.
+# Rule: v3.0+ and FORCE_LEGACY_MIGRATIONS is not true -> unified-migrations (UMF path).
+# Otherwise -> couchbase-migrations (2.x images do not ship UMF).
+# When UPGRADE_STRATEGY is stable/edge/etc., version MUST come from image label; missing label -> die.
+function _migration_resolve_version_and_mode() {
+  FORCE_LEGACY_MIGRATIONS=${FORCE_LEGACY_MIGRATIONS:-false}
+  local version_being_pulled="${UPGRADE_STRATEGY:-stable}"
+  local resolved_from_image=false
+
+  # Pinned tag in .env matches image labels / tags: 2.26.5, 3.0, etc. (no "v" prefix).
+  if [[ "$version_being_pulled" != "stable" && "$version_being_pulled" =~ ^[0-9]+\.[0-9] ]]; then
+    MIGRATION_RESOLVED_SOURCE=pinned
+  else
+    MIGRATION_RESOLVED_SOURCE=image
+    resolved_from_image=true
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      local api_image="${PODMAN_API_IMAGE:-docker.io/plextrac/plextracapi:${UPGRADE_STRATEGY:-stable}}"
+      version_being_pulled="$(container_client image inspect "$api_image" --format json 2>/dev/null | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version") // empty' 2>/dev/null || true)"
+      if [ -z "$version_being_pulled" ]; then
+        die "Could not read org.opencontainers.image.version from image ${api_image}. Pull the image or set UPGRADE_STRATEGY to an explicit version (e.g. 3.0). Refusing to start migrations without a known app version."
+      fi
+    else
+      local api_tag
+      local compose_json
+      local compose_err
+      local errf="${TMPDIR:-/tmp}/plextrac-compose-err.$$"
+      rm -f "$errf"
+      if ! compose_json="$(compose_client config --format json 2>"$errf")"; then
+        compose_err="$(cat "$errf" 2>/dev/null || true)"
+        rm -f "$errf"
+        die "docker compose config --format json failed under ${PLEXTRAC_HOME:-}. With UPGRADE_STRATEGY='${UPGRADE_STRATEGY:-stable}', the migration path needs a valid compose project to find the plextracapi image.${compose_err:+ (${compose_err})}"
+      fi
+      rm -f "$errf"
+      if ! api_tag="$(printf '%s\n' "$compose_json" | jq -r '.services.plextracapi.image // empty')"; then
+        die "Could not parse docker compose JSON while reading services.plextracapi.image."
+      fi
+      if [ -z "$api_tag" ]; then
+        die "Could not read services.plextracapi.image from compose config (empty or missing). Refusing to resolve migration path."
+      fi
+      version_being_pulled="$(container_client image inspect "$api_tag" --format json 2>/dev/null | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version") // empty' 2>/dev/null || true)"
+      if [ -z "$version_being_pulled" ]; then
+        die "Could not read org.opencontainers.image.version from image ${api_tag}. Pull the plextracapi image for this tag or set UPGRADE_STRATEGY to an explicit version. Refusing to start migrations without a known app version."
+      fi
+    fi
+  fi
+
+  MIGRATION_RESOLVED_VERSION="$version_being_pulled"
+  local target_major
+  target_major="$(echo "$version_being_pulled" | cut -d. -f1)"
+
+  if [ "$resolved_from_image" = true ]; then
+    if [ -z "$version_being_pulled" ] || [ "$version_being_pulled" = "null" ] || ! [[ "$target_major" =~ ^[0-9]+$ ]]; then
+      die "Invalid app version from image label: '${version_being_pulled:-empty}'. Expected a semver like 2.28 or 3.0. Refusing to guess migration path."
+    fi
+  fi
+
+  USE_UMF=false
+  if [[ "$target_major" =~ ^[0-9]+$ ]] && [ "$target_major" -ge 3 ] && [ "$FORCE_LEGACY_MIGRATIONS" != "true" ]; then
+    USE_UMF=true
+  fi
+  if [ "$FORCE_LEGACY_MIGRATIONS" = "true" ] && [[ "$target_major" =~ ^[0-9]+$ ]] && [ "$target_major" -ge 3 ]; then
+    info "FORCE_LEGACY_MIGRATIONS=true: using couchbase-migrations (legacy) instead of unified-migrations for v${target_major}.x."
+  fi
+
+  if [ "$USE_UMF" = "true" ]; then
+    debug "Using unified-migrations (UMF): resolved version ${MIGRATION_RESOLVED_VERSION} (source=${MIGRATION_RESOLVED_SOURCE})"
+  fi
+}
+
+function mod_migration-plan() {
+  title "Migration path (dry-run)"
+  check_container_runtime
+  requires_user_plextrac
+  _migration_resolve_version_and_mode
+  info "UPGRADE_STRATEGY=${UPGRADE_STRATEGY:-unset}"
+  info "Resolved version (this step): ${MIGRATION_RESOLVED_VERSION}"
+  info "Resolved from: ${MIGRATION_RESOLVED_SOURCE} (pinned=UPGRADE_STRATEGY like 2.26.5; image=org.opencontainers.image.version)"
+  info "FORCE_LEGACY_MIGRATIONS=${FORCE_LEGACY_MIGRATIONS:-false}  -> if true, legacy even on v3.0+"
+  if [ "$USE_UMF" = "true" ]; then
+    info "Result: ${GREEN}unified-migrations${RESET} (UMF; DVU-capable on v3+)"
+  else
+    info "Result: ${GREEN}couchbase-migrations${RESET} (full legacy chain)"
+  fi
+}
+
 function run_cb_migrations() {
   info "Running Database Migrations"
   secs=${1:-300}
   endTime=$(( $(date +%s) + secs ))
-  # Run the cb migration container
+  _migration_resolve_version_and_mode
+
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-    podman_run_cb_migrations "svcValues"
-  else
-    compose_client --profile=database-migrations up -d couchbase-migrations --remove-orphans
+    if [ "$USE_UMF" == "true" ]; then
+      podman_run_unified_migrations "svcValues" || exit $?
+      info "Migrations completed"
+    else
+      podman_run_cb_migrations "svcValues"
+      info "Waiting up to 5 minutes for migrations to complete..."
+      while [ $(date +%s) -lt $endTime ]; do
+        local mig_cid migration_exited
+        mig_cid="$(_plextrac_one_migration_container_id legacy)"
+        if [ -z "$mig_cid" ]; then
+          migration_exited="exited"
+        else
+          migration_exited=$(container_client inspect --format '{{.State.Status}}' "$mig_cid" 2>/dev/null) || migration_exited="exited"
+        fi
+        if [ "$migration_exited" == "exited" ]; then
+          printf "\r\033[K"
+          info "Migrations completed"
+          break
+        fi
+        sleep 3
+      done
+      if [ $(date +%s) -ge $endTime ]; then
+        error "Migration container timed out and may still be running. Please check the logs for more information"
+      fi
+    fi
+    return
   fi
+
+  # Docker/compose path (unified-migrations service runs maintenance, db:migrate, disable, seed in one container)
+  if [ "$USE_UMF" == "true" ]; then
+    info "Using Unified Migration Framework (resolved ${MIGRATION_RESOLVED_VERSION})"
+    compose_client --profile=database-migrations up unified-migrations
+    migrate_exit=$?
+    if [ $migrate_exit -ne 0 ]; then
+      error "Unified migrations failed (exit code $migrate_exit)"
+      exit $migrate_exit
+    fi
+    info "Migrations completed"
+    return
+  fi
+
+  compose_client --profile=database-migrations up -d couchbase-migrations --remove-orphans
   info "Waiting up to 5 minutes for migrations to complete..."
-  # While the duraction of 5 minutes is running, check if the migration container has exited
   while [ $(date +%s) -lt $endTime ]; do
-    local migration_exited=$(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'`)
+    local mig_cid migration_exited
+    mig_cid="$(_plextrac_one_migration_container_id legacy)"
+    if [ -z "$mig_cid" ]; then
+      migration_exited="exited"
+    else
+      migration_exited=$(container_client inspect --format '{{.State.Status}}' "$mig_cid" 2>/dev/null) || migration_exited="exited"
+    fi
     if [ "$migration_exited" == "exited" ]; then
       printf "\r\033[K"
       info "Migrations completed"
       break
     fi
-    # This was mainly broken spinner code that was too noisy on cli
-    # for s in / - \\ \|; do
-    #     local log=""
-    #     local container=""
-    #     container="$(container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}')"
-    #     log="$(container_client logs $container 2> /dev/null | tail -n 1 -q || true)"
-    #     printf "\r\033[K%s %s -- %s" "$s" "$container" "$log"
-    #     sleep .1
-    # done
-    # sleep 1
+    sleep 3
   done
   if [ $(date +%s) -ge $endTime ]; then
     error "Migration container timed out and may still be running. Please check the logs for more information"

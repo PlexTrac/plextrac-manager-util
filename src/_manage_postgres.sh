@@ -179,26 +179,99 @@ function mod_autofix() {
   postgres_metrics_validation
 }
 
+# One container id for migration polling. In normal operation only one of unified-migrations /
+# couchbase-migrations is running at a time (the CLI never starts both for one update). docker ps -a
+# can still show exited containers from the other path after prior upgrades, so naive "grep migrations"
+# matched multiple IDs -> docker logs failed (single container only) under set -e.
+# Optional arg: legacy | umf | any (default any). legacy = couchbase + Podman --name=migrations only;
+# use on legacy wait loops so we do not follow a stale exited unified container.
+function _plextrac_one_migration_container_id() {
+  local mode="${1:-any}"
+  local id cid n st
+  local -a filters=()
+
+  case "$mode" in
+    legacy) filters=(couchbase-migrations) ;;
+    umf)    filters=(unified-migrations) ;;
+    *)      filters=(unified-migrations couchbase-migrations) ;;
+  esac
+
+  for n in "${filters[@]}"; do
+    while read -r cid; do
+      [ -z "$cid" ] && continue
+      st=$(container_client inspect --format '{{.State.Status}}' "$cid" 2>/dev/null) || continue
+      [ "$st" = "running" ] && printf '%s' "$cid" && return 0
+    done < <(container_client ps -aq --filter "name=$n" 2>/dev/null)
+  done
+
+  for n in "${filters[@]}"; do
+    id="$(container_client ps -aq --filter "name=$n" 2>/dev/null | head -n1)"
+    if [ -n "$id" ]; then
+      printf '%s' "$id"
+      return 0
+    fi
+  done
+
+  if [ "$mode" = "legacy" ] || [ "$mode" = "any" ]; then
+    while read -r cid; do
+      [ -z "$cid" ] && continue
+      n=$(container_client inspect --format '{{.Name}}' "$cid" 2>/dev/null) || continue
+      case "$n" in *unified-migrations*|*couchbase-migrations*) continue ;; esac
+      case "$n" in */migrations|migrations) printf '%s' "$cid"; return 0 ;; esac
+    done < <(container_client ps -aq 2>/dev/null)
+  fi
+  printf ''
+}
+
+# docker inspect/logs accept one id; if anything returns "id1 id2", use the first only.
+function _plextrac_sanitize_container_id() {
+  local raw="${1:-}"
+  raw="${raw%% *}"
+  raw="${raw//$'\n'/}"
+  raw="${raw//$'\r'/}"
+  printf '%s' "$raw"
+}
+
 function mod_check_etl_status() {
   local migration_exited="running"
+  local mig_cid status_line logs_line
   title "Checking Data Migration Status"
   info "Checking Migration Status"
   secs=300
   endTime=$(( $(date +%s) + secs ))
-  if [[ $(container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}') != "" ]]; then
+
+  mig_cid="$(_plextrac_sanitize_container_id "$(_plextrac_one_migration_container_id)")"
+  if [[ -n "$mig_cid" ]]; then
     migration_exited="running"
   else
     migration_exited="exited"
     debug "Migration container not found"
   fi
   while [ "$migration_exited" == "running" ]; do
-    # Check if the migration container has exited, e.g., migrations have completed or failed
-    local migration_exited=$(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'` || migration_exited="exited")
-    if [ $(date +%s) -gt $endTime ]; then
-      error "Migration container has been running for over 5 minutes or is still running. Please ensure they complete or fail before taking further action with the PlexTrac Manager Utility. You can check on the logs by running 'docker compose logs -f couchbase-migrations'"
+    mig_cid="$(_plextrac_sanitize_container_id "$(_plextrac_one_migration_container_id)")"
+    if [[ -z "$mig_cid" ]]; then
+      migration_exited="exited"
+      break
+    fi
+    if ! status_line=$(container_client inspect --format '{{.State.Status}}' "$mig_cid" 2>/dev/null); then
+      migration_exited="exited"
+      break
+    fi
+    migration_exited="$status_line"
+    if [ "$migration_exited" != "running" ]; then
+      break
+    fi
+    if [ "$(date +%s)" -gt "$endTime" ]; then
+      error "Migration container has been running for over 5 minutes or is still running. Please ensure they complete or fail before taking further action with the PlexTrac Manager Utility. You can check on the logs by running 'docker compose logs -f couchbase-migrations' or 'docker compose logs -f unified-migrations'"
       die "Exiting PlexTrac Manager Utility."
     fi
-    for s in / - \\ \|; do printf "\r\033[K$s $(container_client inspect --format '{{.State.Status}}' `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'`) -- $(container_client logs `container_client ps -a | grep migrations 2>/dev/null | awk '{print $1}'` 2> /dev/null | tail -n 1 -q)"; sleep .1; done
+    for s in / - \\ \|; do
+      status_line=$(container_client inspect --format '{{.State.Status}}' "$mig_cid" 2>/dev/null || echo "?")
+      logs_line=$(container_client logs "$mig_cid" 2>/dev/null | tail -n 1)
+      printf "\r\033[K%s %s -- %s" "$s" "$status_line" "$logs_line"
+      sleep .1
+    done
+    sleep 1
   done
   printf "\r\033[K"
   info "Migrations complete"
@@ -222,7 +295,10 @@ function mod_check_etl_status() {
     fi
     local etl_breaking_ver=${etl_breaking_ver:-"2.0"}
     debug "Running Version: $etl_running_ver, Breaking Version: $etl_breaking_ver"
-    if (( $(echo "$etl_breaking_ver <= $etl_running_ver" | bc -l) )); then
+    # v3.0+ uses UMF (unified-migrations); legacy Couchbase→Postgres ETL gatekeeping is not applied here.
+    if [[ "${etl_maj_ver}" =~ ^[0-9]+$ ]] && [ "${etl_maj_ver}" -ge 3 ]; then
+      info "Skipping ETL status check for app v${etl_maj_ver}.x (UMF migration path; no separate pg:etl:status gate after update)."
+    elif (( $(echo "$etl_breaking_ver <= $etl_running_ver" | bc -l) )); then
       title "Checking Data ETL Status"
       debug "Checking ETL health and status..."
       ETL_OUTPUT=${ETL_OUTPUT:-true}
@@ -257,13 +333,13 @@ function mod_check_etl_status() {
         if [[ "$ETLS_COMBINED_STATUS" == "HEALTHY" ]]; then
             info "All ETLs are in a healthy status."
           else
-            etl_failure
+            etl_failure "${etl_running_ver}"
         fi
       else
         info "PlexTrac API container not running, skipping ETL status check"
       fi
     else
-      info "Skipping ETL Check; Version prior to 2.0 detected: $running_ver"
+      info "Skipping ETL Check; Version prior to 2.0 detected: ${etl_running_ver:-unknown}"
     fi
   else
     error "Skipping ETL status check"
@@ -271,9 +347,10 @@ function mod_check_etl_status() {
 }
 
 function etl_failure() {
+  local app_ver="${1:-failed}"
   error "One or more ETLs are in an unhealthy status."
   LOCK_UPDATES=true
-  LOCK_VERSION=${running_ver:-"failed"}
+  LOCK_VERSION="$app_ver"
   sed -i "/^LOCK_VERSION/s/=.*$/=${LOCK_VERSION}/" "${PLEXTRAC_HOME}/.env"
   sed -i '/^LOCK_UPDATES/s/=.*$/=true/' "${PLEXTRAC_HOME}/.env"
   sed -i '/^UPGRADE_STRATEGY/s/=.*$/=NULL/' "${PLEXTRAC_HOME}/.env"

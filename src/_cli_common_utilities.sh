@@ -31,7 +31,9 @@ function requires_user_root() {
 }
 
 function requires_user_plextrac {
-  if [ "$EUID" -ne $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) ]; then
+  local plex_uid
+  plex_uid=$(id -u "${PLEXTRAC_USER_NAME:-plextrac}" 2>/dev/null) || die "Cannot resolve user '${PLEXTRAC_USER_NAME:-plextrac}' (id failed). Check PLEXTRAC_USER_NAME in .env."
+  if [ "$EUID" -ne "$plex_uid" ]; then
     die "${RED}Please run as ${PLEXTRAC_USER_NAME:-plextrac} user${RESET}"
   fi
 }
