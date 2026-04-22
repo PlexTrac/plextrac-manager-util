@@ -330,6 +330,7 @@ function mod_initialize() {
   info "Initializing environment for PlexTrac..."
   check_container_runtime
   requires_user_root
+  check_selinux
   if [ "${AIRGAPPED:-false}" == "false" ]; then
     info "Setting up system packages"
     if [ "${SKIP_SYSTEM_UPDATE:-false}" == "false" ]; then
@@ -344,6 +345,7 @@ function mod_initialize() {
     fi
     if [ "$CONTAINER_RUNTIME" == "podman" ] || [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
       install_podman "${FORCEUPGRADE-}"
+
       if [ "$CONTAINER_RUNTIME" == "podman-compose" ]; then
         install_podman_compose "${FORCEUPGRADE-}"
       fi
