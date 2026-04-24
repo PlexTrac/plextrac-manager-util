@@ -75,8 +75,13 @@ CLOUD_STORAGE_ACCESS_KEY=${CLOUD_STORAGE_ACCESS_KEY:-`generateSecret 20`}
 CLOUD_STORAGE_SECRET_KEY=${CLOUD_STORAGE_SECRET_KEY:-`generateSecret`}
 CLOUD_STORAGE_ENDPOINT=${CLOUD_STORAGE_ENDPOINT:-"minio"}
 CLOUD_STORAGE_SSL=${CLOUD_STORAGE_SSL:-"false"}
+CKEDITOR_SERVER_LICENSE_KEY=${CKEDITOR_SERVER_LICENSE_KEY:-}
+`setCKEMigrateConfig`
+CKEDITOR_ENABLE_METRIC_LOGS=false
+CKEDITOR_LOG_LEVEL=40
 PG_CORE_AI_SQL_USER=${PG_CORE_AI_SQL_USER:-"ai_sql"}
 PG_CORE_AI_SQL_PASSWORD=${PG_CORE_AI_SQL_PASSWORD:-`generateSecret`}
+
 
 
 `generate_default_couchbase_env | setDefaultSecrets`
@@ -129,6 +134,17 @@ function setDefaultSecrets() {
     #echo "$var=${var:-$val}"
   done < "${1:-/dev/stdin}"
   export IFS=$OLDIFS
+}
+
+function setCKEMigrateConfig() {
+  if [ -z ${CKEDITOR_SERVER_LICENSE_KEY:-} ]; then
+    echo CKEDITOR_MIGRATE=false
+  else
+    echo CKEDITOR_MIGRATE=true
+    echo IMAGE_REGISTRY=${IMAGE_REGISTRY:-docker.cke-cs.com}
+    echo IMAGE_REGISTRY_PASS=${IMAGE_REGISTRY_PASS:-?err}
+    echo IMAGE_REGISTRY_USER=\'${IMAGE_REGISTRY_USER:-cs}\'
+  fi
 }
 
 function login_dockerhub() {
@@ -188,8 +204,23 @@ function updateComposeConfig() {
   docker_createInitialComposeOverrideFile
   targetComposeFile="${PLEXTRAC_HOME}/docker-compose.yml"
 
+  # If upgrade strategy is stable or greater than 2.0, we should use the newer compose file
+  # If we also see the ckeditor RTC license key, we use the compose file with CKE RTC services
+  if [ "${UPGRADE_STRATEGY}" == "stable" ] || [ $(printf "%03d%03d%03d%03d" $(echo "${UPGRADE_STRATEGY}" | tr '.' ' ')) -ge $(printf "%03d%03d%03d%03d" $(echo "2.0" | tr '.' ' ')) ]; then
+    debug "version new enough for newer compose file"
+    if [ -n "${CKEDITOR_SERVER_LICENSE_KEY:-}" ]; then
+      decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED_V2_RTC)
+      debug "ckeditor license key set, so enabling rtc compose file"
+    else
+      decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED_V2)
+      debug "setting compose v2 file without rtc"
+    fi
+  else
+    decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
+  fi
+
   info "Checking $targetComposeFile for changes"
-  decodedComposeFile=$(base64 -d <<<$DOCKER_COMPOSE_ENCODED)
+
   if ! test -f "$targetComposeFile"; then
     debug "Creating initial file"
     echo "$decodedComposeFile" > $targetComposeFile
