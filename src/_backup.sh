@@ -117,7 +117,7 @@ function backup_fullCouchbaseBackup_legacy() {
 
   info "Couchbase backup verified complete: $transferred/$estimated messages transferred"
 
-  latestBackup=`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`
+  latestBackup=`ls -dt1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`
   backupDir=`basename $latestBackup`
   debug "Compressing Couchbase backup"
   debug "`tar -C $(dirname $latestBackup) --remove-files -czvf $latestBackup.tar.gz $backupDir 2>&1`"

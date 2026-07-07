@@ -19,7 +19,7 @@ function mod_restore() {
 
 function restore_doUploadsRestore() {
   title "Restoring uploads from backup"
-  latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/uploads/* | head -n1`"
+  latestBackup="`ls -dt1 ${PLEXTRAC_BACKUP_PATH}/uploads/* | head -n1`"
   info "Latest backup: $latestBackup"
 
   error "This is a potentially destructive process, are you sure?"
@@ -45,7 +45,7 @@ function restore_doCouchbaseRestore() {
     debug "`compose_client exec -T $couchbaseComposeService \
       chown -R $user_id:$user_id /backups 2>&1`"
   fi
-  latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`"
+  latestBackup="`ls -dt1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`"
   backupFile=`basename $latestBackup`
   dirName=`basename -s .tar.gz $backupFile`
   info "Latest backup: $latestBackup"
@@ -151,7 +151,7 @@ function restore_doPostgresRestore() {
     compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
   fi
 
-  latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/postgres/* | head -n1`"
+  latestBackup="`ls -dt1 ${PLEXTRAC_BACKUP_PATH}/postgres/* | head -n1`"
   backupFile=`basename $latestBackup`
   info "Latest backup: $latestBackup"
 
