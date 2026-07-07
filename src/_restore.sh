@@ -121,6 +121,9 @@ function restore_doCouchbaseRestore_cbbackupmgr() {
 
   if [ "$cbbackupmgrExit" -ne 0 ]; then
     error "cbbackupmgr restore exited with status $cbbackupmgrExit"
+    if echo "$cbbackupmgrOutput" | grep -q "insufficient_credentials"; then
+      error "This looks like a missing role on ${CB_BACKUP_USER} - cbbackupmgr requires the admin role on Community Edition. Run 'plextrac autofix' to fix this automatically."
+    fi
     return 1
   fi
 
