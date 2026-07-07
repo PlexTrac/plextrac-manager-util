@@ -11,6 +11,13 @@ Please refer to `docs/getting-started.md` for usage instructions.
 
 Please refer to `docs/development.md` for development setup and contribution instructions.
 
+## Database migrations, UMF, and DVU (app v3.0+)
+
+- **UMF** (*Unified Migration Framework*) is the migration system in the application (e.g. `npm run db:migrate`) that can apply all pending migrations in order.
+- **DVU** (*Direct Version Upgrades*) is the *outcome*: upgrading across multiple minor versions in one step (one pull / one update) instead of stepping every release. **UMF is what makes DVU safe** once the app ships it—manager-util switches to the UMF path when you’re on a **v3.0+** image.
+
+**This CLI** (see `docs/development.md` and `plextrac migration-plan`): resolved app version **≥ 3.0** runs the **`unified-migrations`** Compose service (UMF chain); otherwise **`couchbase-migrations`** (legacy stepped-era chain). Optional break-glass: **`FORCE_LEGACY_MIGRATIONS=true`** forces legacy even on v3.x.
+
 ## Support
 
 Now officially supported on:

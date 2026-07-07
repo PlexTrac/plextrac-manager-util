@@ -189,6 +189,19 @@ function install_podman() {
   fi
 }
 
+function check_selinux() {
+  if command -v getenforce >/dev/null 2>&1; then
+    local selinux_status
+    selinux_status=$(getenforce)
+    if [ "$selinux_status" == "Enforcing" ] || [ "$selinux_status" == "Permissive" ]; then
+      error "SELinux is currently set to '$selinux_status'. Please disable SELinux until the install is completed. SELinux can be re-enabled after the initial install is completed."
+      error "You can temporarily disable it by running: sudo setenforce 0"
+      return 1
+    fi
+  fi
+  debug "SELinux is not enabled or not present"
+}
+
 function install_podman_compose() {
   if ! command -v podman-compose &> /dev/null || [ "${1:-}" == "force" ]; then
     case `systemPackageManager` in
