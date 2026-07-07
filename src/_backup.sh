@@ -4,10 +4,15 @@
 
 function mod_backup() {
   title "Running PlexTrac Backups"
+  local backupFailed=0
   backup_ensureBackupDirectory
   backup_fullPostgresBackup
-  backup_fullCouchbaseBackup
+  backup_fullCouchbaseBackup || backupFailed=1
   backup_fullUploadsBackup "svcValues"
+  if [ "$backupFailed" -ne 0 ]; then
+    error "Backup completed with errors - see Couchbase backup failure above"
+    exit 1
+  fi
 }
 
 function backup_ensureBackupDirectory() {
@@ -56,12 +61,116 @@ function backup_fullCouchbaseBackup() {
   if [ "$CONTAINER_RUNTIME" == "podman" ]; then
     cmd='podman exec'
   fi
-  debug "`$cmd $couchbaseComposeService \
-    cbbackup -m full "http://127.0.0.1:8091" /backups -u ${CB_BACKUP_USER} -p ${CB_BACKUP_PASS} 2>&1`"
+
+  if [ "${LEGACY_BACKUP:-false}" == "true" ]; then
+    backup_fullCouchbaseBackup_legacy "$cmd"
+  else
+    backup_fullCouchbaseBackup_cbbackupmgr "$cmd"
+  fi
+}
+
+# Legacy path using the deprecated cbbackup tool.
+# NOTE: cbbackup silently abandons DCP streams that go quiet for 30s and
+# still exits 0, so exit code alone can't be trusted - validate its own
+# transfer accounting (transferred vs. estimated msg count) before treating
+# this as a good backup. See internal incident notes on the July 2026 k3s
+# migration data-loss investigation for the underlying cbbackup/pump_dcp.py
+# behavior.
+function backup_fullCouchbaseBackup_legacy() {
+  local cmd="$1"
+
+  local cbbackupExit=0
+  local cbbackupOutput
+  cbbackupOutput="$($cmd $couchbaseComposeService \
+    cbbackup -m full "http://127.0.0.1:8091" /backups -u ${CB_BACKUP_USER} -p ${CB_BACKUP_PASS} 2>&1)" || cbbackupExit=$?
+  debug "$cbbackupOutput"
+
+  if [ "$cbbackupExit" -ne 0 ]; then
+    error "cbbackup exited with status $cbbackupExit"
+    echo "$cbbackupOutput"
+    return 1
+  fi
+
+  if echo "$cbbackupOutput" | grep -q "no response for"; then
+    error "Couchbase backup incomplete: DCP stream(s) stalled and were abandoned mid-backup."
+    echo "$cbbackupOutput" | grep "no response for"
+    return 1
+  fi
+
+  local transferLine
+  transferLine=$(echo "$cbbackupOutput" | grep -Eo '\([0-9]+/estimated [0-9]+ msgs\)' | tail -n1)
+  if [ -z "$transferLine" ]; then
+    error "Couchbase backup validation failed: no transfer summary found in cbbackup output."
+    echo "$cbbackupOutput"
+    return 1
+  fi
+
+  local transferNumbers
+  transferNumbers=($(echo "$transferLine" | grep -Eo '[0-9]+'))
+  local transferred="${transferNumbers[0]}"
+  local estimated="${transferNumbers[1]}"
+
+  if [ "$transferred" != "$estimated" ]; then
+    error "Couchbase backup incomplete: transferred $transferred of estimated $estimated messages."
+    return 1
+  fi
+
+  info "Couchbase backup verified complete: $transferred/$estimated messages transferred"
+
   latestBackup=`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`
   backupDir=`basename $latestBackup`
   debug "Compressing Couchbase backup"
   debug "`tar -C $(dirname $latestBackup) --remove-files -czvf $latestBackup.tar.gz $backupDir 2>&1`"
+  log "Done."
+}
+
+# Default path using cbbackupmgr, the actively-maintained replacement for
+# cbbackup. Available on Community Edition for basic backup/restore (only
+# `merge`/`examine` are Enterprise-gated). Each run gets its own fresh
+# archive+repo under /backups. Since /backups inside the couchbase container
+# is host-mounted to ${PLEXTRAC_BACKUP_PATH}/couchbase, the archive shows up
+# there directly - no copy-out step needed (unlike the k3s scripts).
+function backup_fullCouchbaseBackup_cbbackupmgr() {
+  local cmd="$1"
+  local repoName="plextrac"
+  local archiveName="cbbackupmgr-archive-$(date -u "+%Y%m%dT%H%M%Sz")"
+  local archivePath="/backups/$archiveName"
+
+  debug "Configuring cbbackupmgr archive at $archivePath..."
+  if ! $cmd $couchbaseComposeService cbbackupmgr config -a "$archivePath" -r "$repoName" 2>&1; then
+    error "Failed to configure cbbackupmgr archive"
+    return 1
+  fi
+
+  local cbbackupmgrExit=0
+  local cbbackupmgrOutput
+  cbbackupmgrOutput="$($cmd $couchbaseComposeService \
+    cbbackupmgr backup -a "$archivePath" -r "$repoName" -c "http://127.0.0.1:8091" \
+    -u ${CB_BACKUP_USER} -p ${CB_BACKUP_PASS} --full-backup --no-progress-bar 2>&1)" || cbbackupmgrExit=$?
+  debug "$cbbackupmgrOutput"
+
+  if [ "$cbbackupmgrExit" -ne 0 ]; then
+    error "cbbackupmgr backup exited with status $cbbackupmgrExit"
+    echo "$cbbackupmgrOutput"
+    return 1
+  fi
+
+  if ! echo "$cbbackupmgrOutput" | grep -q "Backup completed successfully"; then
+    error "cbbackupmgr backup did not report successful completion"
+    echo "$cbbackupmgrOutput"
+    return 1
+  fi
+
+  if echo "$cbbackupmgrOutput" | grep -qi "Failed"; then
+    error "cbbackupmgr backup reported a failure"
+    echo "$cbbackupmgrOutput"
+    return 1
+  fi
+
+  info "Couchbase backup completed via cbbackupmgr"
+
+  debug "Compressing Couchbase backup"
+  debug "`tar -C ${PLEXTRAC_BACKUP_PATH}/couchbase --remove-files -czvf ${PLEXTRAC_BACKUP_PATH}/couchbase/${archiveName}.tar.gz ${archiveName} 2>&1`"
   log "Done."
 }
 

@@ -47,6 +47,7 @@ function restore_doCouchbaseRestore() {
   fi
   latestBackup="`ls -dc1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`"
   backupFile=`basename $latestBackup`
+  dirName=`basename -s .tar.gz $backupFile`
   info "Latest backup: $latestBackup"
 
   error "This is a potentially destructive process, are you sure?"
@@ -62,19 +63,13 @@ function restore_doCouchbaseRestore() {
         tar -xzvf /backups/$backupFile 2>&1`"
     fi
 
-    log "Running database restore"
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      podman exec $couchbaseComposeService cbrestore /backups http://127.0.0.1:8091 \
-        -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
+    if [ "${LEGACY_BACKUP:-false}" == "true" ]; then
+      restore_doCouchbaseRestore_legacy
     else
-      # We have the TTY enabled by default so the output from cbrestore is intelligible
-      tty -s || { debug "Disabling TTY allocation for Couchbase restore due to non-interactive invocation"; ttyFlag="-T"; }
-      compose_client exec ${ttyFlag:-} $couchbaseComposeService cbrestore /backups http://127.0.0.1:8091 \
-        -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
+      restore_doCouchbaseRestore_cbbackupmgr "$dirName"
     fi
 
     log "Cleaning up extracted backup files"
-    dirName=`basename -s .tar.gz $backupFile`
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       podman exec --workdir /backups $couchbaseComposeService rm -rf /backups/$dirName
     else
@@ -83,6 +78,63 @@ function restore_doCouchbaseRestore() {
     fi
     log "Done"
   fi
+}
+
+# Legacy path using the deprecated cbrestore tool. Only usable if the backup
+# being restored was also taken with --legacy (cbrestore-format archive).
+function restore_doCouchbaseRestore_legacy() {
+  log "Running database restore"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    podman exec $couchbaseComposeService cbrestore /backups http://127.0.0.1:8091 \
+      -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
+  else
+    # We have the TTY enabled by default so the output from cbrestore is intelligible
+    tty -s || { debug "Disabling TTY allocation for Couchbase restore due to non-interactive invocation"; ttyFlag="-T"; }
+    compose_client exec ${ttyFlag:-} $couchbaseComposeService cbrestore /backups http://127.0.0.1:8091 \
+      -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
+  fi
+}
+
+# Default path using cbbackupmgr. Only usable if the backup being restored
+# was also taken with cbbackupmgr (the default, non --legacy, backup path).
+# $1: name of the extracted archive directory under /backups (matches the
+#     tar.gz basename by construction, since backup_fullCouchbaseBackup_cbbackupmgr
+#     names the tarball directly from the archive directory name).
+function restore_doCouchbaseRestore_cbbackupmgr() {
+  local archiveName="$1"
+  local repoName="plextrac"
+  local archivePath="/backups/$archiveName"
+
+  log "Running database restore via cbbackupmgr"
+  local cmd="compose_client exec -T"
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    cmd='podman exec'
+  fi
+
+  local cbbackupmgrExit=0
+  local cbbackupmgrOutput
+  cbbackupmgrOutput="$($cmd $couchbaseComposeService \
+    cbbackupmgr restore -a "$archivePath" -r "$repoName" -c "http://127.0.0.1:8091" \
+    -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --force-updates --no-progress-bar 2>&1)" || cbbackupmgrExit=$?
+  debug "$cbbackupmgrOutput"
+  echo "$cbbackupmgrOutput"
+
+  if [ "$cbbackupmgrExit" -ne 0 ]; then
+    error "cbbackupmgr restore exited with status $cbbackupmgrExit"
+    return 1
+  fi
+
+  if ! echo "$cbbackupmgrOutput" | grep -q "Restore completed successfully"; then
+    error "cbbackupmgr restore did not report successful completion. If this backup was taken with --legacy, re-run this restore with --legacy too."
+    return 1
+  fi
+
+  if echo "$cbbackupmgrOutput" | grep -qi "Failed"; then
+    error "cbbackupmgr restore reported a failure"
+    return 1
+  fi
+
+  info "Couchbase restore completed via cbbackupmgr"
 }
 
 function restore_doPostgresRestore() {
