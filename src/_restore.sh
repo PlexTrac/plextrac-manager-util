@@ -27,12 +27,28 @@ function restore_doUploadsRestore() {
 
   if get_user_approval; then
     log "Restoring from $latestBackup"
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      cat $latestBackup | podman cp - plextracapi:/usr/src/plextrac-api
-    else
-      debug "`cat $latestBackup | compose_client run -T --workdir /usr/src/plextrac-api --rm --entrypoint='' \
-      $coreBackendComposeService tar -xzf -`"
+
+    # Extract to a temp directory to handle varying tarball structures
+    timestamp=$(date +%s)
+    restoreTmp="/tmp/uploads_restore_$timestamp"
+    mkdir -p "$restoreTmp"
+    tar -xzf "$latestBackup" -C "$restoreTmp"
+
+    # Find the uploads directory within the extracted backup, regardless of nesting
+    uploadsDir=$(find "$restoreTmp" -type d -name 'uploads' | head -n1)
+    if [ -z "$uploadsDir" ]; then
+      # No nested uploads dir found - assume the tarball contents ARE the uploads
+      uploadsDir="$restoreTmp"
     fi
+    log "Found uploads data at: $uploadsDir"
+
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      podman cp "$uploadsDir/." plextracapi:/usr/src/plextrac-api/uploads/
+    else
+      docker cp "$uploadsDir/." $(docker compose ps -q $coreBackendComposeService):/usr/src/plextrac-api/uploads/
+    fi
+
+    rm -rf "$restoreTmp"
     log "Done"
   fi
 }
@@ -54,32 +70,55 @@ function restore_doCouchbaseRestore() {
 
   if get_user_approval; then
     log "Restoring from $backupFile"
+    # Create a unique temp directory for extraction
+    timestamp=$(date +%s)
+    restoreTmp="/backups/restore_tmp_$timestamp"
+
     log "Extracting backup files"
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      podman exec --workdir /backups $couchbaseComposeService tar -xzvf /backups/$backupFile
+      podman exec $couchbaseComposeService mkdir -p $restoreTmp
+      podman exec $couchbaseComposeService tar -C $restoreTmp -xzvf /backups/$backupFile
     else
-      debug "`compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) --workdir /backups $couchbaseComposeService \
-        tar -xzvf /backups/$backupFile 2>&1`"
+      debug "`compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) $couchbaseComposeService \
+        mkdir -p $restoreTmp 2>&1`"
+      debug "`compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) $couchbaseComposeService \
+        tar -C $restoreTmp -xzvf /backups/$backupFile 2>&1`"
+    fi
+
+    # Find the actual cbrestore data directory (contains bucket-* subdirs)
+    # The tarball may have the data nested at varying depths
+    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+      cbRestorePath=$(podman exec $couchbaseComposeService \
+        find $restoreTmp -type d -name 'bucket-*' -print -quit 2>/dev/null | xargs dirname 2>/dev/null)
+    else
+      cbRestorePath=$(compose_client exec -T $couchbaseComposeService \
+        find $restoreTmp -type d -name 'bucket-*' -print -quit 2>/dev/null | xargs dirname 2>/dev/null | tr -d '\r')
+    fi
+
+    if [ -z "$cbRestorePath" ]; then
+      log "No bucket-* directories found, using extraction root: $restoreTmp"
+      cbRestorePath="$restoreTmp"
+    else
+      log "Found cbrestore data at: $cbRestorePath"
     fi
 
     log "Running database restore"
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      podman exec $couchbaseComposeService cbrestore /backups http://127.0.0.1:8091 \
+      podman exec $couchbaseComposeService cbrestore $cbRestorePath http://127.0.0.1:8091 \
         -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
     else
       # We have the TTY enabled by default so the output from cbrestore is intelligible
       tty -s || { debug "Disabling TTY allocation for Couchbase restore due to non-interactive invocation"; ttyFlag="-T"; }
-      compose_client exec ${ttyFlag:-} $couchbaseComposeService cbrestore /backups http://127.0.0.1:8091 \
+      compose_client exec ${ttyFlag:-} $couchbaseComposeService cbrestore $cbRestorePath http://127.0.0.1:8091 \
         -u ${CB_BACKUP_USER} -p "${CB_BACKUP_PASS}" --from-date 2022-01-01 -x conflict_resolve=0,data_only=1
     fi
 
     log "Cleaning up extracted backup files"
-    dirName=`basename -s .tar.gz $backupFile`
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      podman exec --workdir /backups $couchbaseComposeService rm -rf /backups/$dirName
+      podman exec $couchbaseComposeService rm -rf $restoreTmp
     else
-      debug "`compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) --workdir /backups $couchbaseComposeService \
-        rm -rf /backups/$dirName 2>&1`"
+      debug "`compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac}) $couchbaseComposeService \
+        rm -rf $restoreTmp 2>&1`"
     fi
     log "Done"
   fi
@@ -142,21 +181,57 @@ function restore_doPostgresRestore() {
     fi
 
     # now actually perform the db restore
-    databaseBackups=$(basename -s .psql `tar -tf $latestBackup | awk '/.psql/{print $1}'`)
-    log "Restoring from $backupFile"
-    log "Databases to restore:\n$databaseBackups"
-    local cmd="compose_client exec -T --user $(id -u ${PLEXTRAC_USER_NAME:-plextrac})"
-    if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-      local cmd='podman exec'
+    # Extract backup to a temp directory on the host to handle varying tarball structures
+    timestamp=$(date +%s)
+    restoreTmp="/tmp/postgres_restore_$timestamp"
+    mkdir -p "$restoreTmp"
+    tar -xvzf "$latestBackup" -C "$restoreTmp"
+
+    # Find all .psql files in the extracted backup, regardless of directory structure
+    mapfile -t psql_files < <(find "$restoreTmp" -type f -name '*.psql')
+    if [ ${#psql_files[@]} -eq 0 ]; then
+      error "No .psql files found in backup archive."
+      rm -rf "$restoreTmp"
+      return 1
     fi
-      debug "`$cmd $postgresComposeService \
-        tar -tf /backups/$backupFile 2>&1`"
+
+    log "Restoring from $backupFile"
+    log "Databases to restore:\n${psql_files[*]}"
     local cmd='compose_client exec -T'
     if [ "$CONTAINER_RUNTIME" == "podman" ]; then
       local cmd='podman exec'
     fi
-    for db in $databaseBackups; do
-      log "Extracting backup for $db"
+    for psql_path in "${psql_files[@]}"; do
+      db=$(basename "$psql_path" .psql)
+      log "Restoring backup for $db"
+
+      # Ensure the target database and admin role exist before restoring
+      dbAdminEnvvar="PG_${db^^}_ADMIN_USER"
+      dbAdminRole=$(eval echo "\$$dbAdminEnvvar")
+      dbPasswordEnvvar="PG_${db^^}_ADMIN_PASS"
+      dbAdminPass=$(eval echo "\$${dbPasswordEnvvar:-}" 2>/dev/null || echo "")
+
+      log "Ensuring database '$db' and role '$dbAdminRole' exist"
+      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+        podman exec -e PGPASSWORD=$POSTGRES_PASSWORD postgres \
+          psql -U $POSTGRES_USER -c "SELECT 1 FROM pg_roles WHERE rolname='$dbAdminRole'" | grep -q 1 || \
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD postgres \
+            psql -U $POSTGRES_USER -c "CREATE ROLE $dbAdminRole WITH LOGIN PASSWORD '$dbAdminPass';"
+        podman exec -e PGPASSWORD=$POSTGRES_PASSWORD postgres \
+          psql -U $POSTGRES_USER -tc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 || \
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD postgres \
+            psql -U $POSTGRES_USER -c "CREATE DATABASE $db OWNER $dbAdminRole;"
+      else
+        $cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+          psql -U $POSTGRES_USER -tc "SELECT 1 FROM pg_roles WHERE rolname='$dbAdminRole'" | grep -q 1 || \
+          $cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+            psql -U $POSTGRES_USER -c "CREATE ROLE $dbAdminRole WITH LOGIN PASSWORD '$dbAdminPass';"
+        $cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+          psql -U $POSTGRES_USER -tc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 || \
+          $cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+            psql -U $POSTGRES_USER -c "CREATE DATABASE $db OWNER $dbAdminRole;"
+      fi
+
       # only the core database gets timescaledb tables, so we need to do special things for this restore to work
       if [ $db = "core" ]; then
         log "restoring core db, running special timescaledb commands"
@@ -165,29 +240,27 @@ function restore_doPostgresRestore() {
           podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;"'
 
           # create the timescaledb extension
-          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION timescaledb;"'
+          podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"'
 
           # run the timescaledb pre_restore
           podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();"'
         else
           # temporarily grant superuser priveleges to the core_admin user
-          debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;" 2>&1`"
+          log "Granting temporary superuser to $PG_CORE_ADMIN_USER"
+          docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH SUPERUSER;" 2>&1 | while read -r line; do debug "$line"; done
 
           # create the timescaledb extension for the core database
-          debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION timescaledb;" 2>&1`"
+          log "Creating timescaledb extension"
+          docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "CREATE EXTENSION IF NOT EXISTS timescaledb;" 2>&1 | while read -r line; do debug "$line"; done
 
           # run the timescaledb pre_restore command
-          debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();" 2>&1`"
+          log "Running timescaledb pre_restore"
+          docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_pre_restore();" 2>&1 | while read -r line; do debug "$line"; done
         fi
       fi
-
-      debug "`$cmd $postgresComposeService\
-        tar -xvzf /backups/$backupFile ./$db.psql 2>&1`"
-      dbAdminEnvvar="PG_${db^^}_ADMIN_USER"
-      dbAdminRole=$(eval echo "\$$dbAdminEnvvar")
 
       # Note: Not using `--clean --if-exists` here because it is incompatible with timescaledb.
       # This is because --clean will drop the extension and recreate it during the restoration,
@@ -195,11 +268,33 @@ function restore_doPostgresRestore() {
       # run as the first command in the session due to the way it modified the process's memory.
       dbRestoreFlags="-d $db --no-privileges --no-owner --role=$dbAdminRole  --disable-triggers --verbose"
 
+      # Copy the backup file into the container for restore
+      log "Copying backup file into container"
+      if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+        podman cp "$psql_path" $postgresComposeService:/tmp/$(basename "$psql_path")
+      else
+        docker cp "$psql_path" $(docker compose ps -q $postgresComposeService):/tmp/$(basename "$psql_path")
+      fi
+
       log "Restoring $db with role:${dbAdminRole}"
-      debug "`$cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
-        pg_restore -U $POSTGRES_USER $dbRestoreFlags ./$db.psql 2>&1`"
+      restoreOutput=$($cmd -e PGPASSWORD=$POSTGRES_PASSWORD $postgresComposeService \
+        pg_restore -U $POSTGRES_USER $dbRestoreFlags /tmp/$db.psql 2>&1) || true
+      restoreExitCode=${PIPESTATUS[0]:-$?}
+
+      # pg_restore returns non-zero for warnings too, so log output and check for real errors
+      if [ -n "$restoreOutput" ]; then
+        # Show errors/warnings at log level so they're always visible
+        while IFS= read -r line; do
+          if echo "$line" | grep -qiE '(error|fatal)'; then
+            error "pg_restore: $line"
+          else
+            debug "$line"
+          fi
+        done <<< "$restoreOutput"
+      fi
+
       debug "`$cmd $postgresComposeService \
-        rm ./$db.psql 2>&1`"
+        rm /tmp/$db.psql 2>&1`"
 
       # Run through the post-restore steps for core db
       if [ $db = "core" ]; then
@@ -208,16 +303,21 @@ function restore_doPostgresRestore() {
           podman exec -e PGPASSWORD=$POSTGRES_PASSWORD --user $plextrac_user_id postgres /bin/sh -c 'psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;"'
         else
           # run the timescaledb post_restore command
-          debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_post_restore();" 2>&1`"
+          log "Running timescaledb post_restore"
+          docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "SELECT timescaledb_post_restore();" 2>&1 | while read -r line; do debug "$line"; done
 
           # revoke the temporarily granted superuser privileges from core_admin
-          debug "`docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
-            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;" 2>&1`"
+          log "Revoking temporary superuser from $PG_CORE_ADMIN_USER"
+          docker compose $(echo $compose_files) exec -e PGPASSWORD=$POSTGRES_PASSWORD -T --user $plextrac_user_id $postgresComposeService \
+            psql -U $POSTGRES_USER -d $PG_CORE_DB -c "ALTER ROLE $PG_CORE_ADMIN_USER WITH NOSUPERUSER;" 2>&1 | while read -r line; do debug "$line"; done
 
         fi
       fi
     done
+
+    # Clean up the temp extraction directory
+    rm -rf "$restoreTmp"
 
     log "now, start the rest of the app and sleep for 120s to give couchbase a chance"
     mod_start
