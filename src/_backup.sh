@@ -5,6 +5,8 @@
 function mod_backup() {
   title "Running PlexTrac Backups"
   local backupFailed=0
+  PLEXTRAC_VERSION=$(get_plextrac_version)
+  debug "PLEXTRAC_VERSION is ${PLEXTRAC_VERSION}"
   backup_ensureBackupDirectory
   backup_fullPostgresBackup
   backup_fullCouchbaseBackup || backupFailed=1
@@ -13,6 +15,21 @@ function mod_backup() {
     error "Backup completed with errors - see Couchbase backup failure above"
     exit 1
   fi
+}
+
+# Gets the running plextracapi image version, for labeling backup archive
+# filenames so it's possible to tell what application version a given
+# backup was taken from. Same technique as _version_check.sh's running
+# version detection (org.opencontainers.image.version label), which is more
+# robust than parsing the image tag string.
+function get_plextrac_version() {
+  local version
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    version="$(for i in $(podman ps -a -q --filter name=plextracapi); do podman inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u | head -n1)"
+  else
+    version="$(for i in $(compose_client ps plextracapi -q); do docker container inspect "$i" --format json | jq -r '(.[].Config.Labels | ."org.opencontainers.image.version")'; done | sort -u | head -n1)"
+  fi
+  echo "${version:-unknown}"
 }
 
 function backup_ensureBackupDirectory() {
@@ -32,16 +49,17 @@ function backup_fullUploadsBackup() {
   mkdir -p $uploadsBackupDir
  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
     local current_date=$(date -u "+%Y-%m-%dT%H%M%Sz")
-    podman exec --workdir="/usr/src/plextrac-api" plextracapi tar -czf "uploads/$current_date.tar.gz" uploads
+    local versionedFileName="${current_date}-v${PLEXTRAC_VERSION}.tar.gz"
+    podman exec --workdir="/usr/src/plextrac-api" plextracapi tar -czf "uploads/$versionedFileName" uploads
     debug "Archiving uploads succeeded"
-    podman cp plextracapi:/usr/src/plextrac-api/uploads/$current_date.tar.gz $uploadsBackupDir
+    podman cp plextracapi:/usr/src/plextrac-api/uploads/$versionedFileName $uploadsBackupDir
     debug "Copying to host succeeded"
-    podman exec --workdir="/usr/src/plextrac-api/uploads" plextracapi rm $current_date.tar.gz
+    podman exec --workdir="/usr/src/plextrac-api/uploads" plextracapi rm $versionedFileName
     debug "Cleaned Archive from container"
   else
     debug "`compose_client run --user $(id -u) --no-deps -v ${uploadsBackupDir}:/backups \
       --workdir /usr/src/plextrac-api --rm --entrypoint='' -T  $coreBackendComposeService \
-      tar -czf /backups/$(date -u "+%Y-%m-%dT%H%M%Sz").tar.gz uploads`"
+      tar -czf /backups/$(date -u "+%Y-%m-%dT%H%M%Sz")-v${PLEXTRAC_VERSION}.tar.gz uploads`"
   fi
   log "Done."
 }
@@ -120,7 +138,7 @@ function backup_fullCouchbaseBackup_legacy() {
   latestBackup=`ls -dt1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`
   backupDir=`basename $latestBackup`
   debug "Compressing Couchbase backup"
-  debug "`tar -C $(dirname $latestBackup) --remove-files -czvf $latestBackup.tar.gz $backupDir 2>&1`"
+  debug "`tar -C $(dirname $latestBackup) --remove-files -czvf ${latestBackup}-v${PLEXTRAC_VERSION}.tar.gz $backupDir 2>&1`"
   log "Done."
 }
 
@@ -173,7 +191,7 @@ function backup_fullCouchbaseBackup_cbbackupmgr() {
   info "Couchbase backup completed via cbbackupmgr"
 
   debug "Compressing Couchbase backup"
-  debug "`tar -C ${PLEXTRAC_BACKUP_PATH}/couchbase --remove-files -czvf ${PLEXTRAC_BACKUP_PATH}/couchbase/${archiveName}.tar.gz ${archiveName} 2>&1`"
+  debug "`tar -C ${PLEXTRAC_BACKUP_PATH}/couchbase --remove-files -czvf ${PLEXTRAC_BACKUP_PATH}/couchbase/${archiveName}-v${PLEXTRAC_VERSION}.tar.gz ${archiveName} 2>&1`"
   log "Done."
 }
 
@@ -197,7 +215,7 @@ function backup_fullPostgresBackup() {
       pg_dump -U $POSTGRES_USER $db $pgBackupFlags --file=$targetPath/$db.psql 2>&1`"
   done
   debug "Compressing Postgres backup"
-  tar -C ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp --remove-files -czvf ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp.tar.gz .
+  tar -C ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp --remove-files -czvf ${PLEXTRAC_BACKUP_PATH}/postgres/${backupTimestamp}-v${PLEXTRAC_VERSION}.tar.gz .
   log "Done"
 }
 

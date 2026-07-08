@@ -47,7 +47,11 @@ function restore_doCouchbaseRestore() {
   fi
   latestBackup="`ls -dt1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`"
   backupFile=`basename $latestBackup`
-  dirName=`basename -s .tar.gz $backupFile`
+  # Discover the actual backup/archive directory name from the tarball's own
+  # contents rather than the outer filename - the filename carries a
+  # -vX.Y.Z application version suffix that doesn't match the inner
+  # directory name, for both the legacy and cbbackupmgr archive formats.
+  dirName=$(tar -tzf "$latestBackup" | head -n1 | cut -d/ -f1)
   info "Latest backup: $latestBackup"
 
   error "This is a potentially destructive process, are you sure?"
