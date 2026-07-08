@@ -19,7 +19,15 @@ function mod_restore() {
 
 function restore_doUploadsRestore() {
   title "Restoring uploads from backup"
+  # pipefail disabled: if this directory ever accumulates enough files to
+  # exceed a single pipe buffer, `ls`'s later write()s can hit SIGPIPE once
+  # `head -n1` closes the pipe early, which pipefail would otherwise report
+  # as a real failure and abort the script via set -e. See the couchbase
+  # restore's dirName lookup below for a confirmed instance of this class
+  # of bug against `tar -tzf`.
+  set +o pipefail
   latestBackup="`ls -dt1 ${PLEXTRAC_BACKUP_PATH}/uploads/* | head -n1`"
+  set -o pipefail
   info "Latest backup: $latestBackup"
 
   error "This is a potentially destructive process, are you sure?"
@@ -45,13 +53,24 @@ function restore_doCouchbaseRestore() {
     debug "`compose_client exec -T $couchbaseComposeService \
       chown -R $user_id:$user_id /backups 2>&1`"
   fi
+  # pipefail disabled: see the SIGPIPE note on the dirName lookup below for
+  # why a large enough `ls` listing can trip the same class of bug.
+  set +o pipefail
   latestBackup="`ls -dt1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`"
+  set -o pipefail
   backupFile=`basename $latestBackup`
   # Discover the actual backup/archive directory name from the tarball's own
   # contents rather than the outer filename - the filename carries a
   # -vX.Y.Z application version suffix that doesn't match the inner
   # directory name, for both the legacy and cbbackupmgr archive formats.
+  # pipefail is disabled for this one command: `tar -tzf` on a large archive
+  # is still writing output when `head -n1` gets its line and closes the
+  # pipe early, so `tar` dies with SIGPIPE (exit 141). Under pipefail that
+  # reads as a real failure and aborts the whole script via set -e, even
+  # though the line we needed was already captured successfully.
+  set +o pipefail
   dirName=$(tar -tzf "$latestBackup" | head -n1 | cut -d/ -f1)
+  set -o pipefail
   info "Latest backup: $latestBackup"
 
   error "This is a potentially destructive process, are you sure?"
@@ -155,7 +174,11 @@ function restore_doPostgresRestore() {
     compose_files=$(for i in `ls -r ${PLEXTRAC_HOME}/docker-compose*.yml`; do printf " -f %s" "$i"; done )
   fi
 
+  # pipefail disabled: see the SIGPIPE note on the couchbase restore's
+  # dirName lookup for why a large enough `ls` listing can trip this.
+  set +o pipefail
   latestBackup="`ls -dt1 ${PLEXTRAC_BACKUP_PATH}/postgres/* | head -n1`"
+  set -o pipefail
   backupFile=`basename $latestBackup`
   info "Latest backup: $latestBackup"
 

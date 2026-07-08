@@ -135,7 +135,14 @@ function backup_fullCouchbaseBackup_legacy() {
 
   info "Couchbase backup verified complete: $transferred/$estimated messages transferred"
 
+  # pipefail disabled: if this directory ever accumulates enough files to
+  # exceed a single pipe buffer, `ls`'s later write()s can hit SIGPIPE once
+  # `head -n1` closes the pipe early, which pipefail would otherwise report
+  # as a real failure and abort the script via set -e (confirmed against a
+  # near-identical `tar -tzf | head -n1` lookup in _restore.sh).
+  set +o pipefail
   latestBackup=`ls -dt1 ${PLEXTRAC_BACKUP_PATH}/couchbase/* | head -n1`
+  set -o pipefail
   backupDir=`basename $latestBackup`
   debug "Compressing Couchbase backup"
   debug "`tar -C $(dirname $latestBackup) --remove-files -czvf ${latestBackup}-v${PLEXTRAC_VERSION}.tar.gz $backupDir 2>&1`"
