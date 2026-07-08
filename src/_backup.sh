@@ -47,9 +47,11 @@ function backup_fullUploadsBackup() {
   info "$coreBackendComposeService: Performing backup of uploads directory"
   uploadsBackupDir="${PLEXTRAC_BACKUP_PATH}/uploads"
   mkdir -p $uploadsBackupDir
+
+  local current_date=$(date -u "+%Y-%m-%dT%H%M%Sz")
+  local versionedFileName="${current_date}-uploads-v${PLEXTRAC_VERSION}.tar.gz"
+
  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-    local current_date=$(date -u "+%Y-%m-%dT%H%M%Sz")
-    local versionedFileName="${current_date}-v${PLEXTRAC_VERSION}.tar.gz"
     podman exec --workdir="/usr/src/plextrac-api" plextracapi tar -czf "uploads/$versionedFileName" uploads
     debug "Archiving uploads succeeded"
     podman cp plextracapi:/usr/src/plextrac-api/uploads/$versionedFileName $uploadsBackupDir
@@ -59,7 +61,7 @@ function backup_fullUploadsBackup() {
   else
     debug "`compose_client run --user $(id -u) --no-deps -v ${uploadsBackupDir}:/backups \
       --workdir /usr/src/plextrac-api --rm --entrypoint='' -T  $coreBackendComposeService \
-      tar -czf /backups/$(date -u "+%Y-%m-%dT%H%M%Sz")-v${PLEXTRAC_VERSION}.tar.gz uploads`"
+      tar -czf /backups/$versionedFileName uploads`"
   fi
   log "Done."
 }
@@ -145,7 +147,7 @@ function backup_fullCouchbaseBackup_legacy() {
   set -o pipefail
   backupDir=`basename $latestBackup`
   debug "Compressing Couchbase backup"
-  debug "`tar -C $(dirname $latestBackup) --remove-files -czvf ${latestBackup}-v${PLEXTRAC_VERSION}.tar.gz $backupDir 2>&1`"
+  debug "`tar -C $(dirname $latestBackup) --remove-files -czvf ${latestBackup}-couchbase-v${PLEXTRAC_VERSION}.tar.gz $backupDir 2>&1`"
   log "Done."
 }
 
@@ -198,7 +200,7 @@ function backup_fullCouchbaseBackup_cbbackupmgr() {
   info "Couchbase backup completed via cbbackupmgr"
 
   debug "Compressing Couchbase backup"
-  debug "`tar -C ${PLEXTRAC_BACKUP_PATH}/couchbase --remove-files -czvf ${PLEXTRAC_BACKUP_PATH}/couchbase/${archiveName}-v${PLEXTRAC_VERSION}.tar.gz ${archiveName} 2>&1`"
+  debug "`tar -C ${PLEXTRAC_BACKUP_PATH}/couchbase --remove-files -czvf ${PLEXTRAC_BACKUP_PATH}/couchbase/${archiveName}-couchbase-v${PLEXTRAC_VERSION}.tar.gz ${archiveName} 2>&1`"
   log "Done."
 }
 
@@ -222,7 +224,7 @@ function backup_fullPostgresBackup() {
       pg_dump -U $POSTGRES_USER $db $pgBackupFlags --file=$targetPath/$db.psql 2>&1`"
   done
   debug "Compressing Postgres backup"
-  tar -C ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp --remove-files -czvf ${PLEXTRAC_BACKUP_PATH}/postgres/${backupTimestamp}-v${PLEXTRAC_VERSION}.tar.gz .
+  tar -C ${PLEXTRAC_BACKUP_PATH}/postgres/$backupTimestamp --remove-files -czvf ${PLEXTRAC_BACKUP_PATH}/postgres/${backupTimestamp}-postgres-v${PLEXTRAC_VERSION}.tar.gz .
   log "Done"
 }
 
