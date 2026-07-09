@@ -105,9 +105,24 @@ function configure_couchbase_users() {
   test_couchbase_access $CB_ADMIN_USER $CB_ADMIN_PASS || die "The admin user is broken or misconfigured - please contact support!"
   test_couchbase_access $CB_API_USER $CB_API_PASS "reportMe" || manage_api_user
   # `admin` is a superset of bucket_full_access, so requiring it here covers
-  # both cbbackupmgr (default) and --legacy (cbbackup/cbrestore) usage.
+  # both cbbackupmgr (default) and --legacy (cbbackup/cbrestore) usage. Kept
+  # here (in addition to the same check on `plextrac update` below) so
+  # `plextrac autofix`/`plextrac check` can still catch and fix this
+  # manually if the role ever gets reset outside of an update.
   if test_couchbase_access $CB_BACKUP_USER $CB_BACKUP_PASS "reportMe" && test_couchbase_backup_role $CB_BACKUP_USER; then
     debug ".. $CB_BACKUP_USER is configured correctly"
+  else
+    manage_backup_user
+  fi
+}
+
+# Same check as configure_couchbase_users' backup-user role check, called
+# separately so it also runs automatically on `plextrac update` and doesn't
+# require a manual `plextrac autofix`. Idempotent: once fixed, a no-op on
+# every subsequent update.
+function ensure_couchbase_backup_user_role() {
+  if test_couchbase_backup_role $CB_BACKUP_USER; then
+    debug ".. $CB_BACKUP_USER already has the role cbbackupmgr requires"
   else
     manage_backup_user
   fi
