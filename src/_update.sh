@@ -21,6 +21,9 @@ function mod_update() {
   previous_cke_backend_version="4.17.1"
 
   title "Updating PlexTrac"
+
+  ensure_couchbase_backup_user_role
+
   # I'm comparing an int :shrug:
   # shellcheck disable=SC2086
   if [ "${AIRGAPPED:-false}" == "false" ]; then
