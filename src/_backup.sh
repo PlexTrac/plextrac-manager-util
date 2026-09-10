@@ -10,9 +10,9 @@ function mod_backup() {
   backup_ensureBackupDirectory
   backup_fullPostgresBackup
   backup_fullCouchbaseBackup || backupFailed=1
-  backup_fullUploadsBackup "svcValues"
+  backup_fullUploadsBackup "svcValues" || backupFailed=1
   if [ "$backupFailed" -ne 0 ]; then
-    error "Backup completed with errors - see Couchbase backup failure above"
+    error "Backup completed with errors - see the failure(s) above"
     exit 1
   fi
 }
@@ -50,20 +50,61 @@ function backup_fullUploadsBackup() {
 
   local current_date=$(date -u "+%Y-%m-%dT%H%M%Sz")
   local versionedFileName="${current_date}-uploads-v${PLEXTRAC_VERSION}.tar.gz"
+  local archivePath="${uploadsBackupDir}/${versionedFileName}"
+  local tarExit=0
 
- if [ "$CONTAINER_RUNTIME" == "podman" ]; then
-    podman exec --workdir="/usr/src/plextrac-api" plextracapi tar -czf "uploads/$versionedFileName" uploads
-    debug "Archiving uploads succeeded"
-    podman cp plextracapi:/usr/src/plextrac-api/uploads/$versionedFileName $uploadsBackupDir
-    debug "Copying to host succeeded"
-    podman exec --workdir="/usr/src/plextrac-api/uploads" plextracapi rm $versionedFileName
-    debug "Cleaned Archive from container"
+  # NEVER write the archive inside `uploads` - that is the tree being archived.
+  # An in-tree target makes tar read its own output (GNU tar on amd64 embeds it,
+  # doubling the archive) and tar always exits 1 because the directory mtime
+  # changes when the archive is created. Under `set -e` that exit 1 aborted this
+  # function before the copy-out and cleanup ran, so no backup reached the host
+  # and the archive was orphaned in the live volume for the next run to archive
+  # again, compounding on every run. Stream to stdout and let the host write it.
+  if [ "$CONTAINER_RUNTIME" == "podman" ]; then
+    # No -t on exec: a TTY would corrupt the binary stream.
+    podman exec --workdir="/usr/src/plextrac-api" plextracapi \
+      tar -czf - uploads > "$archivePath" || tarExit=$?
   else
-    debug "`compose_client run --user $(id -u) --no-deps -v ${uploadsBackupDir}:/backups \
-      --workdir /usr/src/plextrac-api --rm --entrypoint='' -T  $coreBackendComposeService \
-      tar -czf /backups/$versionedFileName uploads`"
+    # $uploadsBackupDir is bind-mounted at /backups, so this target is already
+    # outside the archived tree. Do not wrap this in `debug "`...`"` - command
+    # substitution inside an argument hides the exit code and silently swallows
+    # a failed backup.
+    compose_client run --user $(id -u) --no-deps -v ${uploadsBackupDir}:/backups \
+      --workdir /usr/src/plextrac-api --rm --entrypoint='' -T $coreBackendComposeService \
+      tar -czf /backups/$versionedFileName uploads || tarExit=$?
   fi
+
+  backup_verifyUploadsArchive "$tarExit" "$archivePath" || return 1
   log "Done."
+}
+
+# Validates the uploads tar. tar exits 1 when a file it is reading changes
+# underneath it, which is expected here: six services mount the uploads volume
+# read-write and the app keeps writing to it for the whole backup. The archive
+# is still complete and valid in that case, so only 2+ is a real failure.
+# Confirms the gzip stream too, so a truncated archive is never left behind
+# looking like a good backup.
+function backup_verifyUploadsArchive() {
+  local tarExit="$1"
+  local archivePath="$2"
+
+  if [ "$tarExit" -ge 2 ]; then
+    error "tar failed with status $tarExit while archiving uploads"
+    rm -f "$archivePath"
+    return 1
+  fi
+
+  if [ "$tarExit" -eq 1 ]; then
+    log "Some files changed while being read - expected on a running instance, archive is still valid"
+  fi
+
+  if ! gzip -t "$archivePath" 2>/dev/null; then
+    error "Uploads archive failed its integrity check and was discarded: $archivePath"
+    rm -f "$archivePath"
+    return 1
+  fi
+
+  debug "Uploads archive verified: `du -h "$archivePath" 2>/dev/null | cut -f1`"
 }
 
 function backup_fullCouchbaseBackup() {
