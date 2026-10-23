@@ -9,6 +9,7 @@ services:
     - redis
     - postgres
     environment:
+      NODE_OPTIONS: "--use-openssl-ca"
       STARTUP_MODE: API_ONLY
       CLOUD_STORAGE_ENDPOINT: ${CLOUD_STORAGE_ENDPOINT:-minio}
       CLOUD_STORAGE_SSL: ${CLOUD_STORAGE_SSL:-false}
@@ -52,6 +53,7 @@ services:
          npm run maintenance:disable &&
          npm run seed:prebuilt-content --if-present"
     environment:
+      NODE_OPTIONS: "--use-openssl-ca"
       COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
       CB_API_PASS: ${CB_API_PASS}
       CB_API_USER: ${CB_API_USER}
@@ -106,6 +108,7 @@ services:
          npm run maintenance:disable &&
          npm run seed:prebuilt-content --if-present"
     environment:
+      NODE_OPTIONS: "--use-openssl-ca"
       COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
       CB_API_PASS: ${CB_API_PASS}
       CB_API_USER: ${CB_API_USER}
@@ -218,6 +221,7 @@ services:
     restart: always
     init: True
     environment:
+      NODE_OPTIONS: "--use-openssl-ca"
       CB_API_PASS: "${CB_API_PASS:?err}"
       CB_API_USER: "${CB_API_USER:?err}"
       COUCHBASE_URL: "http://plextracdb"
@@ -255,6 +259,7 @@ services:
     restart: always
     init: True
     environment:
+      NODE_OPTIONS: "--use-openssl-ca"
       CB_API_PASS: "${CB_API_PASS:?err}"
       CB_API_USER: "${CB_API_USER:?err}"
       CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
@@ -297,6 +302,7 @@ services:
     volumes:
       - uploads:/usr/src/plextrac-api/uploads:rw
     environment:
+      NODE_OPTIONS: "--use-openssl-ca"
       COUCHBASE_URL: ${COUCHBASE_URL:-http://plextracdb}
       CB_API_USER: ${CB_API_USER:?err}
       CB_API_PASS: ${CB_API_PASS:?err}
@@ -332,6 +338,7 @@ services:
     - redis
     restart: always
     environment:
+      NODE_OPTIONS: "--use-openssl-ca"
       CB_API_PASS: "${CB_API_PASS:?err}"
       CB_API_USER: "${CB_API_USER:?err}"
       CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
@@ -433,6 +440,7 @@ services:
     - redis
     restart: always
     environment:
+      NODE_OPTIONS: "--use-openssl-ca"
       CLIENT_DOMAIN_NAME: ${CLIENT_DOMAIN_NAME:?err}
       REDIS_CONNECTION_STRING: "${REDIS_CONNECTION_STRING:-redis}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:?err}"
@@ -501,6 +509,7 @@ services:
     volumes:
       - uploads:/usr/src/plextrac-api/uploads:rw
     environment:
+      NODE_OPTIONS: "--use-openssl-ca"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-logfmt}
       NODE_ENV: ${NODE_ENV:-production}
